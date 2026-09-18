@@ -1,0 +1,46 @@
+services:
+  docfront:
+    image: docfront
+    ports:
+      - "5173:5173"
+    networks:
+      - mynetwork
+
+  mysql:
+    image: mysql:8.0.39
+    environment:
+      MYSQL_DATABASE: DocTrack
+      MYSQL_ROOT_PASSWORD: majeli@2023
+    ports:
+      - "3308:3306"
+    networks:
+      - mynetwork
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "--silent"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  docback:
+    image: docback
+    ports:
+      - "8182:8181"
+    depends_on:
+      - mysql
+    environment:
+      DB_CONNECTION: mysql
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_DATABASE: DocTrack
+      DB_USERNAME: root
+      DB_PASSWORD: majeli@2023
+    networks:
+      - mynetwork
+
+networks:
+  mynetwork:
+    driver: bridge
+
+volumes:
+  mysql_data:
+    driver: local
