@@ -20,7 +20,9 @@ class EmailVerificationController extends Controller
         $user = User::where('email', $request->email)->first();
 
         // ✅ Vérifier le code
-        if (!$user || $user->email_verification_code !== $request->code) {
+        if (! $user
+            || empty($user->email_verification_code)
+            || ! hash_equals((string) $user->email_verification_code, (string) $request->code)) {
             return response()->json(['message' => 'Code incorrect'], 401);
         }
 

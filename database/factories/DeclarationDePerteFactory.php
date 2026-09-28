@@ -2,6 +2,8 @@
 
 namespace Database\Factories;
 
+use App\Models\DocumentType;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -9,15 +11,15 @@ use Illuminate\Database\Eloquent\Factories\Factory;
  */
 class DeclarationDePerteFactory extends Factory
 {
-    /**
-     * Define the model's default state.
-     *
-     * @return array<string, mixed>
-     */
     public function definition(): array
     {
         return [
-            //
+            'Title'             => 'Perte de document',
+            'FirstNameInDoc'    => fake()->firstName(),
+            'LastNameInDoc'     => fake()->lastName(),
+            'DocIdentification' => fake()->numerify('#############'),
+            'document_type_id'  => DocumentType::factory(),
+            'user_id'           => User::factory(),
         ];
     }
 }

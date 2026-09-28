@@ -6,7 +6,7 @@
 <head>
     <meta charset="UTF-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
-    <title>Certificat de Perte — DocTrack</title>
+    <title>Récépissé de déclaration de perte — DocTrack</title>
     <style>
         /* =====================================================================
            BASE
@@ -520,17 +520,17 @@
     <div class="footer-content">
         <div class="footer-left">
             <div class="footer-text">
-                Certificat généré automatiquement par DocTrack
+                Récépissé généré automatiquement par DocTrack
                 — {{ \Carbon\Carbon::now()->format('d/m/Y à H:i') }}
             </div>
             <div class="footer-text">
                 Réf. {{ $certificat->certificat_number }}
-                | République du Sénégal
+                | Déclaration en ligne non vérifiée par une autorité
             </div>
         </div>
         <div class="footer-right">
-            <div class="footer-officiel">Document officiel</div>
-            <div class="footer-text">Usage administratif</div>
+            <div class="footer-officiel">Récépissé de déclaration</div>
+            <div class="footer-text">Plateforme DocTrack</div>
         </div>
     </div>
 </div>
@@ -549,18 +549,13 @@
 
             <!-- Logo drapeau -->
             <div class="header-left">
-                <img src="{{ public_path('images/drapeau.png') }}"
-                     class="header-logo"
-                     alt="Drapeau du Sénégal">
+
             </div>
 
-            <!-- Centre : République + plateforme -->
+            <!-- Centre : plateforme -->
             <div class="header-center">
-                <div class="header-republique">Plateforme nationale de gestion documentaire</div>
-                <div class="header-pays">République du Sénégal</div>
-                <div class="header-ministere">
-                    Ministère de l'Intérieur et de la Sécurité Publique
-                </div>
+                <div class="header-republique">Plateforme citoyenne de signalement</div>
+                <div class="header-pays">des documents perdus et retrouvés</div>
                 <div class="header-plateforme">Doc<span>Track</span></div>
                 <div class="header-slogan">
                     Retrouver vos documents perdus, partout au Sénégal
@@ -569,8 +564,8 @@
 
             <!-- Badge type + référence -->
             <div class="header-right">
-                <div class="header-num-cert">Certificat N°</div>
-                <div class="header-badge">Officiel</div>
+                <div class="header-num-cert">Récépissé N°</div>
+                <div class="header-badge">En ligne</div>
             </div>
 
         </div>
@@ -580,10 +575,10 @@
     <!-- BANDEAU TITRE -->
     <div class="bandeau-titre">
         <div class="bandeau-titre-text">
-            Certificat de <span>Perte</span>
+            Récépissé de <span>déclaration</span>
         </div>
         <div class="bandeau-sous-titre">
-            Document officiel — Déclaration de perte de document
+            Déclaration de perte enregistrée en ligne sur DocTrack
         </div>
     </div>
 
@@ -593,7 +588,7 @@
         <!-- Numéro de certificat + date -->
         <div class="cert-num-box">
             <div class="cert-num-left">
-                <div class="cert-ref">Référence du certificat</div>
+                <div class="cert-ref">Référence du récépissé</div>
                 <div class="cert-ref-value">{{ $certificat->certificat_number }}</div>
             </div>
             <div class="cert-num-right">
@@ -608,16 +603,15 @@
 
         <!-- Texte d'attestation -->
         <div class="attestation-box">
-            <div class="attestation-intro">Attestation officielle</div>
+            <div class="attestation-intro">Accusé d'enregistrement</div>
             <div class="attestation-text">
-                La plateforme nationale <strong>DocTrack</strong>, sous l'autorité du
-                <strong>Ministère de l'Intérieur et de la Sécurité Publique</strong>
-                de la République du Sénégal, certifie que
+                La plateforme <strong>DocTrack</strong> atteste qu'une déclaration de perte
+                concernant le document au nom de
                 <strong>{{ $certificat->declarationDePerte->FirstNameInDoc }}
                 {{ $certificat->declarationDePerte->LastNameInDoc }}</strong>
-                a effectué une déclaration officielle de perte de document auprès
-                de la plateforme nationale DocTrack, conformément aux dispositions
-                en vigueur sur le territoire sénégalais.
+                a été enregistrée en ligne à la date indiquée. Les informations
+                ont été saisies par le déclarant lui-même et n'ont pas été vérifiées
+                par une autorité administrative.
             </div>
         </div>
 
@@ -677,12 +671,12 @@
         <!-- Validité et usage -->
         <div class="validite-box">
             <div class="validite-left">
-                <div class="validite-title">Validité et usage du certificat</div>
+                <div class="validite-title">Portée de ce récépissé</div>
                 <div class="validite-text">
-                    Ce certificat est délivré à titre de preuve de déclaration de perte.
-                    Il peut être présenté aux autorités compétentes, administrations,
-                    banques et institutions pour justifier la perte du document indiqué
-                    ci-dessus. Il ne constitue pas un document de remplacement.
+                    Ce récépissé prouve uniquement l'enregistrement d'une déclaration sur
+                    DocTrack. Il n'est pas délivré par une autorité administrative, ne
+                    remplace pas le certificat de perte établi par la Police ou la
+                    Gendarmerie, et ne constitue pas un document de remplacement.
                 </div>
             </div>
             <div class="validite-right">
@@ -718,9 +712,9 @@
             <!-- Droite : autorité -->
             <div class="sig-cell">
                 <div class="sig-box">
-                    <div class="sig-label">Visa de l'autorité compétente</div>
-                    <div class="sig-name">Ministère de l'Intérieur</div>
-                    <div class="sig-sub">République du Sénégal</div>
+                    <div class="sig-label">Visa éventuel</div>
+                    <div class="sig-name">Commissariat ou brigade</div>
+                    <div class="sig-sub">Réservé à l'autorité, si présenté</div>
                 </div>
                 <div class="sig-espace"></div>
             </div>

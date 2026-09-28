@@ -11,14 +11,14 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Password;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Laravel\Socialite\Facades\Socialite;
 use Ramsey\Uuid\Uuid;
-use SimpleSoftwareIO\QrCode\Facades\QrCode;
 use Spatie\Activitylog\Models\Activity;
 use Tymon\JWTAuth\Facades\JWTAuth;
+use App\Support\QrCodeUrl;
 
 class AuthController extends Controller
 {
@@ -106,11 +106,10 @@ class AuthController extends Controller
 
         // Générer un token unique pour le QR code avec Ramsey UUID V4
         $qrCodeToken    = Uuid::uuid4()->toString();
-        $expirationDate = now()->addYear(); // Valable 1 an
-                                            // $expirationDate = now()->addMinutes(3);  // QR Code valable pour 3 minutes pour tester
+        $expirationDate = now()->addMonths(config('doctrack.qr_code_validity_months'));
 
         // Générer un code à 6 chiffres pour Verification de la veracité de l'existence de l'email
-        $email_verification_code = random_int(100000, 999999);
+        $email_verification_code = (string) random_int(100000, 999999);
         // Création de l'utilisateur
         $user = User::create([
             'FirstName'               => $request->FirstName,
@@ -132,14 +131,8 @@ class AuthController extends Controller
         // Assignation du rôle SimpleUser par défaut
         $user->assignRole('SimpleUser');
 
-                                                                                       // Générer le QR code (URL publique vers une page de soumission)
-        $qrCodeUrl = "https://sendoctrack.netlify.app/found-qr?token=" . $qrCodeToken; // redirection vers le lien deployé apres scann du qr code
-                                                                                       // $qrCodeUrl = url('/api/found-qr/' . $qrCodeToken); //pour le test en local
-        $qrCodeImage = QrCode::format('png')->size(200)->generate($qrCodeUrl);
-
-        // Sauvegarder le QR code dans le stockage public
-        $fileName = 'qr_codes/' . $user->id . '_qr.png';
-        Storage::disk('public')->put($fileName, $qrCodeImage);
+        // Le QR code n'est plus écrit sur le disque public : son image est
+        // générée à la demande via une URL signée et temporaire.
 
         // ── Log d'activité ──
         activity()
@@ -161,7 +154,7 @@ class AuthController extends Controller
             'message'     => 'Inscription réussie ! Bienvenue sur la plateforme.',
             'user'        => $user,
             'token'       => $token,
-            'qr_code_url' => Storage::url($fileName), // URL publique du QR code
+            'qr_code_url' => QrCodeUrl::imageFor($user),
         ], 201);
     }
 
@@ -170,79 +163,54 @@ class AuthController extends Controller
      */
     public function login(Request $request)
     {
-        // Identifier unique pour suivre les tentatives (par email ou IP)
-        $identifier = $request->input('email') ?? $request->ip();
+        $request->validate([
+            'email'    => 'required|email',
+            'password' => 'required|string',
+        ]);
 
-        // Clé de cache pour stocker les tentatives
-        $cacheKey = "login_attempts_{$identifier}";
+        // 5 échecs max par couple email + IP, blocage 5 minutes.
+        $throttleKey = 'login:' . Str::lower($request->input('email')) . '|' . $request->ip();
 
-        // Récupérer le nombre de tentatives actuelles
-        $attempts    = Cache::get($cacheKey, 0);
-        $lastAttempt = Cache::get("last_attempt_{$identifier}");
-
-        // Vérifier si l'utilisateur est bloqué (5 tentatives atteintes)
-        if ($attempts >= 5) {
-            $lockoutTime = now()->addMinutes(5); // Bloquer pendant 5 minutes
-            if (! $lastAttempt || now()->lessThan($lockoutTime)) {
-                $remainingTime = now()->diffInSeconds($lockoutTime);
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Trop de tentatives. Veuillez attendre ' . $remainingTime . ' secondes avant de réessayer.',
-                ], 429); // 429 Too Many Requests
-            } else {
-                // Réinitialiser les tentatives si le délai est écoulé
-                Cache::forget($cacheKey);
-                Cache::forget("last_attempt_{$identifier}");
-                $attempts = 0;
-            }
+        if (RateLimiter::tooManyAttempts($throttleKey, 5)) {
+            $seconds = RateLimiter::availableIn($throttleKey);
+            return response()->json([
+                'success' => false,
+                'message' => 'Trop de tentatives. Veuillez attendre ' . $seconds . ' secondes avant de réessayer.',
+            ], 429);
         }
 
-        // Récupérer les données de connexion
         $credentials = $request->only('email', 'password');
-        // Vérifier si l'utilisateur a verifié son email
-        $user = User::where('email', $request->email)->first();
-        if (! $user) {
-            return response()->json([
-                'message' => 'Utilisateur introuvable.',
-            ], 404);
-        }
 
-        // Vérifier si l'utilisateur a verifié son email except si il a le rôle 'Admin'
-        if (is_null($user->email_verified_at) && ! $user->hasRole('Admin')) {
-            return response()->json([
-                'message' => 'Email non vérifié.',
-            ], 403);
-        }
-
-        // Tentative de connexion avec JWT
+        // Même réponse pour un email inconnu et un mauvais mot de passe :
+        // on ne révèle pas quels comptes existent.
         if (! $token = JWTAuth::attempt($credentials)) {
-                                                                   // Incrémenter les tentatives en cas d'échec
-            Cache::put($cacheKey, $attempts + 1, 1440);            // Stocke pendant 24h (1440 minutes)
-            Cache::put("last_attempt_{$identifier}", now(), 1440); // Stocke l'heure de la dernière tentative
+            RateLimiter::hit($throttleKey, 300);
 
-            // ── Log tentative échouée ──
             activity()
-                ->withProperties([
-                    'ip'    => $request->ip(),
-                    'email' => $request->email,
-                ])
+                ->withProperties(['ip' => $request->ip()])
                 ->log('Tentative de connexion échouée');
 
             return response()->json([
                 'success' => false,
-                'message' => 'Vos identifiants sont invalides. Veuillez réessayer. Tentatives restantes : ' . (5 - ($attempts + 1)),
+                'message' => 'Vos identifiants sont invalides. Veuillez réessayer.',
             ], 401);
-
         }
 
-        // Connexion réussie : réinitialiser les tentatives
-        Cache::forget($cacheKey);
-        Cache::forget("last_attempt_{$identifier}");
+        /** @var User $user */
+        $user = JWTAuth::setToken($token)->toUser();
 
-        $user  = Auth::user();
-        $roles = $user->getRoleNames(); // Récupérer le rôle
+        // Email non vérifié : on ne le dit qu'après un mot de passe correct.
+        if (is_null($user->email_verified_at) && ! $user->hasRole('Admin')) {
+            JWTAuth::setToken($token)->invalidate();
+            return response()->json([
+                'success' => false,
+                'message' => 'Email non vérifié.',
+            ], 403);
+        }
 
-        // ── Log connexion réussie (AVANT le return) ──
+        RateLimiter::clear($throttleKey);
+        $roles = $user->getRoleNames();
+
         activity()
             ->causedBy($user)
             ->withProperties([
@@ -251,13 +219,12 @@ class AuthController extends Controller
             ])
             ->log('Connexion réussie');
 
-        // Connexion réussie
         return response()->json([
             'success' => true,
             'message' => 'Connexion réussie !',
             'user'    => $user,
             'token'   => $token,
-            'roles'   => $roles, // Retourner le ou les rôles de l'utilisateur
+            'roles'   => $roles,
         ], 200);
     }
     /**
@@ -290,8 +257,8 @@ class AuthController extends Controller
             'success'     => true,
             'user'        => $user,
             'roles'       => $roles,
-            //afficher l'url du qr code
-            'qr_code_url' => Storage::url('qr_codes/' . $user->id . '_qr.png'),
+            'qr_code_url'        => QrCodeUrl::imageFor($user),
+            'qr_code_expires_at' => $user->qr_code_expires_at,
         ], 200);
     }
 
@@ -567,17 +534,17 @@ class AuthController extends Controller
      */
     public function forgotPassword(Request $request)
     {
-        // Validation des données
         $request->validate([
-            'email' => 'required|email|exists:users,email',
+            'email' => 'required|email',
         ]);
 
-        // Envoi du lien de réinitialisation
-        $status = Password::sendResetLink($request->only('email'));
+        // Réponse identique que le compte existe ou non (pas d'énumération).
+        Password::sendResetLink($request->only('email'));
 
-        return $status === Password::RESET_LINK_SENT
-            ? response()->json(['success' => true, 'message' => __($status)], 200)
-            : response()->json(['success' => false, 'message' => __($status)], 400);
+        return response()->json([
+            'success' => true,
+            'message' => 'Si un compte existe pour cet email, un lien de réinitialisation vient d\'être envoyé.',
+        ], 200);
     }
 
     /**
@@ -588,7 +555,7 @@ class AuthController extends Controller
         // Validation des données
         $request->validate([
             'token'    => 'required',
-            'email'    => 'required|email|exists:users,email',
+            'email'    => 'required|email',
             'password' => 'required|string|min:8|confirmed',
         ]);
 
@@ -615,11 +582,9 @@ class AuthController extends Controller
         try {
             // Récupérer le token envoyé par le front-end
             $token = $request->input('token');
-            Log::info('Google Token reçu : ' . $token);
 
             // Récupérer l'utilisateur Google à partir du token
             $googleUser = Socialite::driver('google')->userFromToken($token);
-            Log::info('Utilisateur Google : ' . $googleUser->getName());
 
             // Vérifier que les données essentielles sont présentes
             if (! $googleUser || ! $googleUser->email) {
@@ -665,8 +630,7 @@ class AuthController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Échec de la connexion avec Google. Veuillez réessayer.',
-                'error'   => $e->getMessage(),
-            ], 500);
+            ], 401);
         }
     }
 
@@ -708,6 +672,9 @@ class AuthController extends Controller
                 'password'  => Hash::make(Str::random(16)), // Mot de passe généré de façon aléatoire
                 'Adress'    => $request->input('Adress'),
                 'Phone'     => $request->input('Phone'),
+                'email_verified_at'  => now(), // email déjà vérifié par Google
+                'qr_code_token'      => Uuid::uuid4()->toString(),
+                'qr_code_expires_at' => now()->addMonths(config('doctrack.qr_code_validity_months')),
             ]);
 
             // Assigner le rôle par défaut à l'utilisateur (par exemple, 'SimpleUser')
@@ -730,12 +697,14 @@ class AuthController extends Controller
                 'token'   => $jwtToken,
             ], 200);
 
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            throw $e;
         } catch (\Exception $e) {
+            Log::error('Erreur finalisation compte Google : ' . $e->getMessage());
             return response()->json([
                 'success' => false,
                 'message' => 'Échec de la création du compte. Veuillez réessayer.',
-                'error'   => $e->getMessage(),
-            ], 500);
+            ], 400);
         }
     }
 
@@ -747,71 +716,26 @@ class AuthController extends Controller
      */
     public function renewQrCode(Request $request)
     {
-        try {
-            // Récupérer l'utilisateur authentifié via JWT
-            $user = JWTAuth::parseToken()->authenticate();
+        /** @var \App\Models\User $user */
+        $user = Auth::user();
 
-            if (! $user) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Utilisateur non authentifié.',
-                ], 401);
-            }
+        $newExpirationDate = now()->addMonths(config('doctrack.qr_code_validity_months'));
 
-            // Générer un nouveau token pour le QR code
-            $newQrCodeToken    = Uuid::uuid4()->toString();
-            $newExpirationDate = now()->addYear(); // Valable 1 an
+        $user->qr_code_token      = Uuid::uuid4()->toString();
+        $user->qr_code_expires_at = $newExpirationDate;
+        $user->save();
 
-            // Mettre à jour l'utilisateur
-            $user->qr_code_token      = $newQrCodeToken;
-            $user->qr_code_expires_at = $newExpirationDate;
-            $user->save();
+        activity()
+            ->causedBy($user)
+            ->performedOn($user)
+            ->withProperties(['new_expiration' => $newExpirationDate])
+            ->log('QR Code renouvelé');
 
-                                                                                              // Générer un nouveau QR code
-            $qrCodeUrl = "https://sendoctrack.netlify.app/found-qr?token=" . $newQrCodeToken; //Redirection vers l'appli apres scann
-                                                                                              // $qrCodeUrl = url('/api/found-qr/' . $newQrCodeToken);
-            $qrCodeImage = QrCode::format('png')->size(200)->generate($qrCodeUrl);
-
-            // Sauvegarder le nouveau QR code dans le stockage public
-            $fileName = 'qr_codes/' . $user->id . '_qr.png';
-            Storage::disk('public')->put($fileName, $qrCodeImage);
-
-            // ── Log (AVANT le return) ──
-            activity()
-                ->causedBy($user)
-                ->performedOn($user)
-                ->withProperties([
-                    'new_expiration' => $newExpirationDate,
-                    'user_id'        => $user->id,
-                ])
-                ->log('QR Code renouvelé');
-
-            // Logger l'action
-            Log::info('QR code renouvelé avec succès pour l\'utilisateur', [
-                'user_id'           => $user->id,
-                'new_qr_code_token' => $newQrCodeToken,
-                'new_expiration'    => $newExpirationDate,
-            ]);
-
-            return response()->json([
-                'success'        => true,
-                'message'        => 'QR code renouvelé avec succès.',
-                'qr_code_url'    => Storage::url($fileName),
-                'new_expiration' => $newExpirationDate,
-            ], 200);
-
-        } catch (\Exception $e) {
-            Log::error('Erreur lors du renouvellement du QR code', [
-                'user_id' => $user->id ?? null,
-                'error'   => $e->getMessage(),
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Erreur lors du renouvellement du QR code.',
-            ], 500);
-        }
-
+        return response()->json([
+            'success'        => true,
+            'message'        => 'QR code renouvelé avec succès.',
+            'qr_code_url'    => QrCodeUrl::imageFor($user),
+            'new_expiration' => $newExpirationDate,
+        ], 200);
     }
-
 }

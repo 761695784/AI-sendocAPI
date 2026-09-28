@@ -2,6 +2,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\CertificatDePerte;
+use App\Support\PrivateFiles;
 use Illuminate\Support\Facades\Auth;
 
 class CertificatDePerteController extends Controller
@@ -13,7 +14,7 @@ class CertificatDePerteController extends Controller
     {
         $user = Auth::user();
 
-        if (! $user->hasRole('Admin')) {
+        if (! $user?->hasRole('Admin')) {
             return response()->json(['success' => false, 'message' => 'Accès non autorisé.'], 403);
         }
 
@@ -122,9 +123,9 @@ class CertificatDePerteController extends Controller
             return response()->json(['message' => 'Accès refusé'], 403);
         }
 
-        $path = storage_path('app/public/' . $certificat->pdf_path);
+        $path = PrivateFiles::path($certificat->pdf_path);
 
-        if (! file_exists($path)) {
+        if (! $path) {
             return response()->json(['message' => 'Fichier introuvable'], 404);
         }
 
@@ -163,9 +164,9 @@ class CertificatDePerteController extends Controller
             ], 403);
         }
 
-        $pdfPath = storage_path('app/public/' . $certificat->pdf_path);
+        $pdfPath = PrivateFiles::path($certificat->pdf_path);
 
-        if (! file_exists($pdfPath)) {
+        if (! $pdfPath) {
             return response()->json([
                 'success' => false,
                 'message' => 'Fichier PDF introuvable.',

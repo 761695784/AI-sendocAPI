@@ -24,6 +24,11 @@ use Illuminate\Support\Str;
 class DocumentController extends Controller
 {
 
+    public static function frontendDocumentUrl(Document $document): string
+    {
+        return rtrim(config('doctrack.frontend_url'), '/') . '/document/' . $document->uuid;
+    }
+
     // ══════════════════════════════════════════════════════════════
     // INDEX — Liste publique des documents
     // ══════════════════════════════════════════════════════════════
@@ -51,8 +56,8 @@ class DocumentController extends Controller
     // ══════════════════════════════════════════════════════════════
     public function getAllPublications(Request $request)
     {
-        if (! Auth::check()) {
-            return response()->json(['success' => false, 'message' => 'Non authentifié.'], 401);
+        if (! Auth::user()?->hasRole('Admin')) {
+            return response()->json(['success' => false, 'message' => 'Accès refusé.'], 403);
         }
 
         $documents = Document::withTrashed()
@@ -110,8 +115,8 @@ class DocumentController extends Controller
             ->whereRaw(
                 'LOWER(LastNameInDoc) = ?', [strtolower($document->OwnerLastName)]
             )
-            ->where('document_type_id', $document->document_type_id) 
-            ->whereNull('deleted_at')                                
+            ->where('document_type_id', $document->document_type_id)
+            ->where('user_id', '!=', $document->user_id) // pas de notification à soi-même
             ->with('user')
             ->get();
 
@@ -119,7 +124,7 @@ class DocumentController extends Controller
             dispatch(new NotifyDeclarantJob(
                 $document,
                 $declaration->user,
-                'https://sendoctrack.netlify.app/document/' . $document->uuid,
+                self::frontendDocumentUrl($document),
                 $declaration->id
             ));
         }
@@ -135,146 +140,6 @@ class DocumentController extends Controller
             'document' => new DocumentResource($document->load(['user', 'documentType'])),
         ], 201);
     }
-
-    // Méthode pour envoyer un SMS via l'API Orange
-    // protected function sendSMS($phoneNumber, $message)
-    // {
-    //     // Log du numéro de téléphone avant nettoyage
-    //     Log::info('Numéro de téléphone avant nettoyage : ' . $phoneNumber);
-
-    //     // Nettoyer le numéro de téléphone
-    //     $phoneNumber = str_replace('+221', '', $phoneNumber); // Supprime '+221' du numéro
-    //     $phoneNumber = '221' . $phoneNumber; // Ajoute l'indicatif Sénégal
-
-    //     // Log du numéro de téléphone après nettoyage
-    //     Log::info('Numéro de téléphone après nettoyage : ' . $phoneNumber);
-
-    //     // Vérifier la longueur du numéro
-    //     if (strlen($phoneNumber) < 12) { // 221 + 9 chiffres = 12 caractères
-    //         Log::error('Numéro de téléphone invalide : ' . $phoneNumber);
-    //         return;
-    //     }
-
-    //     // Récupérer les identifiants depuis la configuration
-    //     $clientId = config('services.orange.client_id');
-    //     $clientSecret = config('services.orange.client_secret');
-
-    //     // Vérifier que les identifiants sont bien définis
-    //     if (empty($clientId) || empty($clientSecret)) {
-    //         Log::error('Client ID ou Client Secret non défini.');
-    //         return;
-    //     }
-
-    //     // Log des identifiants
-    //     Log::info('Client ID : ' . $clientId);
-    //     Log::info('Client Secret : ' . $clientSecret);
-
-    //     // Obtenir le token d'accès
-    //     $accessToken = $this->getAccessToken($clientId, $clientSecret);
-
-    //     if (!$accessToken) {
-    //         Log::error('Erreur : Impossible de récupérer le token d\'accès.');
-    //         return;
-    //     }
-
-    //     // Envoyer le SMS
-    //     $senderAddress = config('services.orange.sender_address');
-
-    //     // Vérifier que le senderAddress commence par 'tel:'
-    //     if (strpos($senderAddress, 'tel:') !== 0) {
-    //         $senderAddress = 'tel:' . $senderAddress; // Ajouter le préfixe si absent
-    //     }
-
-    //     $url = 'https://api.orange.com/smsmessaging/v1/outbound/' . urlencode($senderAddress) . '/requests';
-
-    //     $data = [
-    //         'outboundSMSMessageRequest' => [
-    //             'address' => 'tel:+' . $phoneNumber,  // Format international complet
-    //             'outboundSMSTextMessage' => [
-    //                 'message' => $message,
-    //             ],
-    //             'senderAddress' => $senderAddress, // Utiliser le senderAddress formaté
-    //             // 'senderName' => "SMS 183786",
-    //             'senderName' => "DocTrack",
-    //         ]
-    //     ];
-
-    //     $ch = curl_init();
-    //     curl_setopt($ch, CURLOPT_URL, $url);
-    //     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    //     curl_setopt($ch, CURLOPT_POST, true);
-    //     curl_setopt($ch, CURLOPT_HTTPHEADER, [
-    //         'Authorization: Bearer ' . $accessToken,
-    //         'Content-Type: application/json',
-    //         'Accept: application/json',
-    //     ]);
-    //     curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-
-    //     $response = curl_exec($ch);
-    //     $error = curl_error($ch);
-    //     curl_close($ch);
-
-    //     if ($response === false) {
-    //         Log::error('Erreur lors de l\'envoi du SMS : ' . $error);
-    //         return;
-    //     }
-
-    //     $responseData = json_decode($response, true);
-    //     if (isset($responseData['outboundSMSMessageRequest'])) {
-    //         Log::info('SMS envoyé avec succès à ' . $phoneNumber);
-    //     } else {
-    //         Log::error('Erreur lors de l\'envoi du SMS : ' . $response);
-    //     }
-    // }
-
-    // // Méthode pour obtenir un jeton d'accès
-    // protected function getAccessToken($clientId, $clientSecret)
-    // {
-    //     $url = 'https://api.orange.com/oauth/v3/token';
-
-    //     // Log des identifiants et de l'en-tête d'autorisation
-    //     Log::info('Tentative d\'obtention du token avec les identifiants :', [
-    //         'clientId' => $clientId,
-    //         'clientSecret' => $clientSecret,
-    //         'authorizationHeader' => 'Basic ' . base64_encode($clientId . ':' . $clientSecret),
-    //     ]);
-
-    //     $ch = curl_init();
-    //     curl_setopt($ch, CURLOPT_URL, $url);
-    //     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    //     curl_setopt($ch, CURLOPT_POST, true);
-    //     curl_setopt($ch, CURLOPT_HTTPHEADER, [
-    //         'Authorization: Basic ' . base64_encode($clientId . ':' . $clientSecret),
-    //         'Content-Type: application/x-www-form-urlencoded',
-    //         'Accept: application/json',
-    //     ]);
-    //     curl_setopt($ch, CURLOPT_POSTFIELDS, 'grant_type=client_credentials');
-
-    //     $response = curl_exec($ch);
-    //     $error = curl_error($ch);
-    //     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE); // Récupère le code HTTP
-    //     curl_close($ch);
-
-    //     // Log de la réponse
-    //     Log::info('Réponse de l\'API Orange :', [
-    //         'http_code' => $httpCode,
-    //         'response' => $response,
-    //         'error' => $error,
-    //     ]);
-
-    //     if ($response === false) {
-    //         Log::error('Erreur lors de l\'obtention du jeton d\'accès : ' . $error);
-    //         throw new \Exception('Erreur cURL : ' . $error);
-    //     }
-
-    //     $data = json_decode($response, true);
-    //     if (isset($data['access_token'])) {
-    //         return $data['access_token'];
-    //     }
-
-    //     Log::error('Erreur lors de l\'obtention du jeton d\'accès : ' . $response);
-    //     throw new \Exception('Impossible d\'obtenir le jeton d\'accès');
-    // }
 
     /**
      * Gérer la demande de restitution.
@@ -295,6 +160,13 @@ class DocumentController extends Controller
             ], 403); // Code 403 Forbidden
         }
 
+        if ($document->statut === 'récupéré') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Ce document a déjà été restitué.',
+            ], 409);
+        }
+
         // Vérifier si une demande de restitution pour ce document a déjà été faite par cet utilisateur
         $existingEmailLog = EmailLog::where('requester_user_id', $fromUser->id)
             ->where('document_id', $document->uuid)
@@ -312,7 +184,7 @@ class DocumentController extends Controller
         $toUser = $document->user;
                                                                                       // Envoyer la notification par SMS
         $phoneNumber = $toUser->Phone;                                                // Assure-toi que le champ du numéro de téléphone est correct
-        $documentUrl = 'https://sendoctrack.netlify.app/document/' . $document->uuid; // Utilisation de uuid
+        $documentUrl = self::frontendDocumentUrl($document);
         $message     = 'Bonjour, vous avez une demande de restitution pour le document : ' . $document->OwnerFirstName . ' ' . $document->OwnerLastName . '. Consultez-le ici : ' . $documentUrl;
         // Envoyer la notification par email
         $toUser->notify(new RestitutionRequestNotification($fromUser, $document));
@@ -363,6 +235,13 @@ class DocumentController extends Controller
         }
 
         $validatedData = $request->validated();
+
+        // L'image n'est pas une colonne : elle passe par MediaLibrary.
+        if ($request->hasFile('image') && $request->file('image')->isValid()) {
+            $document->addMediaFromRequest('image')->toMediaCollection('document_image');
+        }
+        unset($validatedData['image']);
+
         $document->update($validatedData);
 
         // Invalide le cache si le statut change
@@ -372,7 +251,7 @@ class DocumentController extends Controller
         activity()
             ->causedBy(Auth::user())
             ->performedOn($document)
-            ->withProperties($validatedData)
+            ->withProperties(collect($validatedData)->except('DocIdentification')->all())
             ->log('Document mis à jour');
 
         return response()->json([
@@ -702,7 +581,7 @@ class DocumentController extends Controller
 
         return Cache::remember($cacheKey, now()->addDays(30), function () use ($location) {
             try {
-                $response = Http::withoutVerifying()
+                $response = Http::timeout(5)
                     ->withHeaders(['User-Agent' => 'DocTrack/1.0 (sendoctrack@gmail.com)'])
                     ->get('https://nominatim.openstreetmap.org/search', [
                         'q'      => $location . ', Sénégal',

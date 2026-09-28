@@ -25,7 +25,7 @@ class NewCommentNotification extends Mailable
 
  public function build()
     {
-        $documentUrl = url('https://sendoctrack.netlify.app/document/' . $this->document->uuid); // Générer l'URL de la publication
+        $documentUrl = rtrim(config('doctrack.frontend_url'), '/') . '/document/' . $this->document->uuid; // Générer l'URL de la publication
 
         return $this->markdown('emails.document.new_comment_notification')
             ->subject('Nouveau commentaire sur votre publication')

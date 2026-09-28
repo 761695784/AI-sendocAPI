@@ -4,7 +4,7 @@ namespace App\Services;
 
 use App\Models\CertificatDePerte;
 use App\Models\DeclarationDePerte;
-use Illuminate\Support\Facades\Storage;
+use App\Support\PrivateFiles;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Str;
 
@@ -27,7 +27,7 @@ class CertificatDePerteService
             'declaration_de_perte_id' => $declaration->id,
             'certificat_number' => $certificatNumber,
             'document_type_id' => $declaration->document_type_id,
-            'description' => 'Certificat généré automatiquement pour la déclaration de perte N°' . $declaration->id
+            'description' => 'Récépissé DocTrack généré automatiquement pour la déclaration de perte N°' . $declaration->id
         ]);
         
 
@@ -39,7 +39,8 @@ class CertificatDePerteService
 
         
         $filename = 'certificats/' . $certificatNumber . '.pdf';
-        Storage::disk('public')->put($filename, $pdf->output());
+        // Disque privé : le PDF n'est accessible que via l'API authentifiée.
+        PrivateFiles::put($filename, $pdf->output());
 
         // Mise à jour du chemin du PDF
         $certificat->update([

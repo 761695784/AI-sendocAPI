@@ -2,22 +2,19 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
-// use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
 {
     /**
-     * Seed the application's database.
+     * Ordre obligatoire : rôles → types de documents → utilisateurs.
      */
     public function run(): void
     {
-        // User::factory(10)->create();
-
-
-
-              // Appelle du seeder des utilisateurs (y compris l'admin)
-              $this->call(UserSeeder::class);
+        $this->call([
+            RolesAndPermissionsSeeder::class,
+            DocumentTypeSeeder::class,
+            UserSeeder::class,
+        ]);
     }
 }

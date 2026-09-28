@@ -39,7 +39,7 @@ class RestitutionRequestNotification extends Notification
             ->line('Email : ' . $this->fromUser->email)
             ->line('Téléphone : ' . $this->fromUser->Phone)
             ->line('Pour plus de détails, veuillez cliquer sur le bouton ci-dessous :')
-            ->action('Voir le document', url('https://sendoctrack.netlify.app/document/' . $this->document->uuid))
+            ->action('Voir le document', rtrim(config('doctrack.frontend_url'), '/') . '/document/' . $this->document->uuid)
             ->line('Nous vous remercions de votre confiance se manifestant par l\'utilisation de notre plateforme.')
             ->line('Cordialement,')
             ->line('L’équipe de Sénégal DocTrack');

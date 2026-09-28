@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Models\DeclarationDePerte;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -9,15 +10,12 @@ use Illuminate\Database\Eloquent\Factories\Factory;
  */
 class NotificationFactory extends Factory
 {
-    /**
-     * Define the model's default state.
-     *
-     * @return array<string, mixed>
-     */
     public function definition(): array
     {
         return [
-            //
+            'message'                 => 'Un document correspondant a été trouvé',
+            'is_read'                 => false,
+            'declaration_de_perte_id' => DeclarationDePerte::factory(),
         ];
     }
 }

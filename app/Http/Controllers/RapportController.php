@@ -6,7 +6,7 @@ use App\Models\RapportGenere;
 use App\Services\RapportService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Storage;
+use App\Support\PrivateFiles;
 
 class RapportController extends Controller
 {
@@ -139,7 +139,7 @@ class RapportController extends Controller
             ], 404);
         }
 
-        $path = Storage::disk('public')->path($rapport->pdf_path);
+        $path = PrivateFiles::path($rapport->pdf_path);
         $nom  = "DocTrack-Rapport-{$rapport->periode_label}.pdf";
 
         return response()->download($path, $nom, [
@@ -165,7 +165,7 @@ class RapportController extends Controller
             ], 404);
         }
 
-        $path = Storage::disk('public')->path($rapport->pdf_path);
+        $path = PrivateFiles::path($rapport->pdf_path);
 
         return response()->file($path, [
             'Content-Type'        => 'application/pdf',

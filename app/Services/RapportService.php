@@ -4,7 +4,7 @@ namespace App\Services;
 
 use App\Models\RapportGenere;
 use Barryvdh\DomPDF\Facade\Pdf;
-use Illuminate\Support\Facades\Storage;
+use App\Support\PrivateFiles;
 use Illuminate\Support\Str;
 
 
@@ -66,7 +66,7 @@ class RapportService
         $pdfPath  = $this->buildPdfPath($annee, $mois);
         $pdfBytes = $pdf->output();
 
-        Storage::disk('public')->put($pdfPath, $pdfBytes);
+        PrivateFiles::put($pdfPath, $pdfBytes);
 
         // ── 6. Persister le rapport en base ───────────────────────────────────
         // Supprimer l'éventuel rapport existant pour la même période

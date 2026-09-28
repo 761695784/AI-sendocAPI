@@ -4,7 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Support\Facades\Storage;
+use App\Support\PrivateFiles;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
 
 class RapportGenere extends Model
@@ -32,7 +33,7 @@ class RapportGenere extends Model
     // ── Accesseurs ─────────────────────────────────────────────────────────────
 
     /**
-     * URL publique du PDF
+     * URL signée et temporaire du PDF (fichier stocké sur disque privé).
      */
     public function getPdfUrlAttribute(): ?string
     {
@@ -40,7 +41,7 @@ class RapportGenere extends Model
             return null;
         }
 
-        return Storage::disk('public')->url($this->pdf_path);
+        return URL::temporarySignedRoute('files.rapport', now()->addMinutes(30), ['uuid' => $this->uuid]);
     }
 
     /**
@@ -52,7 +53,7 @@ class RapportGenere extends Model
             return false;
         }
 
-        return Storage::disk('public')->exists($this->pdf_path);
+        return PrivateFiles::exists($this->pdf_path);
     }
 
     // ── Boot ───────────────────────────────────────────────────────────────────
@@ -69,9 +70,7 @@ class RapportGenere extends Model
 
         // Supprime le fichier PDF lors de la suppression du modèle
         static::deleting(function ($model) {
-            if ($model->pdf_path && Storage::disk('public')->exists($model->pdf_path)) {
-                Storage::disk('public')->delete($model->pdf_path);
-            }
+            PrivateFiles::delete($model->pdf_path);
         });
     }
 }

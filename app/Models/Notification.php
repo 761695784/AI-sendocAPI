@@ -12,12 +12,16 @@ class Notification extends Model
 
     // protected $guarded = [];
     protected $fillable = [
-        'message', 'user_id', 'is_read',
+        'message', 'is_read', 'declaration_de_perte_id',
     ];
 
-    public function user()
+    protected $casts = [
+        'is_read' => 'boolean',
+    ];
+
+    public function declaration()
     {
-        return $this->belongsTo(User::class); // Assurez-vous que cela correspond à votre modèle utilisateur
+        return $this->belongsTo(DeclarationDePerte::class, 'declaration_de_perte_id');
     }
 
     protected static function boot()

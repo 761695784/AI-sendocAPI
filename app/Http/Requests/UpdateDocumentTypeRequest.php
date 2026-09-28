@@ -3,26 +3,21 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class UpdateDocumentTypeRequest extends FormRequest
 {
-    /**
-     * Determine if the user is authorized to make this request.
-     */
     public function authorize(): bool
     {
-        return false;
+        return (bool) $this->user()?->hasRole('Admin');
     }
 
-    /**
-     * Get the validation rules that apply to the request.
-     *
-     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
-     */
     public function rules(): array
     {
         return [
-            //
+            'TypeName'           => ['sometimes', 'required', 'string', 'max:255',
+                Rule::unique('document_types', 'TypeName')->ignore($this->route('document_type'))],
+            'IdentificationSize' => 'sometimes|required|string|max:255',
         ];
     }
 }

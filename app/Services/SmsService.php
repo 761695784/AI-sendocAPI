@@ -2,121 +2,149 @@
 
 namespace App\Services;
 
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
+/**
+ * Envoi de SMS via l'API Orange (SMS Messaging).
+ *
+ * - Ne lève jamais d'exception : renvoie true/false, l'appelant décide.
+ * - Normalise les numéros sénégalais au format E.164 (+221XXXXXXXXX).
+ * - Met en cache le jeton OAuth (évite une authentification par SMS).
+ * - Ne journalise ni identifiants, ni jeton, ni numéro complet.
+ */
 class SmsService
 {
-    public function sendSMS(string $phoneNumber, string $message): void
+    private const TOKEN_URL = 'https://api.orange.com/oauth/v3/token';
+    private const SMS_URL   = 'https://api.orange.com/smsmessaging/v1/outbound/%s/requests';
+
+    public function sendSMS(?string $phoneNumber, string $message): bool
     {
-        Log::info('Numéro de téléphone avant nettoyage : ' . $phoneNumber);
+        $recipient = self::normalizeSenegalPhone($phoneNumber);
 
-        // Nettoyer le numéro de téléphone
-        $phoneNumber = str_replace('+221', '', $phoneNumber); // Supprime '+221' du numéro
-        $phoneNumber = '221' . $phoneNumber; // Ajoute l'indicatif Sénégal
-
-        Log::info('Numéro de téléphone après nettoyage : ' . $phoneNumber);
-
-        if (strlen($phoneNumber) < 12) {
-            Log::error('Numéro de téléphone invalide : ' . $phoneNumber);
-            return;
+        if (! $recipient) {
+            Log::warning('SMS non envoyé : numéro invalide ou absent.', ['phone' => self::maskPhone($phoneNumber)]);
+            return false;
         }
 
-        $clientId = config('services.orange.client_id');
+        $clientId     = config('services.orange.client_id');
         $clientSecret = config('services.orange.client_secret');
+        $sender       = config('services.orange.sender_address');
 
-        if (empty($clientId) || empty($clientSecret)) {
-            Log::error('Client ID ou Client Secret non défini.');
-            return;
+        if (empty($clientId) || empty($clientSecret) || empty($sender)) {
+            Log::error('SMS non envoyé : ORANGE_CLIENT_ID, ORANGE_CLIENT_SECRET ou ORANGE_SENDER_ADDRESS manquant dans le .env.');
+            return false;
+        }
+
+        $accessToken = $this->getAccessToken($clientId, $clientSecret);
+        if (! $accessToken) {
+            return false;
+        }
+
+        // L'adresse d'expéditeur doit être au format "tel:+221XXXXXXXXX".
+        $senderAddress = 'tel:+' . ltrim(preg_replace('/^tel:/', '', $sender), '+');
+
+        try {
+            $response = Http::timeout(15)
+                ->withToken($accessToken)
+                ->acceptJson()
+                ->post(sprintf(self::SMS_URL, urlencode($senderAddress)), [
+                    'outboundSMSMessageRequest' => [
+                        'address'                => 'tel:' . $recipient,
+                        'senderAddress'          => $senderAddress,
+                        'senderName'             => config('services.orange.sender_name', 'DocTrack'),
+                        'outboundSMSTextMessage' => ['message' => $message],
+                    ],
+                ]);
+        } catch (\Throwable $e) {
+            Log::error('SMS non envoyé : erreur réseau vers Orange.', ['error' => $e->getMessage()]);
+            return false;
+        }
+
+        if ($response->successful()) {
+            Log::info('SMS envoyé.', ['to' => self::maskPhone($recipient)]);
+            return true;
+        }
+
+        if ($response->status() === 401) {
+            Cache::forget('orange_sms_token');
+        }
+
+        Log::error('SMS refusé par Orange.', [
+            'status' => $response->status(),
+            'to'     => self::maskPhone($recipient),
+            'body'   => mb_substr($response->body(), 0, 500),
+        ]);
+
+        return false;
+    }
+
+    /**
+     * "77 123 45 67", "0022177…", "221771234567", "+221 77…" → "+221771234567".
+     * Renvoie null si le numéro n'est pas un numéro sénégalais valide (9 chiffres).
+     */
+    public static function normalizeSenegalPhone(?string $phone): ?string
+    {
+        if ($phone === null) {
+            return null;
+        }
+
+        $digits = preg_replace('/\D+/', '', $phone);
+
+        if (str_starts_with($digits, '00221')) {
+            $digits = substr($digits, 5);
+        } elseif (str_starts_with($digits, '221') && strlen($digits) === 12) {
+            $digits = substr($digits, 3);
+        }
+
+        // Mobiles 70/71/75/76/77/78 et fixes 33 : 9 chiffres.
+        if (! preg_match('/^(7[0-8]|3[0-9])\d{7}$/', $digits)) {
+            return null;
+        }
+
+        return '+221' . $digits;
+    }
+
+    public static function maskPhone(?string $phone): ?string
+    {
+        if (! $phone) {
+            return $phone;
+        }
+
+        return str_repeat('*', max(strlen($phone) - 4, 0)) . substr($phone, -4);
+    }
+
+    private function getAccessToken(string $clientId, string $clientSecret): ?string
+    {
+        if ($token = Cache::get('orange_sms_token')) {
+            return $token;
         }
 
         try {
-            $accessToken = $this->getAccessToken($clientId, $clientSecret);
-        } catch (\Exception $e) {
-            Log::error('Erreur lors de l\'obtention du token d\'accès : ' . $e->getMessage());
-            return;
+            $response = Http::timeout(15)
+                ->withBasicAuth($clientId, $clientSecret)
+                ->asForm()
+                ->acceptJson()
+                ->post(self::TOKEN_URL, ['grant_type' => 'client_credentials']);
+        } catch (\Throwable $e) {
+            Log::error('Jeton Orange : erreur réseau.', ['error' => $e->getMessage()]);
+            return null;
         }
 
-        $senderAddress = config('services.orange.sender_address');
-        if (strpos($senderAddress, 'tel:') !== 0) {
-            $senderAddress = 'tel:' . $senderAddress;
+        $token = $response->json('access_token');
+
+        if (! $response->successful() || ! $token) {
+            Log::error('Jeton Orange refusé (vérifier les identifiants et l\'abonnement SMS).', [
+                'status' => $response->status(),
+            ]);
+            return null;
         }
 
-        $url = 'https://api.orange.com/smsmessaging/v1/outbound/' . urlencode($senderAddress) . '/requests';
+        // Marge de 60 s sur la durée annoncée par Orange.
+        $ttl = max((int) $response->json('expires_in', 3600) - 60, 60);
+        Cache::put('orange_sms_token', $token, $ttl);
 
-        $data = [
-            'outboundSMSMessageRequest' => [
-                'address' => 'tel:+' . $phoneNumber,
-                'outboundSMSTextMessage' => [
-                    'message' => $message,
-                ],
-                'senderAddress' => $senderAddress,
-                'senderName' => "DocTrack",
-            ]
-        ];
-
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Authorization: Bearer ' . $accessToken,
-            'Content-Type: application/json',
-            'Accept: application/json',
-        ]);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-
-        $response = curl_exec($ch);
-        $error = curl_error($ch);
-        curl_close($ch);
-
-        if ($response === false) {
-            Log::error('Erreur lors de l\'envoi du SMS : ' . $error);
-            return;
-        }
-
-        $responseData = json_decode($response, true);
-        if (isset($responseData['outboundSMSMessageRequest'])) {
-            Log::info('SMS envoyé avec succès à ' . $phoneNumber);
-        } else {
-            Log::error('Erreur lors de l\'envoi du SMS : ' . $response);
-        }
-    }
-
-    protected function getAccessToken(string $clientId, string $clientSecret): ?string
-    {
-        $url = 'https://api.orange.com/oauth/v3/token';
-
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Authorization: Basic ' . base64_encode($clientId . ':' . $clientSecret),
-            'Content-Type: application/x-www-form-urlencoded',
-            'Accept: application/json',
-        ]);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, 'grant_type=client_credentials');
-
-        $response = curl_exec($ch);
-        $error = curl_error($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        Log::info('Réponse de l\'API Orange :', [
-            'http_code' => $httpCode,
-            'response' => $response,
-            'error' => $error,
-        ]);
-
-        if ($response === false) {
-            throw new \Exception('Erreur cURL : ' . $error);
-        }
-
-        $data = json_decode($response, true);
-        if (isset($data['access_token'])) {
-            return $data['access_token'];
-        }
-
-        throw new \Exception('Impossible d\'obtenir le jeton d\'accès');
+        return $token;
     }
 }

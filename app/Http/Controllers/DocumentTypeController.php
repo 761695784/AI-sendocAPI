@@ -80,7 +80,19 @@ class DocumentTypeController extends Controller
      */
     public function destroy(DocumentType $documentType)
     {
-        $documentType->delete(); // Supprime le type de document
+        // Les clés étrangères sont en cascade : supprimer un type utilisé
+        // effacerait toutes les déclarations et publications associées.
+        $enUsage = \App\Models\Document::withTrashed()->where('document_type_id', $documentType->id)->exists()
+            || \App\Models\DeclarationDePerte::withTrashed()->where('document_type_id', $documentType->id)->exists();
+
+        if ($enUsage) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Ce type de document est utilisé par des déclarations ou des publications et ne peut pas être supprimé.',
+            ], 409);
+        }
+
+        $documentType->delete();
 
         // return response()->json(null, 204); // Retourne une réponse vide avec un code HTTP 204 pour indiquer que la suppression a réussi
         return response()->json([

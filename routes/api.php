@@ -9,42 +9,50 @@ use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\DocumentTypeController;
 use App\Http\Controllers\EmailVerificationController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\PrivateFileController;
 use App\Http\Controllers\QrCodeController;
 use App\Http\Controllers\RapportController;
 use Illuminate\Support\Facades\Route;
 
 // ══════════════════════════════════════════════════════════════════
-// ROUTES PUBLIQUES SENSIBLES — throttle strict
-// 10 tentatives par minute (anti brute-force)
+// ROUTES PUBLIQUES SENSIBLES — throttle strict (anti brute-force)
 // ══════════════════════════════════════════════════════════════════
 Route::middleware('throttle:10,1')->group(function () {
     Route::post('register', [AuthController::class, 'register']);
     Route::post('login', [AuthController::class, 'login']);
+    Route::post('forgot-password', [AuthController::class, 'forgotPassword']);
+    // @deprecated — l'email passe dans l'URL. Conservé le temps d'adapter le front.
     Route::get('forgot-password', [AuthController::class, 'forgotPassword']);
     Route::post('reset-password', [AuthController::class, 'resetPassword']);
     Route::post('/verify-email', [EmailVerificationController::class, 'verify']);
+    Route::post('/found-qr', [QrCodeController::class, 'handleFoundQr']);
 });
 
 // ══════════════════════════════════════════════════════════════════
 // ROUTES PUBLIQUES LECTURE — throttle souple
-// 120 requêtes par minute (navigation normale)
 // ══════════════════════════════════════════════════════════════════
 Route::middleware('throttle:120,1')->group(function () {
-    Route::post('/auth/google/callback', [AuthController::class, 'handleGoogleLogin']);
+    Route::post('/auth/google/callback', [AuthController::class, 'handleGoogleCallback']);
     Route::post('/auth/google/finalize-account-creation', [AuthController::class, 'finalizeAccountCreation']);
-    Route::post('/found-qr', [QrCodeController::class, 'handleFoundQr']);
 
-    // Documents publics
+    // Documents publics (vue floutée, données personnelles masquées)
     Route::get('documents', [DocumentController::class, 'index']);
     Route::get('documents/{slug}', [DocumentController::class, 'show']);
     Route::get('documents/{document_slug}/comments', [CommentaireController::class, 'getCommentairesByDocument']);
     Route::get('lieu', [DocumentController::class, 'getPublicationsByLocation']);
-    Route::apiResource('document', DocumentController::class);
 });
 
 // ══════════════════════════════════════════════════════════════════
-// ROUTES PROTÉGÉES — authentification + throttle modéré
-// 60 requêtes par minute par utilisateur connecté
+// FICHIERS PRIVÉS — URLs signées temporaires (générées par l'API)
+// ══════════════════════════════════════════════════════════════════
+Route::middleware(['signed', 'throttle:120,1'])->prefix('files')->group(function () {
+    Route::get('documents/{uuid}/image', [PrivateFileController::class, 'documentImage'])->name('documents.image');
+    Route::get('qr-codes/{uuid}', [PrivateFileController::class, 'qrCode'])->name('files.qr');
+    Route::get('rapports/{uuid}', [PrivateFileController::class, 'rapport'])->name('files.rapport');
+});
+
+// ══════════════════════════════════════════════════════════════════
+// ROUTES PROTÉGÉES — utilisateur connecté
 // ══════════════════════════════════════════════════════════════════
 Route::middleware(['auth:api', 'throttle:60,1'])->group(function () {
 
@@ -79,10 +87,10 @@ Route::middleware(['auth:api', 'throttle:60,1'])->group(function () {
     Route::post('declarations/restore/{slug}', [DeclarationDePerteController::class, 'restoreTrashedDeclaration']);
     Route::get('my-declarations', [DeclarationDePerteController::class, 'getUserDeclarations']);
 
-    // ── Commentaires ──
-    Route::apiResource('comments', CommentaireController::class);
+    // ── Commentaires (pas de modification : la méthode n'existe pas) ──
+    Route::apiResource('comments', CommentaireController::class)->except(['update']);
 
-    // ── Notifications ──
+    // ── Notifications : l'Admin voit tout, le citoyen seulement les siennes ──
     Route::get('notifications', [NotificationController::class, 'index']);
     Route::patch('notifications/{slug}/mark-as-read', [NotificationController::class, 'markAsRead']);
     Route::get('correspondence-emails', [NotificationController::class, 'showAllCorrespondenceEmails']);
@@ -91,12 +99,16 @@ Route::middleware(['auth:api', 'throttle:60,1'])->group(function () {
     Route::get('all-notifications', [NotificationController::class, 'getAllData']);
     Route::get('new-notifications', [NotificationController::class, 'getNewNotifications']);
     Route::get('restitution-count', [NotificationController::class, 'getRestitutionRequestCount']);
+
+    // ── Types de documents : lecture pour tous les connectés ──
+    Route::get('document-types', [DocumentTypeController::class, 'index']);
+    Route::get('document-types/{document_type}', [DocumentTypeController::class, 'show']);
 });
 
 // ══════════════════════════════════════════════════════════════════
-// ROUTES ADMIN — throttle généreux (200/min)
+// ROUTES ADMIN — rôle Admin obligatoire
 // ══════════════════════════════════════════════════════════════════
-Route::middleware(['auth:api', 'throttle:200,1'])->group(function () {
+Route::middleware(['auth:api', 'role:Admin,api', 'throttle:200,1'])->group(function () {
 
     // ── Utilisateurs ──
     Route::get('/users', [AuthController::class, 'getAllUsersWithRoles']);
@@ -121,6 +133,11 @@ Route::middleware(['auth:api', 'throttle:200,1'])->group(function () {
     Route::get('recovered-documents', [DocumentController::class, 'getRecoveredDocuments']);
     Route::get('not-recovered-documents', [DocumentController::class, 'getNotRecoveredDocuments']);
 
+    // ── Types de documents : écriture ──
+    Route::post('document-types', [DocumentTypeController::class, 'store']);
+    Route::match(['put', 'patch'], 'document-types/{document_type}', [DocumentTypeController::class, 'update']);
+    Route::delete('document-types/{document_type}', [DocumentTypeController::class, 'destroy']);
+
     // ── Backup ──
     Route::post('/backup/run', [BackupController::class, 'runBackup']);
     Route::get('/backup/list', [BackupController::class, 'listBackups']);
@@ -137,9 +154,3 @@ Route::middleware(['auth:api', 'throttle:200,1'])->group(function () {
     Route::get('/rapports/{uuid}/telecharger', [RapportController::class, 'telecharger']);
     Route::delete('/rapports/{uuid}', [RapportController::class, 'destroy']);
 });
-
-// ══════════════════════════════════════════════════════════════════
-// TYPES DE DOCUMENTS
-// ══════════════════════════════════════════════════════════════════
-Route::apiResource('document-types', DocumentTypeController::class)
-    ->middleware(['auth:api', 'throttle:60,1']);

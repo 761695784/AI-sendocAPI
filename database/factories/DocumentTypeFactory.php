@@ -9,15 +9,11 @@ use Illuminate\Database\Eloquent\Factories\Factory;
  */
 class DocumentTypeFactory extends Factory
 {
-    /**
-     * Define the model's default state.
-     *
-     * @return array<string, mixed>
-     */
     public function definition(): array
     {
         return [
-            //
+            'TypeName'           => 'Type ' . fake()->unique()->word(),
+            'IdentificationSize' => '13 chiffres',
         ];
     }
 }

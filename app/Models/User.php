@@ -34,6 +34,9 @@ class User extends Authenticatable  implements JWTSubject
     protected $hidden = [
         'password',
         'remember_token',
+        'email_verification_code',
+        'qr_code_token',
+        'qr_code_expires_at',
     ];
 
     /**
@@ -46,6 +49,7 @@ class User extends Authenticatable  implements JWTSubject
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'qr_code_expires_at' => 'datetime',
         ];
     }
 
@@ -78,6 +82,11 @@ class User extends Authenticatable  implements JWTSubject
    public function commentaires(){
      return $this->hasMany(Commentaire::class);
    }
+
+    public function isAdmin(): bool
+    {
+        return $this->hasRole('Admin');
+    }
 
    public function sendPasswordResetNotification($token)
 {

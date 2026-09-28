@@ -52,47 +52,40 @@ class Document extends Model implements HasMedia
 
 
     // ── MediaLibrary : collections ───────────────────
+    // L'original (photo nette d'une pièce d'identité) est stocké sur le disque
+    // PRIVÉ "local". Seules les versions floutées sont écrites sur le disque
+    // public. L'original n'est servi que via une URL signée (publicateur/Admin).
     public function registerMediaCollections(): void
     {
         $this->addMediaCollection('document_image')
              ->singleFile()
+             ->useDisk('local')
+             ->storeConversionsOnDisk('public')
              ->acceptsMimeTypes([
                  'image/jpeg',
                  'image/png',
                  'image/webp',
-                 'image/gif',
              ]);
     }
 
-    // ── MediaLibrary : conversions auto ─────────────
+    // ── MediaLibrary : conversions (toutes floutées) ─
     public function registerMediaConversions(?Media $media = null): void
     {
-        // Thumbnail — chargement rapide dans les listes
+        // Vignette floutée — listes
         $this->addMediaConversion('thumb')
              ->width(400)
              ->height(300)
-             ->sharpen(5)
+             ->blur(8)
              ->format('webp')
              ->performOnCollections('document_image')
              ->nonQueued();
 
-        // Version floutée — protection données sensibles
+        // Version floutée — détail public
         $this->addMediaConversion('blurred')
              ->blur(8)
              ->width(800)
              ->format('webp')
              ->performOnCollections('document_image')
              ->nonQueued();
-
-        // Version optimisée full size
-        $this->addMediaConversion('optimized')
-             ->width(1200)
-             ->quality(85)
-             ->format('webp')
-             ->performOnCollections('document_image')
-             ->nonQueued();
     }
-
-
-
 }

@@ -1,6 +1,6 @@
 /.phpunit.cache
 /node_modules
-vendor
+/vendor
 .env
 .env.backup
 .env.production
@@ -14,6 +14,12 @@ yarn-error.log
 /.idea
 /.vscode
 rr
+rr.exe
 .rr.yaml
-rr
-.rr.yaml
+
+# Fichiers générés et données personnelles (photos de pièces, certificats, QR)
+/public/storage
+/public/hot
+/storage/*.key
+/storage/app/*
+!/storage/app/.gitignore

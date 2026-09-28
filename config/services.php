@@ -35,6 +35,7 @@ return [
     'client_id' => env('ORANGE_CLIENT_ID'),
     'client_secret' => env('ORANGE_CLIENT_SECRET'),
     'sender_address' => env('ORANGE_SENDER_ADDRESS'),
+    'sender_name' => env('ORANGE_SENDER_NAME', 'DocTrack'),
     'api_url' => 'https://api.orange.com/smsmessaging/v1/outbound/tel%3A%2B' . env('ORANGE_SENDER_ADDRESS') . '/requests',
     ],
 

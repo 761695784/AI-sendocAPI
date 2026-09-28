@@ -42,10 +42,11 @@ public function handle(
     }
 
     try {
+        // Numéro du PUBLICATEUR (le trouveur), transmis au déclarant.
         $emailService->notifyDeclarant(
-            $document,          // ← maintenant $document->user est chargé
+            $document,
             $declarant,
-            $declarant->Phone,
+            (string) ($document->user?->Phone ?? ''),
             $this->documentUrl
         );
     } catch (\Exception $e) {

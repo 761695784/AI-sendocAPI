@@ -34,7 +34,7 @@ class ResetPassword extends Notification
     {
         // Générer l'URL de redirection vers le frontend
         // $frontendUrl = "http://localhost:4200/newpass?token={$this->token}&email=" . urlencode($notifiable->getEmailForPasswordReset()); lien pour le serveur en local
-        $frontendUrl = "https://sendoctrack.netlify.app/newpass?token={$this->token}&email=" . urlencode($notifiable->getEmailForPasswordReset()); // lien du site deployé
+        $frontendUrl = rtrim(config('doctrack.frontend_url'), '/') . "/newpass?token={$this->token}&email=" . urlencode($notifiable->getEmailForPasswordReset()); // lien du site deployé
 
         return (new MailMessage)
             ->subject(Lang::get('Notification de réinitialisation de mot de passe'))

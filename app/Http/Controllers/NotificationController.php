@@ -2,189 +2,188 @@
 
 namespace App\Http\Controllers;
 
-use Carbon\Carbon;
+use App\Http\Resources\DocumentResource;
+use App\Models\DeclarationDePerte;
 use App\Models\Document;
 use App\Models\EmailLog;
 use App\Models\Notification;
+use App\Models\User;
+use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
-use App\Models\DeclarationDePerte;
 use Illuminate\Support\Facades\Auth;
-use App\Http\Requests\StoreNotificationRequest;
-use App\Http\Requests\UpdateNotificationRequest;
 
+/**
+ * Notifications et journaux d'emails.
+ *
+ * Règle : l'Admin voit l'ensemble de la plateforme ; un citoyen ne voit que
+ * ce qui le concerne (ses déclarations, ses publications, les emails dont il
+ * est destinataire, demandeur, publicateur ou déclarant).
+ */
 class NotificationController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
-    public function index() {
-        // Récupérer toutes les notifications
-        $notifications = Notification::all();
-        return response()->json(['data' => $notifications]);
+    private function currentUser(): User
+    {
+        return Auth::user();
     }
 
-    public function markAsRead($id) {
-        $notification = Notification::find($id);
+    private function isAdmin(): bool
+    {
+        return $this->currentUser()->hasRole('Admin');
+    }
 
-        if (!$notification) {
+    /** Notifications visibles par l'utilisateur courant. */
+    private function notificationsQuery(): Builder
+    {
+        $query = Notification::query()->latest();
+
+        if (! $this->isAdmin()) {
+            $userId = $this->currentUser()->id;
+            $query->whereHas('declaration', fn ($q) => $q->withTrashed()->where('user_id', $userId));
+        }
+
+        return $query;
+    }
+
+    /** Journaux d'emails visibles par l'utilisateur courant. */
+    private function emailLogsQuery(): Builder
+    {
+        $query = EmailLog::query()->latest();
+
+        if (! $this->isAdmin()) {
+            $user = $this->currentUser();
+            $query->where(function ($q) use ($user) {
+                $q->where('to', $user->email)
+                    ->orWhere('requester_user_id', $user->id)
+                    ->orWhere('publisher_user_id', $user->id)
+                    ->orWhere('declarant_user_id', $user->id);
+            });
+        }
+
+        return $query;
+    }
+
+    private function formatEmailLog(EmailLog $emailLog): array
+    {
+        return [
+            'id'                => $emailLog->id,
+            'from'              => $emailLog->from,
+            'to'                => $emailLog->to,
+            'subject'           => $emailLog->subject,
+            // Le corps peut contenir des numéros de téléphone : Admin uniquement.
+            'body'              => $this->isAdmin() ? $emailLog->body : null,
+            'document_id'       => $emailLog->document_id,
+            'requester_user_id' => $emailLog->requester_user_id,
+            'publisher_user_id' => $emailLog->publisher_user_id,
+            'declarant_user_id' => $emailLog->declarant_user_id,
+            'created_at'        => $emailLog->created_at,
+        ];
+    }
+
+    public function index()
+    {
+        return response()->json(['data' => $this->notificationsQuery()->get()]);
+    }
+
+    /**
+     * Marque une notification comme lue puis la retire de la liste
+     * (comportement V1 conservé). Seul le propriétaire (ou l'Admin) peut le faire.
+     */
+    public function markAsRead($id)
+    {
+        $notification = $this->notificationsQuery()
+            ->where(ctype_digit((string) $id) ? 'id' : 'uuid', $id)
+            ->first();
+
+        if (! $notification) {
             return response()->json(['message' => 'Notification not found.'], 404);
         }
 
-        // Marquez la notification comme lue
         $notification->is_read = true;
         $notification->save();
-
-        // Supprimez la notification de la base de données
         $notification->delete();
 
         return response()->json(['message' => 'Notification marked as read and deleted.']);
     }
 
-     public function showAllEmails()
-     {
-         // Récupérer tous les logs d'emails
-         $emailLogs = EmailLog::with(['document', 'requester', 'publisher', 'declarant'])->get();
-
-         return response()->json([
-             'success' => true,
-             'data' => $emailLogs->map(function($emailLog) {
-                 return [
-                     'id' => $emailLog->id,
-                     'from' => $emailLog->from,
-                     'to' => $emailLog->to,
-                     'subject' => $emailLog->subject,
-                     'body' => $emailLog->body,
-                     'document_id' => $emailLog->document->id ?? null,
-                     'requester_user_id' => $emailLog->requester->id ?? null,
-                     'publisher_user_id' => $emailLog->publisher->id ?? null,
-                     'declarant_user_id' => $emailLog->declarant->id ?? null,
-                     'created_at' => $emailLog->created_at,
-                 ];
-             })
-         ], 200);
-     }
-
-
-    public function showAllCorrespondenceEmails()
+    public function showAllEmails()
     {
-        // Récupérer tous les logs d'emails de correspondance
-        $correspondenceEmails = EmailLog::with(['document', 'requester', 'publisher', 'declarant'])
-                                        ->where('subject', 'like', 'Correspondance%')
-                                        ->get();
+        $logs = $this->emailLogsQuery()->get();
 
         return response()->json([
             'success' => true,
-            'data' => $correspondenceEmails->map(function($emailLog) {
-                return [
-                    'id' => $emailLog->id,
-                    'from' => $emailLog->from,
-                    'to' => $emailLog->to,
-                    'subject' => $emailLog->subject,
-                    'body' => $emailLog->body,
-                    'document_id' => $emailLog->document->id ?? null,
-                    'requester_user_id' => $emailLog->requester->id ?? null,
-                    'publisher_user_id' => $emailLog->publisher->id ?? null,
-                    'declarant_user_id' => $emailLog->declarant->id ?? null,
-                    'created_at' => $emailLog->created_at,
-                ];
-            })
+            'data'    => $logs->map(fn ($log) => $this->formatEmailLog($log)),
+        ], 200);
+    }
+
+    public function showAllCorrespondenceEmails()
+    {
+        $logs = $this->emailLogsQuery()->where('subject', 'like', 'Correspondance%')->get();
+
+        return response()->json([
+            'success' => true,
+            'data'    => $logs->map(fn ($log) => $this->formatEmailLog($log)),
         ], 200);
     }
 
     public function showAllRestitutionEmails()
     {
-        // Récupérer tous les logs d'emails de demande de restitution
-        $restitutionEmails = EmailLog::with(['document', 'requester', 'publisher', 'declarant'])
-                                    ->where('subject', 'like', 'Demande de restitution%')
-                                    ->get();
+        $logs = $this->emailLogsQuery()->where('subject', 'like', 'Demande de restitution%')->get();
 
         return response()->json([
             'success' => true,
-            'data' => $restitutionEmails->map(function($emailLog) {
-                return [
-                    'id' => $emailLog->id,
-                    'from' => $emailLog->from,
-                    'to' => $emailLog->to,
-                    'subject' => $emailLog->subject,
-                    'body' => $emailLog->body,
-                    'document_id' => $emailLog->document->id ?? null,
-                    'requester_user_id' => $emailLog->requester->id ?? null,
-                    'publisher_user_id' => $emailLog->publisher->id ?? null,
-                    'declarant_user_id' => $emailLog->declarant->id ?? null,
-                    'created_at' => $emailLog->created_at,
-                ];
-            })
+            'data'    => $logs->map(fn ($log) => $this->formatEmailLog($log)),
         ], 200);
     }
 
-    // API Controller in Laravel (Example)
-    public function getAllData()
+    public function getAllData(Request $request)
     {
-        // Récupère toutes les déclarations (y compris les supprimées avec soft delete)
-        $declarations = DeclarationDePerte::withTrashed()->with(['user', 'documentType'])->get();
+        $user = $this->currentUser();
 
-        // Récupère toutes les publications (y compris les supprimées avec soft delete)
-        $publications = Document::withTrashed()->with(['user', 'documentType'])->get();
+        $declarations = DeclarationDePerte::withTrashed()->with(['user', 'documentType'])
+            ->when(! $this->isAdmin(), fn ($q) => $q->where('user_id', $user->id))
+            ->get();
 
-        // Récupère tous les emails envoyés liés aux documents avec les relations associées
-        $emailsSent = EmailLog::with(['document', 'requester', 'publisher', 'declarant'])->get();
+        $publications = Document::withTrashed()->with(['user', 'documentType', 'media'])
+            ->when(! $this->isAdmin(), fn ($q) => $q->where('user_id', $user->id))
+            ->get();
 
         return response()->json([
             'declarations' => $declarations,
-            'publications' => $publications,
-            'emailsSent' => $emailsSent->map(function($emailLog) {
-                return [
-                    'id' => $emailLog->id,
-                    'from' => $emailLog->from,
-                    'to' => $emailLog->to,
-                    'subject' => $emailLog->subject,
-                    'body' => $emailLog->body,
-                    'document_id' => $emailLog->document->id ?? null,
-                    'requester_user_id' => $emailLog->requester->id ?? null,
-                    'publisher_user_id' => $emailLog->publisher->id ?? null,
-                    'declarant_user_id' => $emailLog->declarant->id ?? null,
-                    'created_at' => $emailLog->created_at,
-                ];
-            }),
+            'publications' => DocumentResource::collection($publications)->resolve($request),
+            'emailsSent'   => $this->emailLogsQuery()->get()->map(fn ($log) => $this->formatEmailLog($log)),
         ]);
     }
 
-
-
     public function getRestitutionRequestCount()
     {
-        // Compte le nombre d'enregistrements dans la table des logs d'emails liés à une restitution
-        $count = EmailLog::where('subject', 'LIKE', '%Demande de restitution%')->count();
+        $count = $this->emailLogsQuery()->where('subject', 'LIKE', '%Demande de restitution%')->count();
 
         return response()->json(['count' => $count]);
     }
 
-
-
     public function getNewNotifications(Request $request)
     {
-        // Récupérer le paramètre lastChecked
-        $lastChecked = $request->query('lastChecked');
-
-        // Convertir en instance de Carbon pour s'assurer que c'est une date valide
         try {
-            $lastCheckedDate = Carbon::parse($lastChecked);
+            $lastCheckedDate = Carbon::parse($request->query('lastChecked'));
         } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Invalid date format'
-            ], 400);
+            return response()->json(['error' => 'Invalid date format'], 400);
         }
 
-        // Récupérer les nouvelles publications
-        $newDocuments = Document::where('created_at', '>', $lastCheckedDate)->get();
+        $user = $this->currentUser();
 
-        // Récupérer les nouvelles déclarations
-        $newDeclarations = DeclarationDePerte::where('created_at', '>', $lastCheckedDate)->get();
+        $newDocuments = Document::where('created_at', '>', $lastCheckedDate)
+            ->with('media')
+            ->when(! $this->isAdmin(), fn ($q) => $q->where('user_id', $user->id))
+            ->get();
+
+        $newDeclarations = DeclarationDePerte::where('created_at', '>', $lastCheckedDate)
+            ->when(! $this->isAdmin(), fn ($q) => $q->where('user_id', $user->id))
+            ->get();
 
         return response()->json([
-            'newDocuments' => $newDocuments,
+            'newDocuments'    => DocumentResource::collection($newDocuments)->resolve($request),
             'newDeclarations' => $newDeclarations,
         ]);
     }
-
 }

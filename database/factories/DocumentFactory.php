@@ -2,6 +2,8 @@
 
 namespace Database\Factories;
 
+use App\Models\DocumentType;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -9,15 +11,16 @@ use Illuminate\Database\Eloquent\Factories\Factory;
  */
 class DocumentFactory extends Factory
 {
-    /**
-     * Define the model's default state.
-     *
-     * @return array<string, mixed>
-     */
     public function definition(): array
     {
         return [
-            //
+            'OwnerFirstName'    => fake()->firstName(),
+            'OwnerLastName'     => fake()->lastName(),
+            'DocIdentification' => fake()->numerify('#############'),
+            'Location'          => 'Dakar',
+            'statut'            => 'non récupéré',
+            'document_type_id'  => DocumentType::factory(),
+            'user_id'           => User::factory(),
         ];
     }
 }

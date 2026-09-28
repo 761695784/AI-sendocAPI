@@ -2,15 +2,11 @@
 
 namespace Database\Seeders;
 
+use App\Models\DocumentType;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 
 class DocumentTypeSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     */
     public function run(): void
     {
         $documentTypes = [
@@ -27,6 +23,8 @@ class DocumentTypeSeeder extends Seeder
             ['TypeName' => 'Carte d\'étudiant', 'IdentificationSize' => '7 à 10 chiffres'],
         ];
 
-        DB::table('document_types')->insert($documentTypes);
+        foreach ($documentTypes as $type) {
+            DocumentType::firstOrCreate(['TypeName' => $type['TypeName']], $type);
+        }
     }
 }
