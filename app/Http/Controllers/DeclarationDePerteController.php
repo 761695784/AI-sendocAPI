@@ -102,7 +102,7 @@ class DeclarationDePerteController extends Controller
         }
 
         // Si l'utilisateur est un administrateur, récupérer toutes les déclarations (y compris celles supprimées)
-        if ($user->hasRole('Admin')) {
+        if ($user->isSuperAdmin()) {
             $declarations = DeclarationDePerte::withTrashed()
                 ->with(['user', 'documentType'])
                 ->latest()
@@ -235,7 +235,7 @@ class DeclarationDePerteController extends Controller
         $declaration = DeclarationDePerte::with(['user', 'documentType'])->where('uuid', $uuid)->firstOrFail();
 
         // Si l'utilisateur est un simple utilisateur, vérifier qu'il est propriétaire de la déclaration ou bien est ce l'administrator
-        if ($user->hasRole('Admin') || $declaration->user_id === $user->id) {
+        if ($user->isSuperAdmin() || $declaration->user_id === $user->id) {
             return response()->json([
                 'success' => true,
                 'data'    => $declaration,
@@ -265,7 +265,7 @@ class DeclarationDePerteController extends Controller
         $declaration = DeclarationDePerte::where('uuid', $uuid)->firstOrFail();
 
         // Vérifier si l'utilisateur est le propriétaire de la déclaration ou si c'est un administrateur
-        if ($user->hasRole('Admin') || $declaration->user_id === $user->id) {
+        if ($user->isSuperAdmin() || $declaration->user_id === $user->id) {
 
             // ── Log d'activité ──
             /** @var \App\Models\User $user */

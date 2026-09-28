@@ -24,12 +24,12 @@ abstract class TestCase extends BaseTestCase
 
     protected function citizen(array $attributes = []): User
     {
-        return tap(User::factory()->create($attributes))->assignRole('SimpleUser');
+        return tap(User::factory()->create($attributes))->assignRole(User::ROLE_CITIZEN);
     }
 
     protected function admin(array $attributes = []): User
     {
-        return tap(User::factory()->create($attributes))->assignRole('Admin');
+        return tap(User::factory()->create(['account_type' => User::TYPE_ADMIN] + $attributes))->assignRole(User::ROLE_SUPER_ADMIN);
     }
 
     /**
@@ -39,6 +39,7 @@ abstract class TestCase extends BaseTestCase
     public function call($method, $uri, $parameters = [], $cookies = [], $files = [], $server = [], $content = null)
     {
         $this->app['auth']->forgetGuards();
+        $this->app->forgetScopedInstances();
         $this->app['tymon.jwt']->unsetToken();
 
         $response = parent::call($method, $uri, $parameters, $cookies, $files, $server, $content);

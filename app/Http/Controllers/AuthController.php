@@ -28,7 +28,7 @@ class AuthController extends Controller
      */
     public function getActivityLogs(Request $request)
     {
-        if (! Auth::user()?->hasRole('Admin')) {
+        if (! Auth::user()?->isSuperAdmin()) {
             return response()->json(['success' => false, 'message' => 'Accès refusé.'], 403);
         }
 
@@ -51,7 +51,7 @@ class AuthController extends Controller
      */
     public function getLogsByType(string $subjectType, Request $request)
     {
-        if (! Auth::user()?->hasRole('Admin')) {
+        if (! Auth::user()?->isSuperAdmin()) {
             return response()->json(['success' => false, 'message' => 'Accès refusé.'], 403);
         }
 
@@ -128,8 +128,8 @@ class AuthController extends Controller
                 ->subject('Vérification de votre adresse email');
         });
 
-        // Assignation du rôle SimpleUser par défaut
-        $user->assignRole('SimpleUser');
+        // Rôle citoyen par défaut
+        $user->assignRole(User::ROLE_CITIZEN);
 
         // Le QR code n'est plus écrit sur le disque public : son image est
         // générée à la demande via une URL signée et temporaire.
@@ -200,7 +200,7 @@ class AuthController extends Controller
         $user = JWTAuth::setToken($token)->toUser();
 
         // Email non vérifié : on ne le dit qu'après un mot de passe correct.
-        if (is_null($user->email_verified_at) && ! $user->hasRole('Admin')) {
+        if (is_null($user->email_verified_at) && ! $user->isSuperAdmin()) {
             JWTAuth::setToken($token)->invalidate();
             return response()->json([
                 'success' => false,
@@ -208,8 +208,17 @@ class AuthController extends Controller
             ], 403);
         }
 
+        if (! $user->isActive()) {
+            JWTAuth::setToken($token)->invalidate();
+            return response()->json([
+                'success' => false,
+                'message' => 'Ce compte est suspendu. Contactez votre responsable.',
+            ], 403);
+        }
+
         RateLimiter::clear($throttleKey);
-        $roles = $user->getRoleNames();
+        $user->forceFill(['last_login_at' => now()])->saveQuietly();
+        $roles = $user->roleNamesForApi();
 
         activity()
             ->causedBy($user)
@@ -225,7 +234,25 @@ class AuthController extends Controller
             'user'    => $user,
             'token'   => $token,
             'roles'   => $roles,
+            'organizations' => $this->organizationsSummary($user),
         ], 200);
+    }
+
+    /**
+     * Affectations actives de l'utilisateur (vide pour un citoyen).
+     */
+    private function organizationsSummary(User $user): array
+    {
+        return app(\App\Services\Access\OrganizationAccess::class)->memberships($user)
+            ->map(fn ($m) => [
+                'membership_uuid' => $m->uuid,
+                'organization'    => [
+                    'uuid' => $m->organization->uuid,
+                    'name' => $m->organization->name,
+                ],
+                'role'       => $m->role,
+                'is_primary' => $m->is_primary,
+            ])->values()->all();
     }
     /**
      * Déconnexion de l'utilisateur (invalidation du token)
@@ -251,7 +278,7 @@ class AuthController extends Controller
     public function me()
     {
         $user  = Auth::user();
-        $roles = $user->getRoleNames(); // Récupérer le ou les rôles de l'utilisateur
+        $roles = $user->roleNamesForApi();
 
         return response()->json([
             'success'     => true,
@@ -259,6 +286,7 @@ class AuthController extends Controller
             'roles'       => $roles,
             'qr_code_url'        => QrCodeUrl::imageFor($user),
             'qr_code_expires_at' => $user->qr_code_expires_at,
+            'organizations'      => $this->organizationsSummary($user),
         ], 200);
     }
 
@@ -329,7 +357,7 @@ class AuthController extends Controller
     public function getAllUsersWithRoles()
     {
         // Vérifier si l'utilisateur est authentifié et a le rôle 'Admin'
-        if (! Auth::user() || ! Auth::user()->hasRole('Admin')) {
+        if (! Auth::user() || ! Auth::user()->isSuperAdmin()) {
             return response()->json([
                 'success' => false,
                 'message' => 'Accès refusé. Vous devez être un administrateur pour voir cette liste.',
@@ -349,7 +377,9 @@ class AuthController extends Controller
                 'Adress'    => $user->Adress,
                 'Phone'     => $user->Phone,
                 'email'     => $user->email,
-                'roles'     => $user->getRoleNames(), // Récupérer les rôles
+                'account_type' => $user->account_type,
+                'status'    => $user->status,
+                'roles'     => $user->roleNamesForApi(),
             ];
         });
 
@@ -368,7 +398,7 @@ class AuthController extends Controller
     public function deleteUser($uuid)
     {
         // Vérifier si l'utilisateur est authentifié et a le rôle 'Admin'
-        if (! Auth::user() || ! Auth::user()->hasRole('Admin')) {
+        if (! Auth::user() || ! Auth::user()->isSuperAdmin()) {
             return response()->json([
                 'success' => false,
                 'message' => 'Accès refusé. Vous devez être un administrateur pour effectuer cette action.',
@@ -388,7 +418,7 @@ class AuthController extends Controller
         }
 
         // Vérifier que l'utilisateur a le rôle 'SimpleUser'
-        if ($user->hasRole('Admin')) {
+        if ($user->isSuperAdmin()) {
             return response()->json([
                 'success' => false,
                 'message' => 'Vous ne pouvez pas supprimer un autre administrateur.',
@@ -402,8 +432,22 @@ class AuthController extends Controller
             ->withProperties(['deleted_uuid' => $user->uuid, 'email' => $user->email])
             ->log('Utilisateur supprimé par un administrateur');
 
-        // Supprimer l'utilisateur s'il a le rôle 'SimpleUser'
-        $user->delete();
+        // Pas de suppression physique : les déclarations, publications et
+        // journaux d'audit restent liés à un compte anonymisé.
+        $user->forceFill([
+            'FirstName'               => 'Utilisateur',
+            'LastName'                => 'supprimé',
+            'Adress'                  => '-',
+            'Phone'                   => '-',
+            'email'                   => 'deleted+' . $user->uuid . '@doctrack.invalid',
+            'password'                => Hash::make(Str::random(40)),
+            'email_verification_code' => null,
+            'qr_code_token'           => null,
+            'qr_code_expires_at'      => null,
+            'status'                  => User::STATUS_SUSPENDED,
+        ])->saveQuietly();
+        $user->memberships()->whereNull('ends_at')->update(['ends_at' => now()]);
+        $user->delete(); // soft delete
 
         return response()->json([
             'success' => true,
@@ -418,7 +462,7 @@ class AuthController extends Controller
     public function createAdmin(Request $request)
     {
         // Vérifier si l'utilisateur est authentifié et a le rôle 'Admin'
-        if (! Auth::user() || ! Auth::user()->hasRole('Admin')) {
+        if (! Auth::user() || ! Auth::user()->isSuperAdmin()) {
             return response()->json([
                 'success' => false,
                 'message' => 'Accès refusé. Vous devez être un administrateur pour effectuer cette action.',
@@ -454,8 +498,11 @@ class AuthController extends Controller
             'password'  => Hash::make($request->password),
         ]);
 
-        // Assignation du rôle Admin
-        $user->assignRole('Admin');
+        $user->forceFill([
+            'account_type'      => User::TYPE_ADMIN,
+            'email_verified_at' => now(),
+        ])->save();
+        $user->assignRole(User::ROLE_SUPER_ADMIN);
 
         // Génération du token JWT
         $token = JWTAuth::fromUser($user);
@@ -609,8 +656,15 @@ class AuthController extends Controller
                 ], 400);
             }
 
-            // Si l'utilisateur existe déjà, générer un token JWT et le renvoyer
+            if (! $user->isActive()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Ce compte est suspendu. Contactez votre responsable.',
+                ], 403);
+            }
+
             $jwtToken = JWTAuth::fromUser($user);
+            $user->forceFill(['last_login_at' => now()])->saveQuietly();
 
             // ── Log ──
             activity()
@@ -677,8 +731,8 @@ class AuthController extends Controller
                 'qr_code_expires_at' => now()->addMonths(config('doctrack.qr_code_validity_months')),
             ]);
 
-            // Assigner le rôle par défaut à l'utilisateur (par exemple, 'SimpleUser')
-            $user->assignRole('SimpleUser');
+            // Rôle citoyen par défaut
+            $user->assignRole(User::ROLE_CITIZEN);
 
             // Générer un token JWT pour l'utilisateur nouvellement créé
             $jwtToken = JWTAuth::fromUser($user);

@@ -54,7 +54,7 @@ Route::middleware(['signed', 'throttle:120,1'])->prefix('files')->group(function
 // ══════════════════════════════════════════════════════════════════
 // ROUTES PROTÉGÉES — utilisateur connecté
 // ══════════════════════════════════════════════════════════════════
-Route::middleware(['auth:api', 'throttle:60,1'])->group(function () {
+Route::middleware(['auth:api', 'active', 'throttle:60,1'])->group(function () {
 
     // ── Utilisateur ──
     Route::get('me', [AuthController::class, 'me']);
@@ -108,7 +108,7 @@ Route::middleware(['auth:api', 'throttle:60,1'])->group(function () {
 // ══════════════════════════════════════════════════════════════════
 // ROUTES ADMIN — rôle Admin obligatoire
 // ══════════════════════════════════════════════════════════════════
-Route::middleware(['auth:api', 'role:Admin,api', 'throttle:200,1'])->group(function () {
+Route::middleware(['auth:api', 'active', 'role:super_admin,api', 'throttle:200,1'])->group(function () {
 
     // ── Utilisateurs ──
     Route::get('/users', [AuthController::class, 'getAllUsersWithRoles']);
@@ -154,3 +154,8 @@ Route::middleware(['auth:api', 'role:Admin,api', 'throttle:200,1'])->group(funct
     Route::get('/rapports/{uuid}/telecharger', [RapportController::class, 'telecharger']);
     Route::delete('/rapports/{uuid}', [RapportController::class, 'destroy']);
 });
+
+// ══════════════════════════════════════════════════════════════════
+// API V2 — espace institutionnel
+// ══════════════════════════════════════════════════════════════════
+Route::prefix('v2')->group(base_path('routes/api_v2.php'));

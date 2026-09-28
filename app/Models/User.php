@@ -11,12 +11,31 @@ use Tymon\JWTAuth\Contracts\JWTSubject;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Spatie\Activitylog\Traits\LogsActivity;
 use Spatie\Activitylog\LogOptions;
 
 class User extends Authenticatable  implements JWTSubject
 {
-    use HasFactory, HasRoles,Notifiable; use LogsActivity;
+    use HasFactory, HasRoles, Notifiable, LogsActivity, SoftDeletes;
+
+    public const TYPE_CITIZEN = 'citizen';
+    public const TYPE_AGENT   = 'agent';
+    public const TYPE_ADMIN   = 'admin';
+
+    public const STATUS_ACTIVE    = 'active';
+    public const STATUS_SUSPENDED = 'suspended';
+
+    /** Rôles globaux (Spatie). Les rôles d'agent sont portés par organization_memberships. */
+    public const ROLE_SUPER_ADMIN = 'super_admin';
+    public const ROLE_CITIZEN     = 'citizen';
+    public const ROLE_AUDITOR     = 'auditor';
+
+    /** Anciens noms renvoyés au front V1 en plus des nouveaux. */
+    public const LEGACY_ROLE_NAMES = [
+        self::ROLE_SUPER_ADMIN => 'Admin',
+        self::ROLE_CITIZEN     => 'SimpleUser',
+    ];
 
     /**
      * The attributes that are mass assignable.
@@ -50,6 +69,8 @@ class User extends Authenticatable  implements JWTSubject
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'qr_code_expires_at' => 'datetime',
+            'phone_verified_at'  => 'datetime',
+            'last_login_at'      => 'datetime',
         ];
     }
 
@@ -85,7 +106,49 @@ class User extends Authenticatable  implements JWTSubject
 
     public function isAdmin(): bool
     {
-        return $this->hasRole('Admin');
+        return $this->isSuperAdmin();
+    }
+
+    public function isSuperAdmin(): bool
+    {
+        return $this->hasRole(self::ROLE_SUPER_ADMIN);
+    }
+
+    public function isActive(): bool
+    {
+        return $this->status === self::STATUS_ACTIVE;
+    }
+
+    /** Rôles globaux + anciens noms (compatibilité front V1). */
+    public function roleNamesForApi(): array
+    {
+        $names = $this->getRoleNames()->all();
+        foreach ($names as $name) {
+            if (isset(self::LEGACY_ROLE_NAMES[$name])) {
+                $names[] = self::LEGACY_ROLE_NAMES[$name];
+            }
+        }
+
+        return array_values(array_unique($names));
+    }
+
+    // ── Organisations ─────────────────────────────────
+
+    public function memberships()
+    {
+        return $this->hasMany(OrganizationMembership::class);
+    }
+
+    public function activeMemberships()
+    {
+        return $this->memberships()->active();
+    }
+
+    public function organizations()
+    {
+        return $this->belongsToMany(Organization::class, 'organization_memberships')
+            ->withPivot(['role', 'matricule', 'is_primary', 'ends_at'])
+            ->wherePivotNull('ends_at');
     }
 
    public function sendPasswordResetNotification($token)

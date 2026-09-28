@@ -36,7 +36,7 @@ class DocumentController extends Controller
     {
         $user = Auth::user();
 
-        if ($user && $user->hasRole('Admin')) {
+        if ($user && $user->isSuperAdmin()) {
             $documents = Document::withTrashed()
                 ->with(['user', 'documentType', 'media'])
                 ->latest()
@@ -56,7 +56,7 @@ class DocumentController extends Controller
     // ══════════════════════════════════════════════════════════════
     public function getAllPublications(Request $request)
     {
-        if (! Auth::user()?->hasRole('Admin')) {
+        if (! Auth::user()?->isSuperAdmin()) {
             return response()->json(['success' => false, 'message' => 'Accès refusé.'], 403);
         }
 
@@ -278,7 +278,7 @@ class DocumentController extends Controller
         // BUG CORRIGÉ : était findOrFail($uuid) ce qui cherchait par ID
         $document = Document::where('uuid', $uuid)->firstOrFail();
 
-        if ($user->hasRole('Admin') || $document->user_id === $user->id) {
+        if ($user->isSuperAdmin() || $document->user_id === $user->id) {
 
             // ── Log d'activité ──
             /** @var \App\Models\User $user */
@@ -395,7 +395,7 @@ class DocumentController extends Controller
         $user = Auth::user(); // Récupérer l'utilisateur authentifié
 
         // Vérifier si l'utilisateur est un admin
-        if (! $user || ! $user->hasRole('Admin')) {
+        if (! $user || ! $user->isSuperAdmin()) {
             return response()->json([
                 'success' => false,
                 'message' => 'Accès refusé. Vous devez être un administrateur pour effectuer cette action.',
@@ -418,7 +418,7 @@ class DocumentController extends Controller
         $user = Auth::user(); // Récupérer l'utilisateur authentifié
 
         // Vérifier si l'utilisateur est un admin
-        if (! $user || ! $user->hasRole('Admin')) {
+        if (! $user || ! $user->isSuperAdmin()) {
             return response()->json([
                 'success' => false,
                 'message' => 'Accès refusé. Vous devez être un administrateur pour effectuer cette action.',
@@ -443,7 +443,7 @@ class DocumentController extends Controller
         $user = Auth::user(); // Récupérer l'utilisateur authentifié
 
         // Vérifier si l'utilisateur est un admin
-        if (! $user || ! $user->hasRole('Admin')) {
+        if (! $user || ! $user->isSuperAdmin()) {
             return response()->json([
                 'success' => false,
                 'message' => 'Accès refusé. Vous devez être un administrateur pour effectuer cette action.',

@@ -29,7 +29,7 @@ class NotificationController extends Controller
 
     private function isAdmin(): bool
     {
-        return $this->currentUser()->hasRole('Admin');
+        return $this->currentUser()->isSuperAdmin();
     }
 
     /** Notifications visibles par l'utilisateur courant. */

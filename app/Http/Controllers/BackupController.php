@@ -10,7 +10,7 @@ class BackupController extends Controller
 {
     private function checkAdmin()
     {
-        if (! Auth::user()?->hasRole('Admin')) {
+        if (! Auth::user()?->isSuperAdmin()) {
             return response()->json([
                 'success' => false,
                 'message' => 'Accès refusé. Administrateur requis.',

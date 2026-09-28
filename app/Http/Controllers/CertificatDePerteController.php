@@ -14,7 +14,7 @@ class CertificatDePerteController extends Controller
     {
         $user = Auth::user();
 
-        if (! $user?->hasRole('Admin')) {
+        if (! $user?->isSuperAdmin()) {
             return response()->json(['success' => false, 'message' => 'Accès non autorisé.'], 403);
         }
 
@@ -118,7 +118,7 @@ class CertificatDePerteController extends Controller
             ->firstOrFail();
 
         // Admin peut voir tous — user ne voit que les siens
-        if (! $user->hasRole('Admin') &&
+        if (! $user->isSuperAdmin() &&
             $certificat->declarationDePerte->user_id !== $user->id) {
             return response()->json(['message' => 'Accès refusé'], 403);
         }
@@ -156,7 +156,7 @@ class CertificatDePerteController extends Controller
             ->firstOrFail();
 
         // Admin peut télécharger tous — user seulement les siens
-        if (! $user->hasRole('Admin') &&
+        if (! $user->isSuperAdmin() &&
             $certificat->declarationDePerte->user_id !== $user->id) {
             return response()->json([
                 'success' => false,

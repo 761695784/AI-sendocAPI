@@ -21,7 +21,7 @@ class CommentaireController extends Controller
         $user = Auth::user();
 
         $commentaires = Commentaire::with('user')
-            ->when(! $user->hasRole('Admin'), fn ($q) => $q->where('user_id', $user->id))
+            ->when(! $user->isSuperAdmin(), fn ($q) => $q->where('user_id', $user->id))
             ->latest()
             ->get();
 
@@ -67,7 +67,7 @@ class CommentaireController extends Controller
         $commentaire = $this->find($id);
         $user        = Auth::user();
 
-        if ($user->id !== $commentaire->user_id && ! $user->hasRole('Admin')) {
+        if ($user->id !== $commentaire->user_id && ! $user->isSuperAdmin()) {
             return response()->json([
                 'success' => false,
                 'message' => 'Vous n\'êtes pas autorisé à supprimer ce commentaire.',

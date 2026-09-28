@@ -19,7 +19,7 @@ class UserSeeder extends Seeder
     public function run(): void
     {
         $this->seedUser(
-            role: 'Admin',
+            role: User::ROLE_SUPER_ADMIN,
             email: env('SEED_ADMIN_EMAIL', 'admin@doctrack.local'),
             password: env('SEED_ADMIN_PASSWORD'),
             firstName: env('SEED_ADMIN_FIRSTNAME', 'Admin'),
@@ -29,8 +29,8 @@ class UserSeeder extends Seeder
 
         // Comptes citoyens de démonstration : uniquement hors production.
         if (! app()->environment('production')) {
-            $this->seedUser('SimpleUser', 'citoyen1@doctrack.local', env('SEED_DEMO_PASSWORD'), 'Awa', 'Ndiaye', '+221770000001');
-            $this->seedUser('SimpleUser', 'citoyen2@doctrack.local', env('SEED_DEMO_PASSWORD'), 'Moussa', 'Diop', '+221770000002');
+            $this->seedUser(User::ROLE_CITIZEN, 'citoyen1@doctrack.local', env('SEED_DEMO_PASSWORD'), 'Awa', 'Ndiaye', '+221770000001');
+            $this->seedUser(User::ROLE_CITIZEN, 'citoyen2@doctrack.local', env('SEED_DEMO_PASSWORD'), 'Moussa', 'Diop', '+221770000002');
         }
     }
 
@@ -56,6 +56,7 @@ class UserSeeder extends Seeder
             'email_verified_at'  => now(),
             'qr_code_token'      => (string) Str::uuid(),
             'qr_code_expires_at' => now()->addYear(),
+            'account_type'       => $role === User::ROLE_SUPER_ADMIN ? User::TYPE_ADMIN : User::TYPE_CITIZEN,
         ]);
         $user->assignRole($role);
 

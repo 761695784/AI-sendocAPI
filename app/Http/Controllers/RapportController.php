@@ -226,7 +226,7 @@ class RapportController extends Controller
     {
         $user = Auth::user();
 
-        if (!$user || !$user->hasRole('Admin')) {
+        if (!$user || !$user->isSuperAdmin()) {
             abort(403, 'Accès réservé aux administrateurs.');
         }
     }

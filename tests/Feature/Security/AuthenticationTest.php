@@ -33,7 +33,7 @@ class AuthenticationTest extends TestCase
         $this->assertStringNotContainsString($user->email_verification_code, $json->getContent());
         $this->assertStringNotContainsString($user->qr_code_token, $json->getContent());
         $this->assertStringContainsString('signature=', $json->json('qr_code_url'));
-        $this->assertTrue($user->hasRole('SimpleUser'));
+        $this->assertTrue($user->hasRole('citizen'));
     }
 
     public function test_qr_code_image_is_served_only_through_a_signed_url(): void
@@ -70,7 +70,7 @@ class AuthenticationTest extends TestCase
 
     public function test_unverified_email_is_only_revealed_after_a_correct_password(): void
     {
-        User::factory()->unverified()->create(['email' => 'new@example.com'])->assignRole('SimpleUser');
+        User::factory()->unverified()->create(['email' => 'new@example.com'])->assignRole('citizen');
 
         $this->postJson('/api/login', ['email' => 'new@example.com', 'password' => 'wrong'])->assertUnauthorized();
         $this->postJson('/api/login', ['email' => 'new@example.com', 'password' => 'password'])->assertForbidden();

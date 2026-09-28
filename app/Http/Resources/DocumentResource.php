@@ -19,7 +19,7 @@ class DocumentResource extends JsonResource
     public function toArray(Request $request): array
     {
         $viewer     = $request->user('api');
-        $privileged = $viewer && ($viewer->id === $this->user_id || $viewer->hasRole('Admin'));
+        $privileged = $viewer && ($viewer->id === $this->user_id || $viewer->isSuperAdmin());
 
         $blurred  = $this->getFirstMediaUrl('document_image', 'blurred') ?: null;
         $thumb    = $this->getFirstMediaUrl('document_image', 'thumb') ?: $blurred;

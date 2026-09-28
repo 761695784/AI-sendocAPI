@@ -8,7 +8,7 @@ class StoreDocumentTypeRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return (bool) $this->user()?->hasRole('Admin');
+        return (bool) $this->user()?->isSuperAdmin();
     }
 
     public function rules(): array
