@@ -23,6 +23,14 @@ return [
         'gps_max_km' => (float) env('COLLECTION_GPS_MAX_KM', 25),
     ],
 
+    // Délais de réaction attendus des structures (statistiques + relances automatiques).
+    'sla' => [
+        'first_contact_hours' => (int) env('SLA_FIRST_CONTACT_HOURS', 24), // collecte : 1er appel au trouveur
+        'escalate_hours'      => (int) env('SLA_ESCALATE_HOURS', 48),      // sans appel → alerte à la structure supérieure
+        'collection_hours'    => (int) env('SLA_COLLECTION_HOURS', 72),    // affectation → document reçu
+        'review_hours'        => (int) env('SLA_REVIEW_HOURS', 48),        // correspondance à vérifier
+    ],
+
     // Demande de restitution directe au trouveur : délai de réponse avant bascule vers la structure.
     'restitution' => [
         'response_hours' => (int) env('RESTITUTION_RESPONSE_HOURS', 48),

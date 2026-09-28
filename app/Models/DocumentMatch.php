@@ -37,6 +37,7 @@ class DocumentMatch extends Model
         'number_match'  => 'boolean',
         'reviewed_at'   => 'datetime',
         'notified_at'   => 'datetime',
+        'reminded_at'   => 'datetime',
     ];
 
     public function getActivitylogOptions(): LogOptions

@@ -93,7 +93,7 @@ class CollectionService
             'assignment_reason' => $found['reason'],
             'distance_km'       => $found['distance_km'],
             'assigned_at'       => now(),
-        ])->save();
+        ])->forceFill(['first_contacted_at' => null, 'reminded_at' => null, 'escalated_at' => null])->save();
 
         StatusTransition::record($request, $from, CollectionRequest::STATUS_ASSIGNED,
             $context . ' : ' . $found['organization']->name . $this->distanceLabel($found), $actor, $found['organization']->id);
@@ -145,7 +145,7 @@ class CollectionService
             'method'               => null,
             'scheduled_at'         => null,
             'pickup_agent_id'      => null,
-        ])->save();
+        ])->forceFill(['first_contacted_at' => null, 'reminded_at' => null, 'escalated_at' => null])->save();
 
         StatusTransition::record($request, $from, CollectionRequest::STATUS_ASSIGNED, 'Transférée à ' . $target->name . ' : ' . $reason, $agent, $target->id);
 
@@ -161,6 +161,7 @@ class CollectionService
         $from = $request->status;
         $request->contact_attempts     = $request->contact_attempts + 1;
         $request->last_contact_at      = now();
+        $request->first_contacted_at ??= now(); // délai de réaction de la structure affectée
         $request->last_contact_outcome = $outcome;
 
         if ($outcome === CollectionRequest::OUTCOME_REACHED && $from === CollectionRequest::STATUS_ASSIGNED) {

@@ -43,3 +43,11 @@ Artisan::command('doctrack:expire-restitution-requests', function () {
 })->purpose('Expire les demandes de restitution sans réponse');
 
 Schedule::command('doctrack:expire-restitution-requests')->hourly();
+
+// Délais de réaction : relances aux structures et alertes à la hiérarchie.
+Artisan::command('doctrack:sla-check', function () {
+    $r = app(\App\Services\Stats\SlaMonitor::class)->run();
+    $this->info("Relances : {$r['reminders']} — alertes : {$r['escalations']} — correspondances : {$r['review_reminders']}");
+})->purpose('Relance les structures en retard sur les collectes et les vérifications');
+
+Schedule::command('doctrack:sla-check')->hourly();

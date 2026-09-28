@@ -13,6 +13,7 @@ use App\Http\Controllers\V2\MembershipController;
 use App\Http\Controllers\V2\OrganizationController;
 use App\Http\Controllers\V2\OrganizationTypeController;
 use App\Http\Controllers\V2\RestitutionController;
+use App\Http\Controllers\V2\StatsController;
 use App\Http\Controllers\V2\TerritoryController;
 use Illuminate\Support\Facades\Route;
 
@@ -102,6 +103,12 @@ Route::middleware(['auth:api', 'active', 'organization', 'throttle:120,1'])->gro
     Route::get('notification-deliveries', [NotificationDeliveryController::class, 'index']);
     Route::get('notification-deliveries/summary', [NotificationDeliveryController::class, 'summary']);
     Route::post('notification-deliveries/{delivery}/retry', [NotificationDeliveryController::class, 'retry']);
+
+    // Statistiques par périmètre (?organization=uuid&from=&to=)
+    Route::get('stats/overview', [StatsController::class, 'overview']);
+    Route::get('stats/structures', [StatsController::class, 'structures']);
+    Route::get('stats/timeseries', [StatsController::class, 'timeseries']);
+    Route::get('stats/overdue-collections', [StatsController::class, 'overdueCollections']);
 
     // Types d'organisation : super_admin
     Route::middleware('role:super_admin,api')->group(function () {

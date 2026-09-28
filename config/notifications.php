@@ -58,6 +58,18 @@ return [
             'title' => 'Remise directe en cours',
             'body'  => 'Le propriétaire et le trouveur du document :reference organisent une remise directe. :detail',
         ],
+        'collection.sla_reminder' => [
+            'title' => 'Relance — trouveur pas encore appelé',
+            'body'  => 'Le dossier :reference (:place) vous a été affecté il y a :hours h et le trouveur n\'a pas encore été appelé.',
+        ],
+        'collection.sla_escalation' => [
+            'title' => 'Alerte — collecte en retard à :structure',
+            'body'  => ':structure n\'a pas appelé le trouveur du dossier :reference depuis :hours h. Vous pouvez relancer la structure ou transférer le dossier.',
+        ],
+        'match.review_reminder' => [
+            'title' => 'Relance — correspondance à vérifier',
+            'body'  => 'La correspondance :reference (score :score) attend une vérification depuis :hours h.',
+        ],
         'match.pending_review' => [
             'title' => 'Correspondance à vérifier (score :score)',
             'body'  => 'Déclaration :declaration_reference ↔ document :reference (:owner_name). Comparez les deux fiches puis confirmez ou rejetez.',
