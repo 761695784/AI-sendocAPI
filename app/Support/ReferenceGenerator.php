@@ -37,6 +37,14 @@ class ReferenceGenerator
         return sprintf('DT-%d-%06d', $year, self::next("declaration:{$year}"));
     }
 
+    /** TR-2026-000123 (document trouvé) */
+    public static function foundDocument(): string
+    {
+        $year = now()->year;
+
+        return sprintf('TR-%d-%06d', $year, self::next("found:{$year}"));
+    }
+
     /** CP-2026-000045 (certificat officiel) */
     public static function officialCertificate(): string
     {

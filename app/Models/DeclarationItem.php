@@ -33,6 +33,14 @@ class DeclarationItem extends Model
     protected static function booted(): void
     {
         static::creating(fn (DeclarationItem $i) => $i->uuid ??= (string) Str::uuid());
+
+        static::saving(function (DeclarationItem $i) {
+            if ($i->isDirty(['first_name', 'last_name']) || ! $i->last_name_key) {
+                $names = app(\App\Services\Matching\NameNormalizer::class);
+                $i->first_name_key = $names->key($i->first_name);
+                $i->last_name_key  = $names->key($i->last_name);
+            }
+        });
     }
 
     public function setDocNumber(?string $number): static
@@ -54,6 +62,11 @@ class DeclarationItem extends Model
     public function declaration()
     {
         return $this->belongsTo(DeclarationDePerte::class, 'declaration_de_perte_id');
+    }
+
+    public function matches()
+    {
+        return $this->hasMany(DocumentMatch::class);
     }
 
     public function documentType()

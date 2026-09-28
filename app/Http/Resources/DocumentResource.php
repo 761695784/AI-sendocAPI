@@ -27,12 +27,25 @@ class DocumentResource extends JsonResource
             ? URL::temporarySignedRoute('documents.image', now()->addMinutes(15), ['uuid' => $this->uuid])
             : null;
 
+        $counter = $this->found_channel === \App\Models\Document::CHANNEL_COUNTER;
+        // Guichet : le numéro n'existe que chiffré ; on n'affiche que les 4 derniers chiffres.
+        $number = $counter
+            ? ($this->doc_number_last4 ? '••••' . $this->doc_number_last4 : null)
+            : ($privileged ? $this->DocIdentification : self::mask($this->DocIdentification));
+
         return [
             'id'                => $this->id,
             'uuid'              => $this->uuid,
+            'reference'         => $this->reference,
+            'found_channel'     => $this->found_channel ?? \App\Models\Document::CHANNEL_CITIZEN,
+            'lifecycle_status'  => $this->lifecycle_status,
+            // Où récupérer le document (déposé dans une structure officielle).
+            'custody'           => $this->custody_organization_id
+                ? $this->custodyOrganization?->only(['uuid', 'name', 'address', 'phone'])
+                : null,
             'OwnerFirstName'    => $this->OwnerFirstName,
             'OwnerLastName'     => $this->OwnerLastName,
-            'DocIdentification' => $privileged ? $this->DocIdentification : self::mask($this->DocIdentification),
+            'DocIdentification' => $number,
             'Location'          => $this->Location,
             'statut'            => $this->statut,
             'document_type_id'  => $this->document_type_id,
@@ -43,9 +56,10 @@ class DocumentResource extends JsonResource
             'is_owner'          => (bool) ($viewer && $viewer->id === $this->user_id),
 
             'document_type' => $this->whenLoaded('documentType'),
-            'user'          => $this->whenLoaded('user', fn () => $privileged
-                ? $this->user
-                : new PublicUserResource($this->user)),
+            // Guichet : l'agent déposant n'est jamais exposé côté citoyen.
+            'user'          => $this->whenLoaded('user', fn () => $counter
+                ? null
+                : ($privileged ? $this->user : new PublicUserResource($this->user))),
 
             // Clés conservées pour compatibilité avec le front V1.
             'image'           => $original ?? $blurred,

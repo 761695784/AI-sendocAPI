@@ -16,4 +16,15 @@ return [
 
     // Durée de validité d'un QR code (en mois).
     'qr_code_validity_months' => (int) env('QR_CODE_VALIDITY_MONTHS', 12),
+
+    // Collecte des documents publiés par les citoyens.
+    'collection' => [
+        // Au-delà de cette distance, on préfère une structure du même département.
+        'gps_max_km' => (float) env('COLLECTION_GPS_MAX_KM', 25),
+    ],
+
+    // Demande de restitution directe au trouveur : délai de réponse avant bascule vers la structure.
+    'restitution' => [
+        'response_hours' => (int) env('RESTITUTION_RESPONSE_HOURS', 48),
+    ],
 ];

@@ -52,6 +52,9 @@ class DeclarationDePerteController extends Controller
             ])
             ->log('Déclaration de perte créée');
 
+        // Pièce déclarée (modèle V2) → visible par le moteur de correspondance.
+        $declaration->ensureLegacyItem();
+
         // Générer automatiquement le certificat
         $certificat = $certificatService->genererCertificat($declaration);
 
@@ -75,6 +78,9 @@ class DeclarationDePerteController extends Controller
                 $declaration->id
             ));
         }
+
+        // Moteur V2 : documents trouvés publiés ou déposés dans une structure.
+        \App\Jobs\MatchDeclarationJob::dispatch($declaration->id);
 
         return response()->json([
             'success' => true,

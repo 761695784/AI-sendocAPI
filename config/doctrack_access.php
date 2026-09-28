@@ -25,6 +25,11 @@ return [
             'declarations.view',
             'declarations.cancel',
             'citizens.search',
+            'found_documents.view',
+            'matches.view',
+            'matches.review',
+            'collections.view',
+            'collections.manage',
         ],
         'structure_manager' => [
             'organizations.view',
@@ -38,6 +43,12 @@ return [
             'declarations.cancel',
             'citizens.search',
             'citizens.create',
+            'found_documents.create',
+            'found_documents.view',
+            'matches.view',
+            'matches.review',
+            'collections.view',
+            'collections.manage',
         ],
         'agent' => [
             'organizations.view',
@@ -45,6 +56,12 @@ return [
             'declarations.view',
             'citizens.search',
             'citizens.create',
+            'found_documents.create',
+            'found_documents.view',
+            'matches.view',
+            'matches.review',
+            'collections.view',
+            'collections.manage',
             // Un agent peut annuler SA propre saisie pendant un délai limité
             // (config doctrack.agent_cancel_window_hours) : règle dans DeclarationDePertePolicy.
         ],

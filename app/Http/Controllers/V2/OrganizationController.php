@@ -90,6 +90,9 @@ class OrganizationController extends Controller
             'address'              => $data['address'] ?? null,
             'phone'                => $data['phone'] ?? null,
             'email'                => $data['email'] ?? null,
+            'latitude'             => $data['latitude'] ?? null,
+            'longitude'            => $data['longitude'] ?? null,
+            'accepts_collections'  => $data['accepts_collections'] ?? true,
         ]);
 
         return (new OrganizationResource($organization->fresh(['type', 'parent', 'territory'])))
@@ -114,7 +117,7 @@ class OrganizationController extends Controller
             $organization->territory_id = $this->territoryId($data['territory_code']);
         }
 
-        $organization->fill(collect($data)->only(['name', 'code', 'address', 'phone', 'email'])->all());
+        $organization->fill(collect($data)->only(['name', 'code', 'address', 'phone', 'email', 'latitude', 'longitude', 'accepts_collections'])->all());
         $organization->save();
 
         return new OrganizationResource($organization->fresh(['type', 'parent', 'territory']));

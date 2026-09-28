@@ -9,6 +9,8 @@ use App\Models\DocumentType;
 use App\Models\Organization;
 use App\Models\Territory;
 use App\Models\User;
+use App\Jobs\MatchDeclarationJob;
+use App\Services\Matching\MatchReviewService;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -19,7 +21,10 @@ use Illuminate\Support\Facades\DB;
  */
 class CounterDeclarationService
 {
-    public function __construct(private OfficialCertificateService $certificates) {}
+    public function __construct(
+        private OfficialCertificateService $certificates,
+        private MatchReviewService $matches,
+    ) {}
 
     /**
      * @param array{
@@ -91,6 +96,8 @@ class CounterDeclarationService
 
         $this->certificates->issue($declaration, $agent, $structure);
 
+        MatchDeclarationJob::dispatch($declaration->id);
+
         return $declaration->fresh(['items.documentType', 'citizenProfile', 'organization.parent', 'recordedBy', 'certificat']);
     }
 
@@ -117,6 +124,8 @@ class CounterDeclarationService
                 ->performedOn($declaration)
                 ->withProperties(['reference' => $declaration->reference, 'reason' => $reason])
                 ->log('Déclaration annulée');
+
+            $this->matches->supersedeForDeclaration($declaration, $actor);
         });
 
         return $declaration->fresh(['items.documentType', 'citizenProfile', 'organization', 'recordedBy', 'certificat']);

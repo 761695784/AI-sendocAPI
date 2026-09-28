@@ -2,7 +2,10 @@
 
 use App\Http\Controllers\CertificateVerificationController;
 use App\Http\Controllers\V2\CitizenProfileController;
+use App\Http\Controllers\V2\CollectionController;
 use App\Http\Controllers\V2\CounterDeclarationController;
+use App\Http\Controllers\V2\FoundDocumentController;
+use App\Http\Controllers\V2\MatchController;
 use App\Http\Controllers\V2\MeController;
 use App\Http\Controllers\V2\MembershipController;
 use App\Http\Controllers\V2\OrganizationController;
@@ -54,6 +57,28 @@ Route::middleware(['auth:api', 'active', 'organization', 'throttle:120,1'])->gro
     Route::get('declarations/{declaration}', [CounterDeclarationController::class, 'show']);
     Route::post('declarations/{declaration}/cancel', [CounterDeclarationController::class, 'cancel']);
     Route::get('declarations/{declaration}/certificate', [CounterDeclarationController::class, 'certificate']);
+
+    // Documents trouvés en garde
+    Route::get('found-documents', [FoundDocumentController::class, 'index']);
+    Route::post('found-documents', [FoundDocumentController::class, 'store']);
+    Route::get('found-documents/{document}', [FoundDocumentController::class, 'show']);
+    Route::post('found-documents/{document}/take-custody', [FoundDocumentController::class, 'takeCustody']);
+
+    // Collecte des documents publiés par les citoyens (structure la plus proche)
+    Route::get('collections', [CollectionController::class, 'index']);
+    Route::get('collections/{collection}', [CollectionController::class, 'show']);
+    Route::post('collections/{collection}/contact', [CollectionController::class, 'contact']);
+    Route::post('collections/{collection}/plan', [CollectionController::class, 'plan']);
+    Route::post('collections/{collection}/collected', [CollectionController::class, 'collected']);
+    Route::post('collections/{collection}/transfer', [CollectionController::class, 'transfer']);
+    Route::post('collections/{collection}/decline', [CollectionController::class, 'decline']);
+    Route::post('collections/{collection}/cancel', [CollectionController::class, 'cancel']);
+
+    // Correspondances : revue par les agents
+    Route::get('matches', [MatchController::class, 'index']);
+    Route::get('matches/{match}', [MatchController::class, 'show']);
+    Route::post('matches/{match}/confirm', [MatchController::class, 'confirm']);
+    Route::post('matches/{match}/reject', [MatchController::class, 'reject']);
 
     // Types d'organisation : super_admin
     Route::middleware('role:super_admin,api')->group(function () {

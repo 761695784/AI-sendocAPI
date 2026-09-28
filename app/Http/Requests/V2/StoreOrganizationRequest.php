@@ -22,6 +22,9 @@ class StoreOrganizationRequest extends FormRequest
             'address'           => 'nullable|string|max:255',
             'phone'             => 'nullable|string|max:30',
             'email'             => 'nullable|email|max:255',
+            'latitude'            => 'nullable|numeric|between:12,17|required_with:longitude',
+            'longitude'           => 'nullable|numeric|between:-18,-11|required_with:latitude',
+            'accepts_collections' => 'boolean',
         ];
     }
 }

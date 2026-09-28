@@ -111,6 +111,22 @@ class OrganizationAccess
         });
     }
 
+    /**
+     * Ids des organisations où l'utilisateur détient ce droit
+     * (null = toutes : super_admin).
+     */
+    public function organizationIdsWithAbility(User $user, string $ability): ?array
+    {
+        if ($user->isSuperAdmin()) {
+            return null;
+        }
+
+        return $this->visibleOrganizations($user)->get()
+            ->filter(fn (Organization $org) => $this->can($user, $ability, $org))
+            ->pluck('id')
+            ->all();
+    }
+
     /** Ids des organisations visibles (pour filtrer d'autres tables). */
     public function visibleOrganizationIds(User $user): array
     {

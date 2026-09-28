@@ -22,11 +22,14 @@ class Organization extends Model
 
     protected $fillable = [
         'parent_id', 'organization_type_id', 'name', 'code', 'territory_id',
-        'address', 'phone', 'email', 'is_active',
+        'address', 'phone', 'email', 'is_active', 'latitude', 'longitude', 'accepts_collections',
     ];
 
     protected $casts = [
-        'is_active' => 'boolean',
+        'is_active'           => 'boolean',
+        'accepts_collections' => 'boolean',
+        'latitude'            => 'float',
+        'longitude'           => 'float',
     ];
 
     public function getActivitylogOptions(): LogOptions

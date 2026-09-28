@@ -80,11 +80,15 @@ class DeclarationDePerte extends Model
             if (! $declaration->isForceDeleting()) {
                 $declaration->certificat?->delete();
             }
+            app(\App\Services\Matching\MatchReviewService::class)
+                ->supersedeForDeclaration($declaration, auth('api')->user(), 'Déclaration supprimée');
         });
 
         static::restoring(function ($declaration) {
             $declaration->certificat()->withTrashed()->restore();
         });
+
+        static::restored(fn ($declaration) => \App\Jobs\MatchDeclarationJob::dispatch($declaration->id));
     }
 
     public function getRouteKeyName(): string
@@ -137,6 +141,52 @@ class DeclarationDePerte extends Model
     public function items()
     {
         return $this->hasMany(DeclarationItem::class);
+    }
+
+    public function matches()
+    {
+        return $this->hasMany(DocumentMatch::class);
+    }
+
+    public function transitions()
+    {
+        return $this->morphMany(StatusTransition::class, 'transitionable');
+    }
+
+    /**
+     * Déclaration V1 (une seule pièce, colonnes FirstNameInDoc…) : crée la
+     * pièce correspondante pour que le moteur de correspondance la voie.
+     */
+    public function ensureLegacyItem(): ?DeclarationItem
+    {
+        if ($this->items()->exists() || ! $this->document_type_id || ! $this->LastNameInDoc) {
+            return $this->items()->orderBy('id')->first();
+        }
+
+        $item = new DeclarationItem([
+            'declaration_de_perte_id' => $this->id,
+            'document_type_id'        => $this->document_type_id,
+            'first_name'              => (string) $this->FirstNameInDoc,
+            'last_name'               => $this->LastNameInDoc,
+            'birth_date_in_doc'       => $this->birth_date_in_doc ?? null,
+        ]);
+        $item->setDocNumber($this->doc_number_encrypted ?: $this->DocIdentification);
+        $item->save();
+
+        return $item;
+    }
+
+    /** Change le statut et trace la transition. */
+    public function moveTo(string $status, ?string $reason = null, ?User $user = null): void
+    {
+        $from = $this->status;
+        if ($from === $status) {
+            return;
+        }
+        $this->status = $status;
+        $this->save();
+
+        StatusTransition::record($this, $from, $status, $reason, $user);
     }
 
     public function certificat()

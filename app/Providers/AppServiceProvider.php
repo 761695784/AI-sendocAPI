@@ -14,6 +14,13 @@ class AppServiceProvider extends ServiceProvider
     {
         // "scoped" : une instance par requête (y compris sous Octane).
         $this->app->scoped(OrganizationAccess::class);
+
+        // Moteur de correspondance : "rules" aujourd'hui ; un moteur IA
+        // implémentant MatchingEngine pourra être sélectionné par config.
+        $this->app->singleton(\App\Services\Matching\NameNormalizer::class);
+        $this->app->bind(\App\Services\Matching\MatchingEngine::class, fn ($app) => match (config('matching.engine')) {
+            default => $app->make(\App\Services\Matching\RuleBasedMatchingEngine::class),
+        });
     }
 
     public function boot(): void

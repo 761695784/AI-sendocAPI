@@ -12,6 +12,7 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PrivateFileController;
 use App\Http\Controllers\QrCodeController;
 use App\Http\Controllers\RapportController;
+use App\Http\Controllers\RestitutionRequestController;
 use Illuminate\Support\Facades\Route;
 
 // ══════════════════════════════════════════════════════════════════
@@ -77,6 +78,14 @@ Route::middleware(['auth:api', 'active', 'throttle:60,1'])->group(function () {
     Route::post('documents/restore/{slug}', [DocumentController::class, 'restoreTrashedDocument']);
     Route::get('trashed', [DocumentController::class, 'trashedDocuments']);
     Route::post('documents/{slug}/restitution', [DocumentController::class, 'requestRestitution']);
+    Route::get('documents/{slug}/collection', [DocumentController::class, 'collection']);
+
+    // ── Restitution directe (double accord propriétaire ↔ trouveur) ──
+    Route::get('restitution-requests', [RestitutionRequestController::class, 'index']);
+    Route::get('restitution-requests/{restitution}', [RestitutionRequestController::class, 'show']);
+    Route::post('restitution-requests/{restitution}/accept', [RestitutionRequestController::class, 'accept']);
+    Route::post('restitution-requests/{restitution}/decline', [RestitutionRequestController::class, 'decline']);
+    Route::post('restitution-requests/{restitution}/cancel', [RestitutionRequestController::class, 'cancel']);
     Route::get('my-publications', [DocumentController::class, 'OwnPub']);
 
     // ── Déclarations ──

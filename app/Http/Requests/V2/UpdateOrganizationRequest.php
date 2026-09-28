@@ -22,6 +22,9 @@ class UpdateOrganizationRequest extends FormRequest
             'address'        => 'sometimes|nullable|string|max:255',
             'phone'          => 'sometimes|nullable|string|max:30',
             'email'          => 'sometimes|nullable|email|max:255',
+            'latitude'            => 'sometimes|nullable|numeric|between:12,17|required_with:longitude',
+            'longitude'           => 'sometimes|nullable|numeric|between:-18,-11|required_with:latitude',
+            'accepts_collections' => 'sometimes|boolean',
             // Rattachement à un autre parent : super_admin uniquement (contrôlé dans le contrôleur).
             'parent_uuid'    => 'sometimes|nullable|uuid|exists:organizations,uuid',
         ];

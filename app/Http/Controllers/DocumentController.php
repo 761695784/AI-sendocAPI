@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreDocumentRequest;
 use App\Http\Requests\UpdateDocumentRequest;
 use App\Http\Resources\DocumentResource;
+use App\Jobs\MatchDocumentJob;
+use App\Services\Collections\CollectionService;
 use App\Jobs\NotifyDeclarantJob;
 use App\Models\DeclarationDePerte;
 use App\Models\Document;
@@ -38,12 +40,12 @@ class DocumentController extends Controller
 
         if ($user && $user->isSuperAdmin()) {
             $documents = Document::withTrashed()
-                ->with(['user', 'documentType', 'media'])
+                ->with(['user', 'documentType', 'media', 'custodyOrganization'])
                 ->latest()
                 ->paginate(20);
         } else {
             $documents = Document::whereNull('deleted_at')
-                ->with(['user', 'documentType', 'media'])
+                ->with(['user', 'documentType', 'media', 'custodyOrganization'])
                 ->latest()
                 ->paginate(20);
         }
@@ -61,7 +63,7 @@ class DocumentController extends Controller
         }
 
         $documents = Document::withTrashed()
-            ->with(['user', 'documentType', 'media'])
+            ->with(['user', 'documentType', 'media', 'custodyOrganization'])
             ->latest()
             ->paginate(20);
 
@@ -90,6 +92,13 @@ class DocumentController extends Controller
             'document_type_id'  => $validatedData['document_type_id'],
             'user_id'           => Auth::id(),
             'DocIdentification' => $validatedData['DocIdentification'] ?? null,
+            'found_place'       => $validatedData['Location'],
+            'found_latitude'    => $validatedData['latitude'] ?? null,
+            'found_longitude'   => $validatedData['longitude'] ?? null,
+            'territory_id'      => ! empty($validatedData['territory_code'])
+                ? \App\Models\Territory::where('code', $validatedData['territory_code'])->value('id')
+                : null,
+            'contact_consent_at' => $request->boolean('contact_consent') ? now() : null,
         ]);
 
         // ── Upload + conversions via MediaLibrary ── génère automatiquement : thumb, blurred, optimized en WebP
@@ -129,6 +138,19 @@ class DocumentController extends Controller
             ));
         }
 
+        // Moteur de correspondance V2 (scores, revue par les agents).
+        MatchDocumentJob::dispatch($document->id);
+
+        // Le trouveur accepte d'être contacté : la structure la plus proche organise la collecte.
+        $collection = null;
+        if ($request->boolean('contact_consent')) {
+            $collection = app(CollectionService::class)->open(
+                $document->fresh(),
+                Auth::user(),
+                $validatedData['contact_phone'] ?? Auth::user()->Phone,
+            );
+        }
+
         // Invalide le cache des stats après ajout
         Cache::forget('statistics_month_' . now()->format('Y_m'));
         Cache::forget('publications_by_type');
@@ -136,76 +158,77 @@ class DocumentController extends Controller
 
         return response()->json([
             'success'  => true,
-            'message'  => 'Document créé avec succès.',
-            'document' => new DocumentResource($document->load(['user', 'documentType'])),
+            'message'  => $collection?->organization
+                ? 'Document publié. ' . $collection->organization->name . ' va vous contacter pour le récupérer.'
+                : 'Document créé avec succès.',
+            'document'   => new DocumentResource($document->fresh(['user', 'documentType', 'custodyOrganization'])),
+            'collection' => $collection ? self::collectionSummary($collection) : null,
         ], 201);
     }
 
     /**
      * Gérer la demande de restitution.
      */
-    public function requestRestitution($uuid)
+    public function requestRestitution($uuid, \App\Services\Restitution\DirectRestitutionService $restitutions)
     {
-        // Récupérer le document concerné par son uuid
         $document = Document::where('uuid', $uuid)->firstOrFail();
-
-        // L'utilisateur connecté qui clique sur "Restituer"
         $fromUser = Auth::user();
 
-        // Vérifier si l'utilisateur connecté est le propriétaire du document
         if ($fromUser->id === $document->user_id) {
             return response()->json([
                 'success' => false,
                 'message' => 'Vous ne pouvez pas demander la restitution de votre propre document.',
-            ], 403); // Code 403 Forbidden
+            ], 403);
         }
 
-        if ($document->statut === 'récupéré') {
+        // Le trouveur ne l'a plus : il est dans une structure, restitution au guichet.
+        if ($document->found_channel === Document::CHANNEL_COUNTER || $document->isInCustody()) {
             return response()->json([
-                'success' => false,
-                'message' => 'Ce document a déjà été restitué.',
+                'success'   => false,
+                'message'   => 'Ce document est conservé par ' . ($document->custodyOrganization?->name ?? 'une structure officielle')
+                    . '. Présentez-vous à ce guichet avec une pièce justificative.',
+                'custody'   => $document->custodyOrganization?->only(['uuid', 'name', 'address', 'phone']),
+                'reference' => $document->reference,
             ], 409);
         }
 
-        // Vérifier si une demande de restitution pour ce document a déjà été faite par cet utilisateur
-        $existingEmailLog = EmailLog::where('requester_user_id', $fromUser->id)
-            ->where('document_id', $document->uuid)
-            ->where('subject', 'Demande de restitution') // ← sujet exact
-            ->first();
-
-        if ($existingEmailLog) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Vous avez déjà demandé la restitution de ce document.',
-            ], 400); // Code 400 Bad Request
+        if ($document->statut === 'récupéré') {
+            return response()->json(['success' => false, 'message' => 'Ce document a déjà été restitué.'], 409);
         }
 
-        // L'utilisateur qui a publié le document
-        $toUser = $document->user;
-                                                                                      // Envoyer la notification par SMS
-        $phoneNumber = $toUser->Phone;                                                // Assure-toi que le champ du numéro de téléphone est correct
-        $documentUrl = self::frontendDocumentUrl($document);
-        $message     = 'Bonjour, vous avez une demande de restitution pour le document : ' . $document->OwnerFirstName . ' ' . $document->OwnerLastName . '. Consultez-le ici : ' . $documentUrl;
-        // Envoyer la notification par email
-        $toUser->notify(new RestitutionRequestNotification($fromUser, $document));
+        // Règle : seul le propriétaire CONFIRMÉ par DocTrack peut demander une remise directe.
+        $match = $restitutions->confirmedMatchFor($document, $fromUser);
+        if (! $match) {
+            return response()->json([
+                'success' => false,
+                'code'    => 'no_confirmed_match',
+                'message' => 'La remise directe est réservée au propriétaire confirmé par DocTrack. '
+                    . 'Faites d\'abord une déclaration de perte : si ce document est le vôtre, vous serez prévenu dès que la correspondance sera confirmée. '
+                    . 'Vous pouvez aussi vous présenter à la structure de police ou de gendarmerie la plus proche.',
+            ], 403);
+        }
 
-        // Appel à la méthode pour l'envoi de SMS
-        // $this->sendSMS($phoneNumber, $message);
-        //  $smsService->sendSMS($toUser->Phone, $message);
+        if ($active = $restitutions->activeRequest($document)) {
+            return response()->json([
+                'success' => false,
+                'message' => $active->requester_user_id === $fromUser->id
+                    ? 'Vous avez déjà une demande en cours pour ce document.'
+                    : 'Une demande de restitution est déjà en cours pour ce document.',
+                'request' => ['uuid' => $active->uuid, 'status' => $active->status, 'expires_at' => $active->expires_at],
+            ], 400);
+        }
 
-        // ── Log d'activité (AVANT le return) ──
-        activity()
-            ->causedBy($fromUser)
-            ->performedOn($document)
-            ->withProperties([
-                'document_uuid' => $document->uuid,
-                'from_user_id'  => $fromUser->id,
-                'to_user_id'    => $toUser->id,
-            ])
-            ->log('Demande de restitution envoyée');
+        $request = $restitutions->request($document, $fromUser, $match);
 
-        // Retourner une réponse JSON
-        return response()->json(['message' => 'Demande de restitution envoyée avec succès.']);
+        return response()->json([
+            'success' => true,
+            'message' => 'Demande envoyée. Le trouveur est prévenu par SMS et par email ; dès qu\'il accepte, vous recevrez son numéro.',
+            'request' => [
+                'uuid'       => $request->uuid,
+                'status'     => $request->status,
+                'expires_at' => $request->expires_at,
+            ],
+        ], 201);
     }
 
     /**
@@ -213,7 +236,7 @@ class DocumentController extends Controller
      */
     public function show($uuid)
     {
-        $document = Document::with(['user', 'documentType', 'media'])
+        $document = Document::with(['user', 'documentType', 'media', 'custodyOrganization'])
             ->where('uuid', $uuid)
             ->firstOrFail();
 
@@ -234,6 +257,10 @@ class DocumentController extends Controller
             ], 403);
         }
 
+        if ($document->found_channel === Document::CHANNEL_COUNTER) {
+            return self::counterDocumentLocked();
+        }
+
         $validatedData = $request->validated();
 
         // L'image n'est pas une colonne : elle passe par MediaLibrary.
@@ -243,6 +270,21 @@ class DocumentController extends Controller
         unset($validatedData['image']);
 
         $document->update($validatedData);
+
+        // Cycle de vie V2 aligné sur le statut V1 déclaré par le publicateur
+        // (remise directe entre particuliers, « déclarée par les parties »).
+        if ($document->statut === 'récupéré' && $document->lifecycle_status !== Document::LIFECYCLE_RESTITUTED) {
+            $document->moveTo(Document::LIFECYCLE_RESTITUTED, 'Restitution déclarée par les parties', Auth::user());
+            app(\App\Services\Matching\MatchReviewService::class)->supersedeForDocument($document, Auth::user(), 'Document restitué');
+            app(\App\Services\Matching\MatchReviewService::class)->applyRestitution($document, Auth::user(), 'Restitution déclarée par les parties');
+            app(\App\Services\Restitution\DirectRestitutionService::class)->completeForDocument($document, Auth::user());
+            app(CollectionService::class)->cancelForDocument($document, Auth::user(), 'Document remis directement par le trouveur');
+        } elseif ($document->statut === 'non récupéré' && $document->lifecycle_status === Document::LIFECYCLE_RESTITUTED) {
+            $document->moveTo(Document::LIFECYCLE_PUBLISHED, 'Restitution annulée par le publicateur', Auth::user());
+        }
+
+        // Noms ou numéro corrigés : on recalcule les correspondances ouvertes.
+        MatchDocumentJob::dispatch($document->id);
 
         // Invalide le cache si le statut change
         Cache::forget('statistics_month_' . now()->format('Y_m'));
@@ -277,6 +319,10 @@ class DocumentController extends Controller
 
         // BUG CORRIGÉ : était findOrFail($uuid) ce qui cherchait par ID
         $document = Document::where('uuid', $uuid)->firstOrFail();
+
+        if ($document->found_channel === Document::CHANNEL_COUNTER && ! $user->isSuperAdmin()) {
+            return self::counterDocumentLocked();
+        }
 
         if ($user->isSuperAdmin() || $document->user_id === $user->id) {
 
@@ -380,7 +426,7 @@ class DocumentController extends Controller
     public function OwnPub()
     {
         $documents = Document::where('user_id', Auth::id())
-            ->with(['user', 'documentType', 'media'])
+            ->with(['user', 'documentType', 'media', 'custodyOrganization'])
             ->latest()
             ->paginate(20);
 
@@ -403,7 +449,7 @@ class DocumentController extends Controller
         }
 
         // Récupérer uniquement les documents supprimés (soft deleted)
-        $documents = Document::onlyTrashed()->with(['user', 'documentType', 'media'])
+        $documents = Document::onlyTrashed()->with(['user', 'documentType', 'media', 'custodyOrganization'])
             ->latest()
             ->paginate(20);
 
@@ -428,7 +474,7 @@ class DocumentController extends Controller
         // Récupérer les documents dont le statut est "récupéré", y compris ceux qui sont soft-deleted
         $documents = Document::withTrashed()
             ->where('statut', 'récupéré')
-            ->with(['user', 'documentType', 'media'])
+            ->with(['user', 'documentType', 'media', 'custodyOrganization'])
             ->latest()
             ->paginate(20);
 
@@ -453,7 +499,7 @@ class DocumentController extends Controller
         // Récupérer les documents dont le statut est "non récupéré", y compris ceux qui sont soft-deleted
         $documents = Document::withTrashed()
             ->where('statut', 'non récupéré')
-            ->with(['user', 'documentType', 'media'])
+            ->with(['user', 'documentType', 'media', 'custodyOrganization'])
             ->latest()
             ->paginate(20);
 
@@ -625,4 +671,43 @@ class DocumentController extends Controller
         return response()->json($data);
     }
 
+
+    /** Les documents déposés au guichet se gèrent dans l'espace institutionnel (API v2). */
+    private static function counterDocumentLocked()
+    {
+        return response()->json([
+            'success' => false,
+            'message' => 'Ce document est sous la garde d\'une structure : il se gère depuis l\'espace institutionnel.',
+        ], 409);
+    }
+
+    /**
+     * Suivi de la collecte par le trouveur : quelle structure va l'appeler, quand.
+     */
+    public function collection($uuid)
+    {
+        $document = Document::where('uuid', $uuid)->firstOrFail();
+        abort_unless(Auth::id() === $document->user_id || Auth::user()->isSuperAdmin(), 403);
+
+        $collection = $document->collectionRequests()->with('organization')->latest('id')->first();
+
+        return response()->json(['collection' => $collection ? self::collectionSummary($collection) : null]);
+    }
+
+    /** Ce que le trouveur voit de la collecte (jamais le nom des agents). */
+    public static function collectionSummary(\App\Models\CollectionRequest $c): array
+    {
+        $org = $c->organization;
+
+        return [
+            'uuid'          => $c->uuid,
+            'status'        => $c->status,
+            'structure'     => $org ? $org->only(['name', 'address', 'phone']) : null,
+            'distance_km'   => $c->distance_km,
+            'method'        => $c->method,
+            'scheduled_at'  => $c->scheduled_at,
+            'meeting_place' => $c->meeting_place,
+            'collected_at'  => $c->collected_at,
+        ];
+    }
 }

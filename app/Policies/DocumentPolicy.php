@@ -3,64 +3,48 @@
 namespace App\Policies;
 
 use App\Models\Document;
+use App\Models\Organization;
+use App\Models\OrganizationType;
 use App\Models\User;
-use Illuminate\Auth\Access\Response;
+use App\Services\Access\OrganizationAccess;
 
+/**
+ * Documents trouvés côté institutionnel (API V2).
+ * Les routes V1 du citoyen gardent leurs propres contrôles (publicateur).
+ */
 class DocumentPolicy
 {
-    /**
-     * Determine whether the user can view any models.
-     */
-    public function viewAny(User $user): bool
+    public function __construct(private OrganizationAccess $access) {}
+
+    public function depositAtCounter(User $user, Organization $structure): bool
     {
-        //
+        return $structure->type?->level === OrganizationType::LEVEL_STRUCTURE
+            && ! $user->isSuperAdmin()
+            && $this->access->can($user, 'found_documents.create', $structure);
     }
 
-    /**
-     * Determine whether the user can view the model.
-     */
-    public function view(User $user, Document $document): bool
+    public function viewInstitutional(User $user): bool
     {
-        //
+        return $user->isSuperAdmin() || $this->access->memberships($user)
+            ->contains(fn ($m) => in_array('found_documents.view', config("doctrack_access.abilities.{$m->role}", []), true));
     }
 
-    /**
-     * Determine whether the user can create models.
-     */
-    public function create(User $user): bool
+    public function viewCustody(User $user, Document $document): bool
     {
-        //
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        return $document->custodyOrganization
+            && $this->access->can($user, 'found_documents.view', $document->custodyOrganization);
     }
 
-    /**
-     * Determine whether the user can update the model.
-     */
-    public function update(User $user, Document $document): bool
+    /** Prendre en garde un document publié en ligne (le trouveur l'apporte). */
+    public function takeCustody(User $user, Document $document, Organization $structure): bool
     {
-        //
-    }
-
-    /**
-     * Determine whether the user can delete the model.
-     */
-    public function delete(User $user, Document $document): bool
-    {
-        //
-    }
-
-    /**
-     * Determine whether the user can restore the model.
-     */
-    public function restore(User $user, Document $document): bool
-    {
-        //
-    }
-
-    /**
-     * Determine whether the user can permanently delete the model.
-     */
-    public function forceDelete(User $user, Document $document): bool
-    {
-        //
+        return $document->found_channel === Document::CHANNEL_CITIZEN
+            && ! $document->isInCustody()
+            && in_array($document->lifecycle_status, Document::MATCHABLE, true)
+            && $this->depositAtCounter($user, $structure);
     }
 }

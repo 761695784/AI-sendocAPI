@@ -30,6 +30,10 @@ class OrganizationSeeder extends Seeder
         $ziguinchor = $this->org('GN-ZIG-BRIGADE', 'Brigade de gendarmerie de Ziguinchor', 'brigade', $gendarmerie, 'SN-ZG-ZIGUIN');
 
         $this->agent('admin.police@doctrack.local', 'Point focal', 'Police', $police, OrganizationMembership::ROLE_INSTITUTION_ADMIN);
+        // Coordonnées approximatives (démo) : à remplacer par la position réelle de chaque structure.
+        $dieuppeul->latitude === null && $dieuppeul->update(['latitude' => 14.7160, 'longitude' => -17.4580]);
+        $ziguinchor->latitude === null && $ziguinchor->update(['latitude' => 12.5640, 'longitude' => -16.2720]);
+
         $this->agent('chef.dieuppeul@doctrack.local', 'Responsable', 'Dieuppeul', $dieuppeul, OrganizationMembership::ROLE_STRUCTURE_MANAGER);
         $this->agent('agent.dieuppeul@doctrack.local', 'Agent', 'Dieuppeul', $dieuppeul, OrganizationMembership::ROLE_AGENT);
         $this->agent('agent.ziguinchor@doctrack.local', 'Agent', 'Ziguinchor', $ziguinchor, OrganizationMembership::ROLE_AGENT);

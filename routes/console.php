@@ -35,3 +35,11 @@ Schedule::command('backup:monitor')
 // Nettoyage logs activité (90 jours) chaque semaine
 Schedule::command('activitylog:clean --days=90')
     ->weekly();
+
+// Demandes de restitution directe sans réponse du trouveur : la structure prend le relais.
+Artisan::command('doctrack:expire-restitution-requests', function () {
+    $n = app(\App\Services\Restitution\DirectRestitutionService::class)->expireOverdue();
+    $this->info($n . ' demande(s) expirée(s).');
+})->purpose('Expire les demandes de restitution sans réponse');
+
+Schedule::command('doctrack:expire-restitution-requests')->hourly();
