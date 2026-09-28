@@ -1,0 +1,72 @@
+<?php
+
+/*
+|--------------------------------------------------------------------------
+| Textes des notifications DocTrack
+|--------------------------------------------------------------------------
+| Modifiables sans toucher au code. Les mots précédés de « : » sont
+| remplacés automatiquement (ex. :reference → DT-2026-000123).
+| SMS : rester court (160 caractères = 1 SMS ; au-delà, 2 SMS facturés).
+| Pour ajouter une langue plus tard : dupliquer ce fichier par langue.
+*/
+
+return [
+
+    'sms' => [
+        // Guichet : déclaration de perte
+        'counter_declaration.registered' => 'DocTrack : déclaration :reference enregistrée par :structure. Certificat vérifiable : :verify_url . Vous serez prévenu si votre pièce est retrouvée.',
+        'counter_declaration.cancelled'  => 'DocTrack : votre déclaration :reference a été annulée par :structure. Motif : :reason',
+
+        // Guichet : document déposé par un trouveur
+        'found_document.deposited'       => 'DocTrack : merci d\'avoir déposé ce document à :structure (réf. :reference). Votre geste aide son propriétaire.',
+
+        // Collecte des documents publiés en ligne
+        'collection.assigned.structure'  => 'DocTrack : nouveau document à récupérer (:document_type, :place:distance). Voir l\'espace agent, dossier :reference.',
+        'collection.assigned.finder'     => 'DocTrack : merci ! :structure:structure_phone va vous appeler pour récupérer le document que vous avez trouvé.',
+        'collection.planned.drop_off'    => 'DocTrack : :structure vous attend :when pour recevoir le document (:address). Merci !',
+        'collection.planned.agent_pickup'=> 'DocTrack : un agent de :structure passera récupérer le document :when:place. Merci !',
+        'collection.collected.finder'    => 'DocTrack : :structure a bien reçu le document. Merci pour votre geste citoyen !',
+
+        // Correspondances et restitution
+        'match.confirmed.online'         => 'DocTrack : votre :document_type au nom de :owner_name a été retrouvé. Demandez la restitution au trouveur sur :url',
+        'match.confirmed.custody'        => 'DocTrack : votre :document_type au nom de :owner_name a été retrouvé. Il est conservé par :structure:structure_phone. Réf. :reference.',
+        'match.custody_changed'          => 'DocTrack : votre document au nom de :owner_name est maintenant conservé par :structure:structure_phone. Présentez-vous avec une pièce justificative. Réf. :reference.',
+        'restitution.requested'          => 'DocTrack : le propriétaire du document au nom de :owner_name (confirmé par DocTrack) demande à le récupérer. Acceptez-vous d\'être mis en contact ? Répondez ici : :url',
+        'restitution.accepted.owner'     => 'DocTrack : le trouveur accepte de vous remettre le document au nom de :owner_name. Contactez :finder_name au :finder_phone. Rencontrez-vous dans un lieu public, sans jamais payer.',
+        'restitution.accepted.finder'    => 'DocTrack : merci ! Le propriétaire (:owner_first_name, :owner_phone) va vous contacter pour le document au nom de :owner_name. Une fois remis, indiquez-le sur DocTrack.',
+        'restitution.declined'           => 'DocTrack : le trouveur n\'a pas accepté la remise directe. :next',
+        // QR code personnel scanné par un trouveur / ancien avertissement V1
+        'qr.found'                       => 'DocTrack : un de vos documents a été trouvé. Contactez le trouveur au :finder_phone.',
+        'v1.match_found'                 => 'DocTrack : un document correspondant à votre déclaration a été trouvé : :owner_name. Consultez-le ici : :url',
+        'restitution.expired'            => 'DocTrack : le trouveur n\'a pas répondu à temps. :next',
+    ],
+
+    'inbox' => [
+        'collection.assigned' => [
+            'title' => 'Document à récupérer — :document_type',
+            'body'  => 'Un citoyen a trouvé un document (:owner_name) à :place:distance. Appelez-le pour organiser le dépôt ou le passage d\'un agent.',
+        ],
+        'collection.unassigned' => [
+            'title' => 'Collecte sans structure',
+            'body'  => 'Aucune structure disponible pour le document :reference (:place). Affectez-le manuellement.',
+        ],
+        'collection.direct_restitution' => [
+            'title' => 'Remise directe en cours',
+            'body'  => 'Le propriétaire et le trouveur du document :reference organisent une remise directe. :detail',
+        ],
+        'match.pending_review' => [
+            'title' => 'Correspondance à vérifier (score :score)',
+            'body'  => 'Déclaration :declaration_reference ↔ document :reference (:owner_name). Comparez les deux fiches puis confirmez ou rejetez.',
+        ],
+    ],
+
+    'mail' => [
+        'collection.assigned' => [
+            'subject' => 'DocTrack — nouveau document à récupérer',
+            'lines'   => [
+                'Un citoyen a trouvé un document (:document_type au nom de :owner_name) à :place:distance.',
+                'Il a accepté d\'être contacté. Ouvrez le dossier :reference dans l\'espace agent pour l\'appeler.',
+            ],
+        ],
+    ],
+];

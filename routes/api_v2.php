@@ -5,6 +5,8 @@ use App\Http\Controllers\V2\CitizenProfileController;
 use App\Http\Controllers\V2\CollectionController;
 use App\Http\Controllers\V2\CounterDeclarationController;
 use App\Http\Controllers\V2\FoundDocumentController;
+use App\Http\Controllers\V2\InboxController;
+use App\Http\Controllers\V2\NotificationDeliveryController;
 use App\Http\Controllers\V2\MatchController;
 use App\Http\Controllers\V2\MeController;
 use App\Http\Controllers\V2\MembershipController;
@@ -79,6 +81,17 @@ Route::middleware(['auth:api', 'active', 'organization', 'throttle:120,1'])->gro
     Route::get('matches/{match}', [MatchController::class, 'show']);
     Route::post('matches/{match}/confirm', [MatchController::class, 'confirm']);
     Route::post('matches/{match}/reject', [MatchController::class, 'reject']);
+
+    // Boîte de réception de l'agent
+    Route::get('inbox', [InboxController::class, 'index']);
+    Route::get('inbox/unread-count', [InboxController::class, 'unreadCount']);
+    Route::post('inbox/read-all', [InboxController::class, 'markAllRead']);
+    Route::post('inbox/{message}/read', [InboxController::class, 'markRead']);
+
+    // Suivi des envois (SMS, emails, boîte de réception)
+    Route::get('notification-deliveries', [NotificationDeliveryController::class, 'index']);
+    Route::get('notification-deliveries/summary', [NotificationDeliveryController::class, 'summary']);
+    Route::post('notification-deliveries/{delivery}/retry', [NotificationDeliveryController::class, 'retry']);
 
     // Types d'organisation : super_admin
     Route::middleware('role:super_admin,api')->group(function () {

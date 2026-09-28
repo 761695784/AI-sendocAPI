@@ -22,6 +22,7 @@ class CollectionService
     public function __construct(
         private NearestStructureFinder $finder,
         private FoundDocumentService $foundDocuments,
+        private \App\Services\Notifications\Notifier $notifier,
     ) {}
 
     /** Ouvre une collecte (le trouveur a accepté d'être contacté). */
@@ -78,6 +79,11 @@ class CollectionService
                 StatusTransition::record($request, $from, CollectionRequest::STATUS_UNASSIGNED, 'Aucune structure disponible', $actor);
             }
 
+            $this->notifier->inboxSuperAdmins('collection.unassigned', [
+                'reference' => $document->reference,
+                'place'     => $document->found_place ?? $document->Location ?? '—',
+            ], ['subject' => $request, 'dedupe' => 'collection.unassigned:' . $request->id . ':' . now()->timestamp], 'collections/' . $request->uuid);
+
             return $request->fresh();
         }
 
@@ -92,7 +98,10 @@ class CollectionService
         StatusTransition::record($request, $from, CollectionRequest::STATUS_ASSIGNED,
             $context . ' : ' . $found['organization']->name . $this->distanceLabel($found), $actor, $found['organization']->id);
 
-        return $request->fresh();
+        $request = $request->fresh();
+        $this->notifyAssigned($request);
+
+        return $request;
     }
 
     /** La structure ne peut pas s'en charger : on passe à la suivante la plus proche. */
@@ -140,7 +149,10 @@ class CollectionService
 
         StatusTransition::record($request, $from, CollectionRequest::STATUS_ASSIGNED, 'Transférée à ' . $target->name . ' : ' . $reason, $agent, $target->id);
 
-        return $request->fresh();
+        $request = $request->fresh();
+        $this->notifyAssigned($request);
+
+        return $request;
     }
 
     /** Trace chaque appel au trouveur. */
@@ -188,6 +200,15 @@ class CollectionService
             : 'Un agent récupère le document' . ($meetingPlace ? ' (' . $meetingPlace . ')' : '');
         StatusTransition::record($request, $from, CollectionRequest::STATUS_PLANNED, $label, $agent, $request->organization_id);
 
+        // Le trouveur reçoit le rendez-vous par SMS.
+        $org = $request->organization;
+        $this->notifier->sms('collection.planned.' . $method, $request->finderPhone(), [
+            'structure' => $org->name,
+            'when'      => $scheduledAt ? 'le ' . \Illuminate\Support\Carbon::parse($scheduledAt)->format('d/m à H\\hi') : 'dès que possible',
+            'address'   => $org->address ?: $org->name,
+            'place'     => $meetingPlace ? ' (' . $meetingPlace . ')' : '',
+        ], ['recipient' => $request, 'subject' => $request, 'organization_id' => $org->id]);
+
         return $request->fresh();
     }
 
@@ -233,5 +254,42 @@ class CollectionService
     private function distanceLabel(array $found): string
     {
         return $found['distance_km'] !== null ? ' (' . number_format($found['distance_km'], 1, ',', ' ') . ' km)' : '';
+    }
+
+    /**
+     * Nouvelle affectation : la structure est prévenue (boîte de réception,
+     * SMS et email à la structure), le trouveur apprend qui va l'appeler.
+     */
+    private function notifyAssigned(CollectionRequest $request): void
+    {
+        $org = $request->organization;
+        $doc = $request->document;
+        if (! $org || ! $doc) {
+            return;
+        }
+
+        $params = [
+            'document_type' => $doc->documentType?->TypeName ?? 'document',
+            'owner_name'    => $doc->OwnerFirstName . ' ' . $doc->OwnerLastName,
+            'place'         => $doc->found_place ?? $doc->Location ?? 'lieu non précisé',
+            'distance'      => $request->distance_km !== null ? ', à ' . number_format($request->distance_km, 1, ',', ' ') . ' km' : '',
+            'reference'     => $doc->reference,
+        ];
+        $once    = $request->id . ':' . $org->id . ':' . $request->assigned_at?->timestamp;
+        $context = ['subject' => $request, 'organization_id' => $org->id];
+
+        $this->notifier->inbox('collection.assigned', $org, $params, $context + ['dedupe' => 'collection.assigned:' . $once],
+            'collections/' . $request->uuid, priority: $request->owner_identified_at !== null);
+        $this->notifier->sms('collection.assigned.structure', $org->phone, $params,
+            $context + ['recipient' => $org, 'dedupe' => 'collection.assigned.structure:' . $once]);
+        if ($org->email) {
+            $this->notifier->mailTo('collection.assigned', $org->email, $params,
+                $context + ['recipient' => $org, 'dedupe' => 'collection.assigned.mail:' . $once]);
+        }
+
+        $this->notifier->sms('collection.assigned.finder', $request->finderPhone(), [
+            'structure'       => $org->name,
+            'structure_phone' => $org->phone ? ' (tél. ' . $org->phone . ')' : '',
+        ], $context + ['recipient' => $request, 'dedupe' => 'collection.assigned.finder:' . $once]);
     }
 }

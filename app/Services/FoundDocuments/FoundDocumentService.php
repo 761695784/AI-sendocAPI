@@ -11,6 +11,7 @@ use App\Models\StatusTransition;
 use App\Models\Territory;
 use App\Models\User;
 use App\Services\Declarations\CitizenProfileService;
+use App\Services\Notifications\Notifier;
 use App\Support\SensitiveData;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -75,6 +76,13 @@ class FoundDocumentService
             $document->addMedia($image)->toMediaCollection('document_image');
         }
 
+        if ($document->finder) {
+            app(Notifier::class)->sms('found_document.deposited', $document->finder->phone(), [
+                'structure' => $structure->name,
+                'reference' => $document->reference,
+            ], ['recipient' => $document->finder, 'subject' => $document, 'organization_id' => $structure->id]);
+        }
+
         dispatch(new MatchDocumentJob($document->id));
 
         return $document->fresh(['documentType', 'custodyOrganization', 'depositedBy', 'finder', 'matches']);
@@ -111,6 +119,9 @@ class FoundDocumentService
                     'collected_by'    => $agent->id,
                 ])->save();
                 StatusTransition::record($c, $from, CollectionRequest::STATUS_COLLECTED, 'Document reçu par ' . $structure->name, $agent, $structure->id);
+
+                app(Notifier::class)->sms('collection.collected.finder', $c->finderPhone(), ['structure' => $structure->name],
+                    ['recipient' => $c, 'subject' => $c, 'organization_id' => $structure->id, 'dedupe' => 'collection.collected:' . $c->id]);
             });
 
             // Le trouveur ne l'a plus : une éventuelle remise directe n'a plus d'objet.
@@ -125,12 +136,13 @@ class FoundDocumentService
         // Propriétaire déjà prévenu qu'il pouvait s'adresser au trouveur : on lui dit où est désormais son document.
         $document->matches()->where('status', \App\Models\DocumentMatch::STATUS_CONFIRMED)->whereNotNull('notified_at')
             ->with(['declaration.user', 'declaration.citizenProfile'])->get()
-            ->each(fn ($m) => \App\Jobs\SendSmsJob::dispatch(
-                $m->declaration?->user?->Phone ?: $m->declaration?->citizenProfile?->phone(),
-                'DocTrack : votre document au nom de ' . $document->OwnerFirstName . ' ' . $document->OwnerLastName
-                . ' est maintenant conservé par ' . $structure->name . ($structure->phone ? ' (tél. ' . $structure->phone . ')' : '')
-                . '. Présentez-vous avec une pièce justificative. Réf. ' . $document->reference . '.'
-            ));
+            ->each(fn ($m) => app(Notifier::class)->sms('match.custody_changed',
+                $m->declaration?->user?->Phone ?: $m->declaration?->citizenProfile?->phone(), [
+                    'owner_name'      => $document->OwnerFirstName . ' ' . $document->OwnerLastName,
+                    'structure'       => $structure->name,
+                    'structure_phone' => $structure->phone ? ' (tél. ' . $structure->phone . ')' : '',
+                    'reference'       => $document->reference,
+                ], ['recipient' => $m->declaration?->user ?? $m->declaration?->citizenProfile, 'subject' => $m, 'organization_id' => $structure->id]));
 
         dispatch(new MatchDocumentJob($document->id));
 

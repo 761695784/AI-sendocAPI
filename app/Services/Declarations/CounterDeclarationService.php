@@ -11,6 +11,7 @@ use App\Models\Territory;
 use App\Models\User;
 use App\Jobs\MatchDeclarationJob;
 use App\Services\Matching\MatchReviewService;
+use App\Services\Notifications\Notifier;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -94,7 +95,15 @@ class CounterDeclarationService
             return $declaration;
         });
 
-        $this->certificates->issue($declaration, $agent, $structure);
+        $certificate = $this->certificates->issue($declaration, $agent, $structure);
+
+        // Reçu par SMS à la victime : référence + lien de vérification du certificat.
+        app(Notifier::class)->sms('counter_declaration.registered', $citizen->phone(), [
+            'reference'  => $declaration->reference,
+            'structure'  => $structure->name,
+            'verify_url' => $certificate->verificationUrl(),
+        ], ['recipient' => $citizen, 'subject' => $declaration, 'organization_id' => $structure->id,
+            'dedupe' => 'counter_declaration.registered:' . $declaration->id]);
 
         MatchDeclarationJob::dispatch($declaration->id);
 
@@ -127,6 +136,14 @@ class CounterDeclarationService
 
             $this->matches->supersedeForDeclaration($declaration, $actor);
         });
+
+        if ($declaration->citizenProfile) {
+            app(Notifier::class)->sms('counter_declaration.cancelled', $declaration->citizenProfile->phone(), [
+                'reference' => $declaration->reference,
+                'structure' => $declaration->organization?->name ?? 'la structure',
+                'reason'    => $reason,
+            ], ['recipient' => $declaration->citizenProfile, 'subject' => $declaration, 'organization_id' => $declaration->organization_id]);
+        }
 
         return $declaration->fresh(['items.documentType', 'citizenProfile', 'organization', 'recordedBy', 'certificat']);
     }

@@ -61,10 +61,8 @@ class QrCodeController extends Controller
             Log::error('QR trouvé : échec email propriétaire.', ['user_id' => $user->id, 'error' => $e->getMessage()]);
         }
 
-        $smsSent = $this->smsService->sendSMS(
-            $user->Phone,
-            "DocTrack : un de vos documents a été trouvé. Contactez le trouveur au {$finderPhone}."
-        );
+        $smsSent = app(\App\Services\Notifications\Notifier::class)->smsNow('qr.found', $user->Phone,
+            ['finder_phone' => $finderPhone], ['recipient' => $user, 'subject' => $user]);
 
         activity()
             ->performedOn($user)

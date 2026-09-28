@@ -56,12 +56,10 @@ public function handle(
     }
 
     try {
-        $smsService->sendSMS(
-            $declarant->Phone,
-            'Un document correspondant à votre déclaration a été trouvé : ' .
-            $document->OwnerFirstName . ' ' . $document->OwnerLastName .
-            '. Consultez-le ici : ' . $this->documentUrl
-        );
+        app(\App\Services\Notifications\Notifier::class)->sms('v1.match_found', $declarant->Phone, [
+            'owner_name' => $document->OwnerFirstName . ' ' . $document->OwnerLastName,
+            'url'        => $this->documentUrl,
+        ], ['recipient' => $declarant, 'subject' => $document, 'dedupe' => 'v1.match_found:' . $this->declarationId . ':' . $document->id]);
     } catch (\Exception $e) {
         Log::warning('NotifyDeclarantJob SMS (non bloquant): ' . $e->getMessage());
     }

@@ -167,6 +167,10 @@ class MatchingService
                 StatusTransition::record($match, null, $status, 'Score ' . $result->score);
             }
 
+            if ($status === DocumentMatch::STATUS_PENDING_REVIEW) {
+                $this->notifyReview($match, $item, $document);
+            }
+
             // Collecte en cours : le propriétaire est probablement identifié → priorité.
             \App\Models\CollectionRequest::where('document_id', $document->id)->open()
                 ->whereNull('owner_identified_at')->update(['owner_identified_at' => now()]);
@@ -185,5 +189,24 @@ class MatchingService
         $from = $match->status;
         $match->update(['status' => $to]);
         StatusTransition::record($match, $from, $to, $reason);
+    }
+
+    /** Nouvelle correspondance à vérifier : message dans la boîte de la structure (une fois). */
+    private function notifyReview(DocumentMatch $match, DeclarationItem $item, Document $document): void
+    {
+        $params  = [
+            'score'                 => $match->score,
+            'declaration_reference' => $item->declaration?->reference ?? '—',
+            'reference'             => $document->reference,
+            'owner_name'            => $document->OwnerFirstName . ' ' . $document->OwnerLastName,
+        ];
+        $context = ['subject' => $match, 'dedupe' => 'match.pending_review:' . $match->id];
+        $notifier = app(\App\Services\Notifications\Notifier::class);
+
+        if ($match->organization) {
+            $notifier->inbox('match.pending_review', $match->organization, $params, $context, 'matches/' . $match->uuid);
+        } else {
+            $notifier->inboxSuperAdmins('match.pending_review', $params, $context, 'matches/' . $match->uuid);
+        }
     }
 }

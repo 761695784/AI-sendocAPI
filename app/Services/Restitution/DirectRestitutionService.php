@@ -2,7 +2,6 @@
 
 namespace App\Services\Restitution;
 
-use App\Jobs\SendSmsJob;
 use App\Models\Document;
 use App\Models\DocumentMatch;
 use App\Models\RestitutionRequest;
@@ -11,7 +10,6 @@ use App\Models\User;
 use App\Notifications\RestitutionRequestNotification;
 use App\Notifications\RestitutionUpdateNotification;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 
 /**
  * Restitution directe propriétaire ↔ trouveur, en double accord :
@@ -22,6 +20,8 @@ use Illuminate\Support\Facades\Log;
  */
 class DirectRestitutionService
 {
+    public function __construct(private \App\Services\Notifications\Notifier $notifier) {}
+
     /** Correspondance confirmée entre ce document et une déclaration de ce citoyen. */
     public function confirmedMatchFor(Document $document, User $requester): ?DocumentMatch
     {
@@ -58,12 +58,13 @@ class DirectRestitutionService
             return $request;
         });
 
-        $finder = $document->user;
-        $this->mail($finder, new RestitutionRequestNotification($requester, $document, true, $request));
-        SendSmsJob::dispatch($this->phoneOf($finder, $document),
-            'DocTrack : le propriétaire du document au nom de ' . $document->OwnerFirstName . ' ' . $document->OwnerLastName
-            . ' (confirmé par DocTrack) demande à le récupérer. Acceptez-vous d\'être mis en contact ? Répondez ici : '
-            . $this->link($request));
+        $finder  = $document->user;
+        $context = ['subject' => $request, 'recipient' => $finder];
+        $this->notifier->mail('restitution.requested', $finder, new RestitutionRequestNotification($requester, $document, true, $request), $context);
+        $this->notifier->sms('restitution.requested', $this->phoneOf($finder, $document), [
+            'owner_name' => $document->OwnerFirstName . ' ' . $document->OwnerLastName,
+            'url'        => $this->link($request),
+        ], $context);
 
         return $request;
     }
@@ -89,13 +90,18 @@ class DirectRestitutionService
         $finderPhone = $this->phoneOf($request->finder, $doc);
         $what       = 'le document au nom de ' . $doc->OwnerFirstName . ' ' . $doc->OwnerLastName;
 
-        SendSmsJob::dispatch($ownerPhone, 'DocTrack : le trouveur accepte de vous remettre ' . $what . '. Contactez '
-            . $request->finder->FirstName . ' au ' . $finderPhone . '. Vérifiez la pièce avant de partir, sans jamais payer.');
-        SendSmsJob::dispatch($finderPhone, 'DocTrack : merci ! Le propriétaire (' . $owner->FirstName . ', ' . $ownerPhone
-            . ') va vous contacter pour ' . $what . '. Une fois remis, indiquez-le sur DocTrack.');
+        $params = [
+            'owner_name'       => $doc->OwnerFirstName . ' ' . $doc->OwnerLastName,
+            'owner_first_name' => $owner->FirstName,
+            'owner_phone'      => $ownerPhone,
+            'finder_name'      => $request->finder->FirstName,
+            'finder_phone'     => $finderPhone,
+        ];
+        $this->notifier->sms('restitution.accepted.owner', $ownerPhone, $params, ['subject' => $request, 'recipient' => $owner]);
+        $this->notifier->sms('restitution.accepted.finder', $finderPhone, $params, ['subject' => $request, 'recipient' => $request->finder]);
 
-        $this->mail($owner, new RestitutionUpdateNotification($request, RestitutionUpdateNotification::CONTACT_FOR_OWNER, $finderPhone));
-        $this->mail($request->finder, new RestitutionUpdateNotification($request, RestitutionUpdateNotification::CONTACT_FOR_FINDER, $ownerPhone));
+        $this->notifier->mail('restitution.accepted', $owner, new RestitutionUpdateNotification($request, RestitutionUpdateNotification::CONTACT_FOR_OWNER, $finderPhone), ['subject' => $request]);
+        $this->notifier->mail('restitution.accepted', $request->finder, new RestitutionUpdateNotification($request, RestitutionUpdateNotification::CONTACT_FOR_FINDER, $ownerPhone), ['subject' => $request]);
 
         return $request;
     }
@@ -118,9 +124,9 @@ class DirectRestitutionService
             ? $collection->organization->name . ' va récupérer le document auprès du trouveur ; vous serez prévenu.'
             : 'Vous pouvez signaler la situation à la structure de police ou de gendarmerie la plus proche avec la référence ' . $doc->reference . '.';
 
-        SendSmsJob::dispatch($request->requester->Phone, 'DocTrack : le trouveur n\'a pas '
-            . ($expired ? 'répondu à temps' : 'accepté la remise directe') . '. ' . $next);
-        $this->mail($request->requester, new RestitutionUpdateNotification($request, $expired ? RestitutionUpdateNotification::EXPIRED : RestitutionUpdateNotification::DECLINED, $next));
+        $event = $expired ? 'restitution.expired' : 'restitution.declined';
+        $this->notifier->sms($event, $request->requester->Phone, ['next' => $next], ['subject' => $request, 'recipient' => $request->requester]);
+        $this->notifier->mail($event, $request->requester, new RestitutionUpdateNotification($request, $expired ? RestitutionUpdateNotification::EXPIRED : RestitutionUpdateNotification::DECLINED, $next), ['subject' => $request]);
 
         return $request->fresh();
     }
@@ -172,18 +178,12 @@ class DirectRestitutionService
     {
         if ($collection = $document->openCollection()) {
             StatusTransition::record($collection, $collection->status, $collection->status, $reason, $actor, $collection->organization_id);
-        }
-    }
 
-    private function mail(?User $user, $notification): void
-    {
-        if (! $user?->email) {
-            return;
-        }
-        try {
-            $user->notify($notification);
-        } catch (\Throwable $e) {
-            Log::warning('Email restitution non envoyé', ['error' => $e->getMessage()]);
+            if ($collection->organization) {
+                $this->notifier->inbox('collection.direct_restitution', $collection->organization,
+                    ['reference' => $document->reference, 'detail' => $reason . '.'],
+                    ['subject' => $collection], 'collections/' . $collection->uuid);
+            }
         }
     }
 }
