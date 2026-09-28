@@ -16,6 +16,7 @@ class StoreDocumentTypeRequest extends FormRequest
         return [
             'TypeName'           => 'required|string|max:255|unique:document_types,TypeName',
             'IdentificationSize' => 'required|string|max:255',
+            'allows_proxy'       => 'sometimes|boolean',
         ];
     }
 }

@@ -35,6 +35,10 @@ return [
         'restitution.accepted.owner'     => 'DocTrack : le trouveur accepte de vous remettre le document au nom de :owner_name. Contactez :finder_name au :finder_phone. Rencontrez-vous dans un lieu public, sans jamais payer.',
         'restitution.accepted.finder'    => 'DocTrack : merci ! Le propriétaire (:owner_first_name, :owner_phone) va vous contacter pour le document au nom de :owner_name. Une fois remis, indiquez-le sur DocTrack.',
         'restitution.declined'           => 'DocTrack : le trouveur n\'a pas accepté la remise directe. :next',
+        // Restitution officielle au guichet
+        'restitution.official.owner'     => 'DocTrack : votre document au nom de :owner_name vous a été remis par :structure. Décharge :reference, vérifiable ici : :verify_url',
+        'restitution.official.finder'    => 'DocTrack : le document que vous avez trouvé a été rendu à son propriétaire par :structure. Merci pour votre geste citoyen !',
+
         // QR code personnel scanné par un trouveur / ancien avertissement V1
         'qr.found'                       => 'DocTrack : un de vos documents a été trouvé. Contactez le trouveur au :finder_phone.',
         'v1.match_found'                 => 'DocTrack : un document correspondant à votre déclaration a été trouvé : :owner_name. Consultez-le ici : :url',

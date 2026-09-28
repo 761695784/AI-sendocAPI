@@ -12,6 +12,7 @@ use App\Http\Controllers\V2\MeController;
 use App\Http\Controllers\V2\MembershipController;
 use App\Http\Controllers\V2\OrganizationController;
 use App\Http\Controllers\V2\OrganizationTypeController;
+use App\Http\Controllers\V2\RestitutionController;
 use App\Http\Controllers\V2\TerritoryController;
 use Illuminate\Support\Facades\Route;
 
@@ -65,6 +66,15 @@ Route::middleware(['auth:api', 'active', 'organization', 'throttle:120,1'])->gro
     Route::post('found-documents', [FoundDocumentController::class, 'store']);
     Route::get('found-documents/{document}', [FoundDocumentController::class, 'show']);
     Route::post('found-documents/{document}/take-custody', [FoundDocumentController::class, 'takeCustody']);
+
+    // Restitution officielle au guichet
+    Route::get('found-documents/{document}/restitution', [RestitutionController::class, 'prepare']);
+    Route::post('found-documents/{document}/restitution', [RestitutionController::class, 'store']);
+    Route::get('restitutions', [RestitutionController::class, 'index']);
+    Route::get('restitutions/{restitution}', [RestitutionController::class, 'show']);
+    Route::get('restitutions/{restitution}/discharge', [RestitutionController::class, 'discharge']);
+    Route::post('restitutions/{restitution}/signed-scan', [RestitutionController::class, 'signedScan']);
+    Route::post('restitutions/{restitution}/void', [RestitutionController::class, 'void']);
 
     // Collecte des documents publiés par les citoyens (structure la plus proche)
     Route::get('collections', [CollectionController::class, 'index']);

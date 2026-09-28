@@ -53,6 +53,14 @@ class ReferenceGenerator
         return sprintf('CP-%d-%06d', $year, self::next("certificate:{$year}"));
     }
 
+    /** RS-2026-000012 (décharge de restitution officielle) */
+    public static function restitution(): string
+    {
+        $year = now()->year;
+
+        return sprintf('RS-%d-%06d', $year, self::next("restitution:{$year}"));
+    }
+
     /** Code de vérification imprimé sur le certificat (sans caractères ambigus). */
     public static function verificationCode(): string
     {
@@ -62,7 +70,11 @@ class ReferenceGenerator
             for ($i = 0; $i < 12; $i++) {
                 $code .= $alphabet[random_int(0, strlen($alphabet) - 1)];
             }
-        } while (DB::table('certificat_de_pertes')->where('verification_code', $code)->exists());
+        } while (
+            // Un code unique pour tous les documents vérifiables (certificats et décharges).
+            DB::table('certificat_de_pertes')->where('verification_code', $code)->exists()
+            || (\Illuminate\Support\Facades\Schema::hasTable('restitutions') && DB::table('restitutions')->where('verification_code', $code)->exists())
+        );
 
         return $code;
     }

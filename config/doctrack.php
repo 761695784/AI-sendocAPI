@@ -26,5 +26,9 @@ return [
     // Demande de restitution directe au trouveur : délai de réponse avant bascule vers la structure.
     'restitution' => [
         'response_hours' => (int) env('RESTITUTION_RESPONSE_HOURS', 48),
+
+        // Restitution officielle au guichet
+        'name_threshold'   => (float) env('RESTITUTION_NAME_THRESHOLD', 0.85), // similarité minimale nom présenté ↔ document
+        'void_window_hours'=> (int) env('RESTITUTION_VOID_WINDOW_HOURS', 72),  // délai pour annuler une remise erronée
     ],
 ];

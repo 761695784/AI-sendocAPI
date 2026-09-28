@@ -18,6 +18,7 @@ class UpdateDocumentTypeRequest extends FormRequest
             'TypeName'           => ['sometimes', 'required', 'string', 'max:255',
                 Rule::unique('document_types', 'TypeName')->ignore($this->route('document_type'))],
             'IdentificationSize' => 'sometimes|required|string|max:255',
+            'allows_proxy'       => 'sometimes|boolean',
         ];
     }
 }

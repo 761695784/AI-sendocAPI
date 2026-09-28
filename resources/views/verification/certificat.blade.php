@@ -32,9 +32,12 @@
             <h1>Aucun certificat ne correspond à ce code</h1>
             <p>Vérifiez le code imprimé sous le QR code (<code>{{ $code }}</code>). Un document dont le code est introuvable ne doit pas être considéré comme authentique.</p>
         @elseif ($s['status'] === 'revoked')
-            <span class="badge ko">Certificat révoqué</span>
-            <h1>Ce certificat n'est plus valable</h1>
+            <span class="badge ko">{{ ($s['type'] ?? '') === 'restitution' ? 'Décharge annulée' : 'Certificat révoqué' }}</span>
+            <h1>{{ ($s['type'] ?? '') === 'restitution' ? 'Cette décharge n\'est plus valable' : 'Ce certificat n\'est plus valable' }}</h1>
             <p>Révoqué le {{ \Carbon\Carbon::parse($s['revoked_at'])->format('d/m/Y') }} — {{ $s['revocation_reason'] }}</p>
+        @elseif (($s['type'] ?? '') === 'restitution')
+            <span class="badge ok">Décharge authentique</span>
+            <h1>{{ $s['kind_label'] }}</h1>
         @elseif ($s['kind'] === 'official')
             <span class="badge ok">Certificat authentique</span>
             <h1>{{ $s['kind_label'] }}</h1>
@@ -46,7 +49,7 @@
         @if ($s['found'])
             <dl>
                 <dt>Numéro</dt><dd>{{ $s['certificate_number'] }}</dd>
-                <dt>Délivré le</dt><dd>{{ \Carbon\Carbon::parse($s['issued_at'])->format('d/m/Y') }}</dd>
+                <dt>{{ ($s['type'] ?? '') === 'restitution' ? 'Remis le' : 'Délivré le' }}</dt><dd>{{ \Carbon\Carbon::parse($s['issued_at'])->format('d/m/Y') }}</dd>
                 @if ($s['issued_by'])
                     <dt>Délivré par</dt><dd>{{ $s['issued_by']['structure'] }}<br><small>{{ $s['issued_by']['institution'] }}</small></dd>
                 @endif

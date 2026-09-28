@@ -10,12 +10,28 @@ use App\Services\Declarations\CertificateVerifier;
  */
 class CertificateVerificationController extends Controller
 {
-    public function __construct(private CertificateVerifier $verifier) {}
+    public function __construct(
+        private CertificateVerifier $verifier,
+        private \App\Services\Restitution\RestitutionVerifier $restitutions,
+    ) {}
+
+    /** Certificat de perte, sinon décharge de restitution (même code, même lien). */
+    private function lookup(string $code): array
+    {
+        if ($certificate = $this->verifier->find($code)) {
+            return $this->verifier->summary($certificate) + ['type' => 'certificate'];
+        }
+        if ($restitution = $this->restitutions->find($code)) {
+            return $this->restitutions->summary($restitution);
+        }
+
+        return $this->verifier->summary(null);
+    }
 
     /** GET /api/v2/verify/{code} */
     public function api(string $code)
     {
-        $summary = $this->verifier->summary($this->verifier->find($code));
+        $summary = $this->lookup($code);
 
         return response()->json($summary, $summary['found'] ? 200 : 404);
     }
@@ -23,7 +39,7 @@ class CertificateVerificationController extends Controller
     /** GET /verifier/{code} — page HTML lisible sur téléphone */
     public function page(string $code)
     {
-        $summary = $this->verifier->summary($this->verifier->find($code));
+        $summary = $this->lookup($code);
 
         return response()
             ->view('verification.certificat', ['s' => $summary, 'code' => CertificateVerifier::normalize($code)], $summary['found'] ? 200 : 404)

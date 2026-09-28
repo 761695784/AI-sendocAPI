@@ -30,6 +30,9 @@ return [
             'matches.review',
             'collections.view',
             'collections.manage',
+            'restitutions.view',
+            'restitutions.void',
+            'restitutions.override',
         ],
         'structure_manager' => [
             'organizations.view',
@@ -49,6 +52,10 @@ return [
             'matches.review',
             'collections.view',
             'collections.manage',
+            'restitutions.view',
+            'restitutions.perform',
+            'restitutions.void',
+            'restitutions.override',
         ],
         'agent' => [
             'organizations.view',
@@ -62,6 +69,8 @@ return [
             'matches.review',
             'collections.view',
             'collections.manage',
+            'restitutions.view',
+            'restitutions.perform',
             // Un agent peut annuler SA propre saisie pendant un délai limité
             // (config doctrack.agent_cancel_window_hours) : règle dans DeclarationDePertePolicy.
         ],
