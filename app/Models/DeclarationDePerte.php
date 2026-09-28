@@ -148,6 +148,11 @@ class DeclarationDePerte extends Model
         return $this->hasMany(DocumentMatch::class);
     }
 
+    public function charges()
+    {
+        return $this->morphMany(Charge::class, 'subject');
+    }
+
     public function transitions()
     {
         return $this->morphMany(StatusTransition::class, 'transitionable');

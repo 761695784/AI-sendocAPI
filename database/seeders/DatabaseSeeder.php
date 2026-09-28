@@ -18,6 +18,7 @@ class DatabaseSeeder extends Seeder
             OrganizationTypeSeeder::class,
             UserSeeder::class,
             OrganizationSeeder::class,
+            BillingSeeder::class,
         ]);
     }
 }

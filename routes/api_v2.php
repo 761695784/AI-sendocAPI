@@ -1,6 +1,9 @@
 <?php
 
 use App\Http\Controllers\CertificateVerificationController;
+use App\Http\Controllers\TagScanController;
+use App\Http\Controllers\V2\BillingController;
+use App\Http\Controllers\V2\ChargeController;
 use App\Http\Controllers\V2\CitizenProfileController;
 use App\Http\Controllers\V2\CollectionController;
 use App\Http\Controllers\V2\CounterDeclarationController;
@@ -30,6 +33,10 @@ use Illuminate\Support\Facades\Route;
 Route::get('verify/{code}', [CertificateVerificationController::class, 'api'])
     ->middleware('throttle:30,1')
     ->where('code', '[A-Za-z0-9\-]{4,40}');
+
+// Scan public d'un QR de document (trouveur sans compte).
+Route::get('tags/{token}', [TagScanController::class, 'show'])->middleware('throttle:30,1')->where('token', '[A-Za-z0-9]{20,40}');
+Route::post('tags/{token}/found', [TagScanController::class, 'report'])->middleware('throttle:5,1')->where('token', '[A-Za-z0-9]{20,40}');
 
 Route::middleware(['auth:api', 'active', 'organization', 'throttle:120,1'])->group(function () {
 
@@ -103,6 +110,19 @@ Route::middleware(['auth:api', 'active', 'organization', 'throttle:120,1'])->gro
     Route::get('notification-deliveries', [NotificationDeliveryController::class, 'index']);
     Route::get('notification-deliveries/summary', [NotificationDeliveryController::class, 'summary']);
     Route::post('notification-deliveries/{delivery}/retry', [NotificationDeliveryController::class, 'retry']);
+
+    // Frais au guichet (encaissement, exonération, lien Wave)
+    Route::get('charges', [ChargeController::class, 'index']);
+    Route::get('charges/{charge}', [ChargeController::class, 'show']);
+    Route::post('charges/{charge}/cash', [ChargeController::class, 'cash']);
+    Route::post('charges/{charge}/exempt', [ChargeController::class, 'exempt']);
+    Route::post('charges/{charge}/cancel', [ChargeController::class, 'cancel']);
+    Route::post('charges/{charge}/checkout', [ChargeController::class, 'checkout']);
+
+    // Tarifs (super admin) et rapport de reversement
+    Route::get('billing/services', [BillingController::class, 'services']);
+    Route::post('billing/prices', [BillingController::class, 'setPrice']);
+    Route::get('billing/report', [BillingController::class, 'report']);
 
     // Statistiques par périmètre (?organization=uuid&from=&to=)
     Route::get('stats/overview', [StatsController::class, 'overview']);

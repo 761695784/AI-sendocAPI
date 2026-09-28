@@ -45,4 +45,11 @@ return [
     'redirect' => env('GOOGLE_REDIRECT_URI'),
 ],
 
+    // Paiement mobile money Wave (compte Wave Business requis)
+    'wave' => [
+        'api_key'        => env('WAVE_API_KEY'),
+        'webhook_secret' => env('WAVE_WEBHOOK_SECRET'),
+        'base_url'       => env('WAVE_BASE_URL', 'https://api.wave.com'),
+    ],
+
 ];

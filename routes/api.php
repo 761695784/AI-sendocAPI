@@ -6,7 +6,9 @@ use App\Http\Controllers\CertificatDePerteController;
 use App\Http\Controllers\CommentaireController;
 use App\Http\Controllers\DeclarationDePerteController;
 use App\Http\Controllers\DocumentController;
+use App\Http\Controllers\DocumentTagController;
 use App\Http\Controllers\DocumentTypeController;
+use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\EmailVerificationController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PrivateFileController;
@@ -28,6 +30,9 @@ Route::middleware('throttle:10,1')->group(function () {
     Route::post('/verify-email', [EmailVerificationController::class, 'verify']);
     Route::post('/found-qr', [QrCodeController::class, 'handleFoundQr']);
 });
+
+// Notifications des prestataires de paiement (signature vérifiée, sans compte)
+Route::post('webhooks/{provider}', [PaymentController::class, 'webhook'])->middleware('throttle:120,1');
 
 // ══════════════════════════════════════════════════════════════════
 // ROUTES PUBLIQUES LECTURE — throttle souple
@@ -79,6 +84,17 @@ Route::middleware(['auth:api', 'active', 'throttle:60,1'])->group(function () {
     Route::get('trashed', [DocumentController::class, 'trashedDocuments']);
     Route::post('documents/{slug}/restitution', [DocumentController::class, 'requestRestitution']);
     Route::get('documents/{slug}/collection', [DocumentController::class, 'collection']);
+
+    // ── QR code par document (v2) ──
+    Route::get('document-tags', [DocumentTagController::class, 'index']);
+    Route::post('document-tags', [DocumentTagController::class, 'store']);
+    Route::get('document-tags/{tag}', [DocumentTagController::class, 'show']);
+    Route::post('document-tags/{tag}/renew', [DocumentTagController::class, 'renew']);
+    Route::post('document-tags/{tag}/revoke', [DocumentTagController::class, 'revoke']);
+
+    // ── Paiements du citoyen ──
+    Route::get('my-charges', [PaymentController::class, 'myCharges']);
+    Route::post('charges/{charge}/checkout', [PaymentController::class, 'checkout']);
 
     // ── Restitution directe (double accord propriétaire ↔ trouveur) ──
     Route::get('restitution-requests', [RestitutionRequestController::class, 'index']);

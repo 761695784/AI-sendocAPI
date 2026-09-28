@@ -45,6 +45,8 @@ class DocumentController extends Controller
                 ->paginate(20);
         } else {
             $documents = Document::whereNull('deleted_at')
+                // Les signalements par QR ne sont pas publiés : le propriétaire est prévenu directement.
+                ->where(fn ($q) => $q->whereNull('found_channel')->orWhere('found_channel', '!=', Document::CHANNEL_QR_SCAN))
                 ->with(['user', 'documentType', 'media', 'custodyOrganization'])
                 ->latest()
                 ->paginate(20);
@@ -181,6 +183,13 @@ class DocumentController extends Controller
             ], 403);
         }
 
+        if ($document->found_channel === Document::CHANNEL_QR_SCAN) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Ce document a été signalé grâce à son QR code : son propriétaire a été prévenu directement.',
+            ], 409);
+        }
+
         // Le trouveur ne l'a plus : il est dans une structure, restitution au guichet.
         if ($document->found_channel === Document::CHANNEL_COUNTER || $document->isInCustody()) {
             return response()->json([
@@ -239,6 +248,8 @@ class DocumentController extends Controller
         $document = Document::with(['user', 'documentType', 'media', 'custodyOrganization'])
             ->where('uuid', $uuid)
             ->firstOrFail();
+
+        abort_if($document->found_channel === Document::CHANNEL_QR_SCAN && ! Auth::user()?->isSuperAdmin(), 404);
 
         return new DocumentResource($document);
     }

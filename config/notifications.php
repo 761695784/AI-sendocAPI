@@ -39,6 +39,13 @@ return [
         'restitution.official.owner'     => 'DocTrack : votre document au nom de :owner_name vous a été remis par :structure. Décharge :reference, vérifiable ici : :verify_url',
         'restitution.official.finder'    => 'DocTrack : le document que vous avez trouvé a été rendu à son propriétaire par :structure. Merci pour votre geste citoyen !',
 
+        // QR code par document (v2)
+        'tag.found.both'                 => 'DocTrack : votre :document_type:label a été trouvé(e) (:place). :structure va le récupérer. Vous pouvez aussi joindre :finder_name au :finder_phone.',
+        'tag.found.collection'           => 'DocTrack : votre :document_type:label a été trouvé(e) (:place). :structure va le récupérer auprès du trouveur et vous préviendra.',
+        'tag.found.contact'              => 'DocTrack : votre :document_type:label a été trouvé(e) (:place). Contactez :finder_name au :finder_phone pour le récupérer.',
+        'tag.found.minimal'              => 'DocTrack : votre :document_type:label a été trouvé(e) (:place). Surveillez vos notifications DocTrack.',
+        'tag.collected'                  => 'DocTrack : votre :document_type est conservé par :structure:structure_phone. Présentez-vous avec une pièce justificative. Réf. :reference.',
+
         // QR code personnel scanné par un trouveur / ancien avertissement V1
         'qr.found'                       => 'DocTrack : un de vos documents a été trouvé. Contactez le trouveur au :finder_phone.',
         'v1.match_found'                 => 'DocTrack : un document correspondant à votre déclaration a été trouvé : :owner_name. Consultez-le ici : :url',
@@ -77,6 +84,14 @@ return [
     ],
 
     'mail' => [
+        'tag.found' => [
+            'subject' => 'DocTrack — votre document a été trouvé',
+            'lines'   => [
+                'Quelqu\'un a scanné le QR code collé sur votre :document_type:label.',
+                ':next',
+                'Si vous ne reconnaissez pas ce signalement, désactivez ce QR depuis votre espace DocTrack.',
+            ],
+        ],
         'collection.assigned' => [
             'subject' => 'DocTrack — nouveau document à récupérer',
             'lines'   => [

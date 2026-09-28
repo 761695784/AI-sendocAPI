@@ -26,7 +26,7 @@ class CollectionService
     ) {}
 
     /** Ouvre une collecte (le trouveur a accepté d'être contacté). */
-    public function open(Document $document, User $finderUser, string $phone): ?CollectionRequest
+    public function open(Document $document, ?User $finderUser, string $phone, ?string $finderName = null): ?CollectionRequest
     {
         if ($document->found_channel === Document::CHANNEL_COUNTER
             || $document->isInCustody()
@@ -36,16 +36,16 @@ class CollectionService
             return null;
         }
 
-        $request = DB::transaction(function () use ($document, $finderUser, $phone) {
+        $request = DB::transaction(function () use ($document, $finderUser, $phone, $finderName) {
             $request = (new CollectionRequest([
                 'document_id'    => $document->id,
                 'status'         => CollectionRequest::STATUS_UNASSIGNED,
-                'finder_user_id' => $finderUser->id,
-                'finder_name'    => trim($finderUser->FirstName . ' ' . $finderUser->LastName),
+                'finder_user_id' => $finderUser?->id,
+                'finder_name'    => $finderUser ? trim($finderUser->FirstName . ' ' . $finderUser->LastName) : $finderName,
             ]))->setFinderPhone($phone);
             $request->save();
 
-            StatusTransition::record($request, null, CollectionRequest::STATUS_UNASSIGNED, 'Publication avec accord de contact', $finderUser);
+            StatusTransition::record($request, null, CollectionRequest::STATUS_UNASSIGNED, $document->found_channel === Document::CHANNEL_QR_SCAN ? 'Signalement par QR code avec accord de contact' : 'Publication avec accord de contact', $finderUser);
 
             // Déjà une correspondance probable ? Le dossier est prioritaire.
             if ($document->matches()->whereIn('status', ['pending_review', 'confirmed'])->exists()) {

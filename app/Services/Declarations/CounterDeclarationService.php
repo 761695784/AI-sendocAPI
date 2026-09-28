@@ -95,19 +95,14 @@ class CounterDeclarationService
             return $declaration;
         });
 
-        $certificate = $this->certificates->issue($declaration, $agent, $structure);
-
-        // Reçu par SMS à la victime : référence + lien de vérification du certificat.
-        app(Notifier::class)->sms('counter_declaration.registered', $citizen->phone(), [
-            'reference'  => $declaration->reference,
-            'structure'  => $structure->name,
-            'verify_url' => $certificate->verificationUrl(),
-        ], ['recipient' => $citizen, 'subject' => $declaration, 'organization_id' => $structure->id,
-            'dedupe' => 'counter_declaration.registered:' . $declaration->id]);
+        // Frais de déclaration : en pilote gratuit (tracé) → certificat immédiat ;
+        // en mode live, le certificat est délivré une fois le frais payé ou exonéré.
+        app(\App\Services\Billing\BillingManager::class)->bill('counter_declaration', $declaration, $structure,
+            $citizen->user, $citizen, $agent);
 
         MatchDeclarationJob::dispatch($declaration->id);
 
-        return $declaration->fresh(['items.documentType', 'citizenProfile', 'organization.parent', 'recordedBy', 'certificat']);
+        return $declaration->fresh(['items.documentType', 'citizenProfile', 'organization.parent', 'recordedBy', 'certificat', 'charges.service']);
     }
 
     /**

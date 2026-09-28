@@ -52,6 +52,15 @@ class DeclarationResource extends JsonResource
                     ? URL::temporarySignedRoute('files.certificate', now()->addMinutes(15), ['uuid' => $cert->uuid])
                     : null,
             ] : null,
+            // Frais de la déclaration (en mode live : le certificat attend le règlement).
+            'charge'         => $this->whenLoaded('charges', fn () => ($c = $this->charges->sortByDesc('id')->first()) ? [
+                'uuid'        => $c->uuid,
+                'reference'   => $c->reference,
+                'status'      => $c->status,
+                'amount'      => $c->amount,
+                'list_amount' => $c->list_amount,
+                'currency'    => $c->currency,
+            ] : null),
             'closed_at'      => $this->closed_at,
             'closure_reason' => $this->closure_reason,
             'created_at'     => $this->created_at,

@@ -57,7 +57,7 @@ class DocumentResource extends JsonResource
 
             'document_type' => $this->whenLoaded('documentType'),
             // Guichet : l'agent déposant n'est jamais exposé côté citoyen.
-            'user'          => $this->whenLoaded('user', fn () => $counter
+            'user'          => $this->whenLoaded('user', fn () => ($counter || ! $this->user)
                 ? null
                 : ($privileged ? $this->user : new PublicUserResource($this->user))),
 

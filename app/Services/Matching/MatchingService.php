@@ -86,7 +86,8 @@ class MatchingService
             $documents = Document::query()
                 ->where('document_type_id', $item->document_type_id)
                 ->whereIn('lifecycle_status', Document::MATCHABLE)
-                ->when($declaration->user_id, fn ($q) => $q->where('user_id', '!=', $declaration->user_id))
+                // Pas sa propre publication ; les documents sans publicateur (QR, guichet) restent candidats.
+                ->when($declaration->user_id, fn ($q) => $q->where(fn ($q) => $q->whereNull('user_id')->orWhere('user_id', '!=', $declaration->user_id)))
                 ->where(function (Builder $q) use ($item, $keys) {
                     if ($item->doc_number_hash) {
                         $q->orWhere('doc_number_hash', $item->doc_number_hash);

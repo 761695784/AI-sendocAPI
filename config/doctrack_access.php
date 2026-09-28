@@ -33,6 +33,8 @@ return [
             'restitutions.view',
             'restitutions.void',
             'restitutions.override',
+            'billing.view',
+            'billing.exempt',
         ],
         'structure_manager' => [
             'organizations.view',
@@ -56,6 +58,9 @@ return [
             'restitutions.perform',
             'restitutions.void',
             'restitutions.override',
+            'billing.view',
+            'billing.collect',
+            'billing.exempt',
         ],
         'agent' => [
             'organizations.view',
@@ -71,6 +76,7 @@ return [
             'collections.manage',
             'restitutions.view',
             'restitutions.perform',
+            'billing.collect',
             // Un agent peut annuler SA propre saisie pendant un délai limité
             // (config doctrack.agent_cancel_window_hours) : règle dans DeclarationDePertePolicy.
         ],

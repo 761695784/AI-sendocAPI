@@ -133,6 +133,16 @@ class FoundDocumentService
                 ->log('Document pris en garde par une structure');
         });
 
+        // Document signalé par son QR : le propriétaire est connu, on lui dit où le récupérer.
+        if ($document->document_tag_id && ($tag = $document->tag()->with(['owner', 'documentType'])->first())) {
+            app(Notifier::class)->sms('tag.collected', $tag->owner?->Phone, [
+                'document_type'   => $tag->documentType?->TypeName ?? 'document',
+                'structure'       => $structure->name,
+                'structure_phone' => $structure->phone ? ' (tél. ' . $structure->phone . ')' : '',
+                'reference'       => $document->reference,
+            ], ['recipient' => $tag->owner, 'subject' => $document, 'organization_id' => $structure->id, 'dedupe' => 'tag.collected:' . $document->id]);
+        }
+
         // Propriétaire déjà prévenu qu'il pouvait s'adresser au trouveur : on lui dit où est désormais son document.
         $document->matches()->where('status', \App\Models\DocumentMatch::STATUS_CONFIRMED)->whereNotNull('notified_at')
             ->with(['declaration.user', 'declaration.citizenProfile'])->get()

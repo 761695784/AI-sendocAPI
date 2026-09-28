@@ -32,6 +32,7 @@ class Document extends Model implements HasMedia
 
     public const CHANNEL_CITIZEN = 'citizen';
     public const CHANNEL_COUNTER = 'counter';
+    public const CHANNEL_QR_SCAN = 'qr_scan'; // signalé par scan du QR collé sur le document
 
     public const LIFECYCLE_PUBLISHED           = 'published';
     public const LIFECYCLE_IN_CUSTODY          = 'in_custody';
@@ -112,6 +113,11 @@ class Document extends Model implements HasMedia
     public function collectionRequests()
     {
         return $this->hasMany(CollectionRequest::class);
+    }
+
+    public function tag()
+    {
+        return $this->belongsTo(DocumentTag::class, 'document_tag_id');
     }
 
     public function restitutionRequests()

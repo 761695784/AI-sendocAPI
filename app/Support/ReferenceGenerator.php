@@ -53,6 +53,14 @@ class ReferenceGenerator
         return sprintf('CP-%d-%06d', $year, self::next("certificate:{$year}"));
     }
 
+    /** FA-2026-000123 (reçu de paiement / frais) */
+    public static function charge(): string
+    {
+        $year = now()->year;
+
+        return sprintf('FA-%d-%06d', $year, self::next("charge:{$year}"));
+    }
+
     /** RS-2026-000012 (décharge de restitution officielle) */
     public static function restitution(): string
     {

@@ -771,25 +771,32 @@ class AuthController extends Controller
     public function renewQrCode(Request $request)
     {
         /** @var \App\Models\User $user */
-        $user = Auth::user();
+        $user   = Auth::user();
+        $charge = app(\App\Services\Billing\BillingManager::class)->bill('qr_renewal', $user, null, $user, null, $user);
 
-        $newExpirationDate = now()->addMonths(config('doctrack.qr_code_validity_months'));
+        // Mode live : le renouvellement attend le paiement (Wave).
+        if (! $charge->isSettled()) {
+            return response()->json([
+                'success'          => false,
+                'payment_required' => true,
+                'message'          => 'Le renouvellement du QR code coûte ' . $charge->amount . ' FCFA. Payez par Wave pour l\'activer.',
+                'charge'           => \App\Http\Controllers\ChargeSummary::of($charge),
+            ], 402);
+        }
 
-        $user->qr_code_token      = Uuid::uuid4()->toString();
-        $user->qr_code_expires_at = $newExpirationDate;
-        $user->save();
-
+        $user->refresh();
         activity()
             ->causedBy($user)
             ->performedOn($user)
-            ->withProperties(['new_expiration' => $newExpirationDate])
+            ->withProperties(['new_expiration' => $user->qr_code_expires_at, 'charge' => $charge->reference])
             ->log('QR Code renouvelé');
 
         return response()->json([
             'success'        => true,
             'message'        => 'QR code renouvelé avec succès.',
             'qr_code_url'    => QrCodeUrl::imageFor($user),
-            'new_expiration' => $newExpirationDate,
+            'new_expiration' => $user->qr_code_expires_at,
+            'charge'         => \App\Http\Controllers\ChargeSummary::of($charge),
         ], 200);
     }
 }
