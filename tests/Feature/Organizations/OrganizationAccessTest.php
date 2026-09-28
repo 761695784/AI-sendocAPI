@@ -13,6 +13,9 @@ class OrganizationAccessTest extends OrganizationTestCase
         $this->assertSame(2, $this->commissariatA->depth);
         $this->assertTrue($this->commissariatA->isDescendantOf($this->police));
         $this->assertFalse($this->brigadeZ->isDescendantOf($this->police));
+        $this->assertSame([$this->police->id, $this->direction->id], $this->commissariatA->ancestorIds());
+        $this->assertSame($this->police->id, $this->commissariatA->institution()->id);
+        $this->assertSame($this->police->id, $this->police->institution()->id);
     }
 
     public function test_each_level_only_sees_its_own_perimeter(): void

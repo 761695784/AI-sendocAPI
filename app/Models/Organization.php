@@ -129,7 +129,7 @@ class Organization extends Model
     /** Ids des ancêtres (du plus haut au parent direct). */
     public function ancestorIds(): array
     {
-        $ids = array_map('intval', array_filter(explode('/', $this->path)));
+        $ids = array_values(array_map('intval', array_filter(explode('/', $this->path))));
         array_pop($ids); // retire l'organisation elle-même
 
         return $ids;

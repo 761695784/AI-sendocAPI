@@ -49,6 +49,7 @@ Route::middleware(['signed', 'throttle:120,1'])->prefix('files')->group(function
     Route::get('documents/{uuid}/image', [PrivateFileController::class, 'documentImage'])->name('documents.image');
     Route::get('qr-codes/{uuid}', [PrivateFileController::class, 'qrCode'])->name('files.qr');
     Route::get('rapports/{uuid}', [PrivateFileController::class, 'rapport'])->name('files.rapport');
+    Route::get('certificats/{uuid}', [PrivateFileController::class, 'certificate'])->name('files.certificate');
 });
 
 // ══════════════════════════════════════════════════════════════════

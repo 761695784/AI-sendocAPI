@@ -139,6 +139,11 @@ class User extends Authenticatable  implements JWTSubject
         return $this->hasMany(OrganizationMembership::class);
     }
 
+    public function citizenProfile()
+    {
+        return $this->hasOne(CitizenProfile::class);
+    }
+
     public function activeMemberships()
     {
         return $this->memberships()->active();

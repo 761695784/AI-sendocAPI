@@ -46,6 +46,20 @@ class PrivateFileController extends Controller
         ]);
     }
 
+    public function certificate(string $uuid)
+    {
+        $certificat = \App\Models\CertificatDePerte::withTrashed()->where('uuid', $uuid)->firstOrFail();
+        $path       = PrivateFiles::path($certificat->pdf_path);
+
+        abort_if(! $path, 404);
+
+        return response()->file($path, [
+            'Content-Type'        => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="' . $certificat->certificat_number . '.pdf"',
+            'Cache-Control'       => 'private, no-store',
+        ]);
+    }
+
     public function rapport(string $uuid)
     {
         $rapport = RapportGenere::where('uuid', $uuid)->firstOrFail();

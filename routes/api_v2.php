@@ -1,5 +1,8 @@
 <?php
 
+use App\Http\Controllers\CertificateVerificationController;
+use App\Http\Controllers\V2\CitizenProfileController;
+use App\Http\Controllers\V2\CounterDeclarationController;
 use App\Http\Controllers\V2\MeController;
 use App\Http\Controllers\V2\MembershipController;
 use App\Http\Controllers\V2\OrganizationController;
@@ -15,6 +18,11 @@ use Illuminate\Support\Facades\Route;
 | L'en-tête optionnel "X-Organization: <uuid>" indique au nom de quelle
 | structure l'agent agit (sinon : son affectation principale).
 */
+
+// Vérification publique d'un certificat (sans connexion).
+Route::get('verify/{code}', [CertificateVerificationController::class, 'api'])
+    ->middleware('throttle:30,1')
+    ->where('code', '[A-Za-z0-9\-]{4,40}');
 
 Route::middleware(['auth:api', 'active', 'organization', 'throttle:120,1'])->group(function () {
 
@@ -37,6 +45,15 @@ Route::middleware(['auth:api', 'active', 'organization', 'throttle:120,1'])->gro
     Route::post('organizations/{organization}/members', [MembershipController::class, 'store']);
     Route::match(['put', 'patch'], 'memberships/{membership}', [MembershipController::class, 'update']);
     Route::post('memberships/{membership}/end', [MembershipController::class, 'end']);
+
+    // Guichet : victimes et déclarations
+    Route::get('citizens', [CitizenProfileController::class, 'search']);
+    Route::post('citizens', [CitizenProfileController::class, 'store']);
+    Route::get('declarations', [CounterDeclarationController::class, 'index']);
+    Route::post('declarations', [CounterDeclarationController::class, 'store']);
+    Route::get('declarations/{declaration}', [CounterDeclarationController::class, 'show']);
+    Route::post('declarations/{declaration}/cancel', [CounterDeclarationController::class, 'cancel']);
+    Route::get('declarations/{declaration}/certificate', [CounterDeclarationController::class, 'certificate']);
 
     // Types d'organisation : super_admin
     Route::middleware('role:super_admin,api')->group(function () {

@@ -22,6 +22,9 @@ return [
             'members.manage',
             'stats.view',
             'audit.view',
+            'declarations.view',
+            'declarations.cancel',
+            'citizens.search',
         ],
         'structure_manager' => [
             'organizations.view',
@@ -30,9 +33,20 @@ return [
             'members.manage',
             'stats.view',
             'audit.view',
+            'declarations.create',
+            'declarations.view',
+            'declarations.cancel',
+            'citizens.search',
+            'citizens.create',
         ],
         'agent' => [
             'organizations.view',
+            'declarations.create',
+            'declarations.view',
+            'citizens.search',
+            'citizens.create',
+            // Un agent peut annuler SA propre saisie pendant un délai limité
+            // (config doctrack.agent_cancel_window_hours) : règle dans DeclarationDePertePolicy.
         ],
     ],
 

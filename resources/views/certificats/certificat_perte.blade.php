@@ -527,6 +527,11 @@
                 Réf. {{ $certificat->certificat_number }}
                 | Déclaration en ligne non vérifiée par une autorité
             </div>
+            @if ($certificat->verification_code)
+            <div class="footer-text">
+                Vérification : {{ $certificat->verificationUrl() }}
+            </div>
+            @endif
         </div>
         <div class="footer-right">
             <div class="footer-officiel">Récépissé de déclaration</div>

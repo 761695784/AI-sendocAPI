@@ -2,65 +2,74 @@
 
 namespace App\Policies;
 
+use App\Http\Middleware\ResolveActiveOrganization;
 use App\Models\DeclarationDePerte;
+use App\Models\Organization;
+use App\Models\OrganizationType;
 use App\Models\User;
-use Illuminate\Auth\Access\Response;
+use App\Services\Access\OrganizationAccess;
 
+/**
+ * Déclarations institutionnelles (API V2).
+ * Les routes V1 du citoyen gardent leurs propres contrôles (propriétaire).
+ */
 class DeclarationDePertePolicy
 {
-    /**
-     * Determine whether the user can view any models.
-     */
-    public function viewAny(User $user): bool
+    public function __construct(private OrganizationAccess $access) {}
+
+    /** Enregistrer une déclaration au guichet de $structure. */
+    public function createAtCounter(User $user, Organization $structure): bool
     {
-        //
+        return $structure->type?->level === OrganizationType::LEVEL_STRUCTURE
+            && ! $user->isSuperAdmin() // le super admin n'est pas un agent de guichet
+            && $this->access->can($user, 'declarations.create', $structure);
     }
 
-    /**
-     * Determine whether the user can view the model.
-     */
-    public function view(User $user, DeclarationDePerte $declarationDePerte): bool
+    public function viewInstitutional(User $user): bool
     {
-        //
+        return $user->isSuperAdmin() || $this->access->memberships($user)
+            ->contains(fn ($m) => in_array('declarations.view', config("doctrack_access.abilities.{$m->role}", []), true));
     }
 
-    /**
-     * Determine whether the user can create models.
-     */
-    public function create(User $user): bool
+    public function view(User $user, DeclarationDePerte $declaration): bool
     {
-        //
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        return $declaration->organization
+            && $this->access->can($user, 'declarations.view', $declaration->organization);
     }
 
-    /**
-     * Determine whether the user can update the model.
-     */
-    public function update(User $user, DeclarationDePerte $declarationDePerte): bool
+    public function cancel(User $user, DeclarationDePerte $declaration): bool
     {
-        //
+        if (! $declaration->isCounter() || ! $declaration->organization) {
+            return false;
+        }
+        if ($this->access->can($user, 'declarations.cancel', $declaration->organization)) {
+            return true;
+        }
+
+        // L'agent auteur peut corriger sa propre erreur, peu de temps après.
+        return $declaration->recorded_by_user_id === $user->id
+            && $this->access->can($user, 'declarations.create', $declaration->organization)
+            && $declaration->created_at->gt(now()->subHours(config('doctrack.agent_cancel_window_hours')));
     }
 
-    /**
-     * Determine whether the user can delete the model.
-     */
-    public function delete(User $user, DeclarationDePerte $declarationDePerte): bool
+    public function searchCitizens(User $user): bool
     {
-        //
+        return $this->hasAbilityInActiveOrganization($user, 'citizens.search');
     }
 
-    /**
-     * Determine whether the user can restore the model.
-     */
-    public function restore(User $user, DeclarationDePerte $declarationDePerte): bool
+    public function createCitizen(User $user): bool
     {
-        //
+        return $this->hasAbilityInActiveOrganization($user, 'citizens.create');
     }
 
-    /**
-     * Determine whether the user can permanently delete the model.
-     */
-    public function forceDelete(User $user, DeclarationDePerte $declarationDePerte): bool
+    private function hasAbilityInActiveOrganization(User $user, string $ability): bool
     {
-        //
+        $org = ResolveActiveOrganization::current();
+
+        return $org && $this->access->can($user, $ability, $org) && ! $user->isSuperAdmin();
     }
 }

@@ -15,7 +15,7 @@ class DeclarationDePerteController extends Controller
     // ══════════════════════════════════════════════════════════════
     // STORE — Créer une déclaration
     // ══════════════════════════════════════════════════════════════
-    public function store(StoreDeclarationDePerteRequest $request, CertificatDePerteService $certificatService)
+    public function store(StoreDeclarationDePerteRequest $request, CertificatDePerteService $certificatService, \App\Services\Declarations\CitizenProfileService $citizens)
     {
         // Vérifier si l'utilisateur est authentifié
         $user = Auth::user();
@@ -34,6 +34,8 @@ class DeclarationDePerteController extends Controller
             'DocIdentification' => $validatedData['DocIdentification'] ?? null,
             'document_type_id'  => $validatedData['document_type_id'],
             'user_id'           => $user->id,
+            'channel'           => DeclarationDePerte::CHANNEL_ONLINE,
+            'citizen_profile_id'=> $citizens->forAccount($user)->id,
         ]);
 
         // ── Log d'activité ──
@@ -263,6 +265,15 @@ class DeclarationDePerteController extends Controller
         }
         // Récupérer la declaration par son uuid
         $declaration = DeclarationDePerte::where('uuid', $uuid)->firstOrFail();
+
+        // Une déclaration enregistrée au guichet d'une structure ne se supprime pas
+        // depuis l'espace citoyen (elle porte un certificat officiel).
+        if ($declaration->isCounter() && ! $user->isSuperAdmin()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cette déclaration a été enregistrée par une structure : seule celle-ci peut l\'annuler.',
+            ], 403);
+        }
 
         // Vérifier si l'utilisateur est le propriétaire de la déclaration ou si c'est un administrateur
         if ($user->isSuperAdmin() || $declaration->user_id === $user->id) {
