@@ -9,6 +9,7 @@ use App\Models\DocumentType;
 use App\Models\EmailLog;
 use App\Models\Notification;
 use Illuminate\Support\Facades\Storage;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class AccessControlTest extends TestCase
@@ -35,13 +36,13 @@ class AccessControlTest extends TestCase
         ];
     }
 
-    /** @dataProvider adminOnlyRoutes */
+    #[DataProvider('adminOnlyRoutes')]
     public function test_citizen_is_refused_on_admin_routes(string $method, string $uri): void
     {
         $this->asUser($this->citizen())->json($method, $uri)->assertForbidden();
     }
 
-    /** @dataProvider adminOnlyRoutes */
+    #[DataProvider('adminOnlyRoutes')]
     public function test_anonymous_is_refused_on_admin_routes(string $method, string $uri): void
     {
         $this->json($method, $uri)->assertUnauthorized();

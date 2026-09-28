@@ -7,7 +7,7 @@ use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
-return Application::configure(basePath: dirname(__DIR__))
+$app = Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
         api: __DIR__.'/../routes/api.php',
@@ -55,3 +55,12 @@ return Application::configure(basePath: dirname(__DIR__))
             ], 500);
         });
     })->create();
+
+// PHP 8.5 : ne pas charger vendor/laravel/framework/config/database.php (constante dépréciée).
+// Voir app/Bootstrap/LoadConfiguration.php — à retirer avec Laravel 12.
+$app->singleton(
+    \Illuminate\Foundation\Bootstrap\LoadConfiguration::class,
+    \App\Bootstrap\LoadConfiguration::class
+);
+
+return $app;

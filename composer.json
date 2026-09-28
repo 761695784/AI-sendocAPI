@@ -2,19 +2,22 @@
     "name": "laravel/laravel",
     "type": "project",
     "description": "The skeleton application for the Laravel framework.",
-    "keywords": ["laravel", "framework"],
+    "keywords": [
+        "laravel",
+        "framework"
+    ],
     "license": "MIT",
     "require": {
         "php": "^8.2",
         "barryvdh/laravel-dompdf": "^3.1",
-        "darkaonline/l5-swagger": "^8.6",
+        "darkaonline/l5-swagger": "^9.0",
         "google/cloud-vision": "^1.9",
         "intervention/image": "^2.7",
-        "laravel/framework": "^11.0",
-        "laravel/octane": "^2.5",
+        "laravel/framework": "^12.0",
+        "laravel/octane": "^2.8",
         "laravel/sanctum": "^4.0",
-        "laravel/socialite": "^5.17",
-        "laravel/tinker": "^2.9",
+        "laravel/socialite": "^5.18",
+        "laravel/tinker": "^2.10.1",
         "ramsey/uuid": "^4.7",
         "simplesoftwareio/simple-qrcode": "^4.2",
         "spatie/laravel-activitylog": "*",
@@ -23,16 +26,16 @@
         "spatie/laravel-permission": "^6.9",
         "spiral/roadrunner-cli": "^2.6.0",
         "spiral/roadrunner-http": "^3.3.0",
-        "tymon/jwt-auth": "^2.1"
+        "tymon/jwt-auth": "^2.2"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",
-        "laravel/pint": "^1.13",
-        "laravel/sail": "^1.26",
+        "laravel/pint": "^1.20",
+        "laravel/sail": "^1.41",
         "mockery/mockery": "^1.6",
-        "nunomaduro/collision": "^8.0",
-        "phpunit/phpunit": "^10.5",
-        "spatie/laravel-ignition": "^2.4"
+        "nunomaduro/collision": "^8.6",
+        "phpunit/phpunit": "^11.5.3",
+        "spatie/laravel-ignition": "^2.9"
     },
     "autoload": {
         "psr-4": {
@@ -65,7 +68,7 @@
     },
     "extra": {
         "branch-alias": {
-            "dev-master": "11.x-dev"
+            "dev-master": "12.x-dev"
         },
         "laravel": {
             "dont-discover": []
