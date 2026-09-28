@@ -77,6 +77,10 @@ return [
             'title' => 'Relance — correspondance à vérifier',
             'body'  => 'La correspondance :reference (score :score) attend une vérification depuis :hours h.',
         ],
+        'report.monthly' => [
+            'title' => 'Rapport d\'activité — :period (:scope)',
+            'body'  => ':summary Alertes : :alerts. Référence :reference.',
+        ],
         'match.pending_review' => [
             'title' => 'Correspondance à vérifier (score :score)',
             'body'  => 'Déclaration :declaration_reference ↔ document :reference (:owner_name). Comparez les deux fiches puis confirmez ou rejetez.',
@@ -84,6 +88,14 @@ return [
     ],
 
     'mail' => [
+        'report.monthly' => [
+            'subject' => 'DocTrack — rapport d\'activité :period (:scope)',
+            'lines'   => [
+                ':summary',
+                'Nombre d\'alertes : :alerts.',
+                'Le rapport complet (PDF et Excel, référence :reference) est disponible dans votre espace DocTrack, rubrique Rapports.',
+            ],
+        ],
         'tag.found' => [
             'subject' => 'DocTrack — votre document a été trouvé',
             'lines'   => [

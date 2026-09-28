@@ -51,3 +51,12 @@ Artisan::command('doctrack:sla-check', function () {
 })->purpose('Relance les structures en retard sur les collectes et les vérifications');
 
 Schedule::command('doctrack:sla-check')->hourly();
+
+// Rapports d'activité du mois écoulé (national + chaque institution), envoyés aux responsables.
+Artisan::command('doctrack:monthly-reports {--month= : AAAA-MM (défaut : mois précédent)}', function () {
+    $month = $this->option('month') ? \Illuminate\Support\Carbon::createFromFormat('Y-m', $this->option('month')) : null;
+    $made  = app(\App\Services\Reports\ActivityReportService::class)->generateMonthly($month);
+    $this->info(count($made) . ' rapport(s) généré(s) : ' . collect($made)->pluck('reference')->implode(', '));
+})->purpose('Génère et envoie les rapports mensuels');
+
+Schedule::command('doctrack:monthly-reports')->monthlyOn(1, '06:15');

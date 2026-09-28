@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\CertificateVerificationController;
 use App\Http\Controllers\TagScanController;
+use App\Http\Controllers\V2\ActivityReportController;
 use App\Http\Controllers\V2\BillingController;
 use App\Http\Controllers\V2\ChargeController;
 use App\Http\Controllers\V2\CitizenProfileController;
@@ -123,6 +124,14 @@ Route::middleware(['auth:api', 'active', 'organization', 'throttle:120,1'])->gro
     Route::get('billing/services', [BillingController::class, 'services']);
     Route::post('billing/prices', [BillingController::class, 'setPrice']);
     Route::get('billing/report', [BillingController::class, 'report']);
+
+    // Rapports d'activité (PDF + Excel) par périmètre
+    Route::get('reports', [ActivityReportController::class, 'index']);
+    Route::post('reports', [ActivityReportController::class, 'store'])->middleware('throttle:10,1');
+    Route::get('reports/{report}', [ActivityReportController::class, 'show']);
+    Route::get('reports/{report}/pdf', [ActivityReportController::class, 'pdf']);
+    Route::get('reports/{report}/xlsx', [ActivityReportController::class, 'xlsx']);
+    Route::delete('reports/{report}', [ActivityReportController::class, 'destroy']);
 
     // Statistiques par périmètre (?organization=uuid&from=&to=)
     Route::get('stats/overview', [StatsController::class, 'overview']);

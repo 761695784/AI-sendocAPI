@@ -23,6 +23,9 @@ return [
         'gps_max_km' => (float) env('COLLECTION_GPS_MAX_KM', 25),
     ],
 
+    // Documentation de l'API V2 (/api/documentation/v2). Désactivable en production.
+    'api_docs_enabled' => (bool) env('API_DOCS_ENABLED', true),
+
     // Délais de réaction attendus des structures (statistiques + relances automatiques).
     'sla' => [
         'first_contact_hours' => (int) env('SLA_FIRST_CONTACT_HOURS', 24), // collecte : 1er appel au trouveur

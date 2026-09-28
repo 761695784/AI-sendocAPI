@@ -1,0 +1,1026 @@
+openapi: 3.0.3
+info:
+  title: DocTrack — API V2 (espace institutionnel, citoyen, paiements)
+  version: "2.0.0"
+  description: |
+    API de la plateforme nationale DocTrack (Sénégal) : déclarations de perte, documents trouvés,
+    correspondances, collecte, restitutions, notifications, statistiques, rapports, facturation et QR codes.
+
+    **Authentification** : `POST /api/login` (API V1) renvoie un jeton JWT à passer dans l'en-tête
+    `Authorization: Bearer <jeton>`.
+
+    **Structure active** : un agent rattaché à plusieurs structures indique au nom de laquelle il agit
+    avec l'en-tête `X-Organization: <uuid>` (sinon : son affectation principale).
+
+    **Périmètres** : `institution_admin` agit sur son institution et toute sa descendance ;
+    `structure_manager` et `agent` sur leur structure ; `super_admin` partout.
+    Les droits de chaque rôle sont listés dans `config/doctrack_access.php`.
+
+    **Conventions** : identifiants publics = UUID ; dates ISO 8601 ; montants en FCFA (entiers) ;
+    erreurs de validation = 422 `{message, errors}` ; listes paginées au format Laravel
+    (`data`, `current_page`, `last_page`, `total`…).
+
+    Parcours métier expliqués par des scénarios : voir `docs/WORKFLOWS.md`.
+  contact:
+    name: Majeli Connect — DocTrack
+    email: contact@majeliconnect.com
+servers:
+  - url: /
+    description: Serveur courant
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Organisations
+    description: Institutions, directions, structures (commissariats, brigades) et agents.
+  - name: Guichet — déclarations
+    description: Victimes (profils citoyens), déclarations de perte au guichet, certificat officiel.
+  - name: Documents trouvés
+    description: Dépôt au guichet, prise en garde, fiche d'un document trouvé.
+  - name: Correspondances
+    description: File de revue des correspondances proposées par le moteur.
+  - name: Collecte
+    description: Récupération auprès d'un trouveur par la structure la plus proche.
+  - name: Restitution officielle
+    description: Remise au guichet avec vérification d'identité et décharge vérifiable.
+  - name: Restitution directe (citoyen)
+    description: Demande du propriétaire confirmé au trouveur, en double accord.
+  - name: QR codes
+    description: QR par document (citoyen) et scan public par un trouveur.
+  - name: Paiements
+    description: Frais, encaissement au guichet, Wave, tarifs, reversement.
+  - name: Notifications
+    description: Boîte de réception des agents et suivi des envois (SMS, emails).
+  - name: Statistiques
+    description: Indicateurs par périmètre et délais de réaction.
+  - name: Rapports
+    description: Rapports d'activité PDF + Excel par périmètre.
+  - name: Public
+    description: Routes sans compte (vérification de certificat/décharge, scan de QR, webhooks).
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    XOrganization:
+      name: X-Organization
+      in: header
+      required: false
+      description: UUID de la structure au nom de laquelle l'agent agit.
+      schema: { type: string, format: uuid }
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1 }
+    From:
+      name: from
+      in: query
+      description: Début de période (AAAA-MM-JJ).
+      schema: { type: string, format: date }
+    To:
+      name: to
+      in: query
+      description: Fin de période (AAAA-MM-JJ).
+      schema: { type: string, format: date }
+    ScopeOrganization:
+      name: organization
+      in: query
+      description: UUID du périmètre (organisation et sa descendance). Par défaut, celui de l'utilisateur.
+      schema: { type: string, format: uuid }
+    Uuid:
+      name: uuid
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    Unauthorized:
+      description: Non authentifié.
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Forbidden:
+      description: Hors de votre périmètre ou droit manquant.
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    NotFound:
+      description: Ressource introuvable.
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Conflict:
+      description: Action impossible dans l'état actuel.
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    ValidationError:
+      description: Données invalides.
+      content: { application/json: { schema: { $ref: '#/components/schemas/ValidationError' } } }
+    PaymentRequired:
+      description: Paiement requis (mode live) — un frais en attente est renvoyé.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              payment_required: { type: boolean, example: true }
+              charge: { $ref: '#/components/schemas/Charge' }
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        success: { type: boolean, example: false }
+        message: { type: string }
+    ValidationError:
+      type: object
+      properties:
+        message: { type: string, example: "Le champ first name est obligatoire." }
+        errors:
+          type: object
+          additionalProperties: { type: array, items: { type: string } }
+    Paginated:
+      type: object
+      properties:
+        current_page: { type: integer }
+        last_page: { type: integer }
+        per_page: { type: integer }
+        total: { type: integer }
+    OrganizationRef:
+      type: object
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string, example: Commissariat de Dieuppeul }
+    Organization:
+      type: object
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        code: { type: string, nullable: true }
+        type: { type: object, properties: { code: { type: string, example: commissariat }, name: { type: string }, level: { type: string, enum: [institution, intermediate, structure] } } }
+        parent: { $ref: '#/components/schemas/OrganizationRef' }
+        territory: { type: object, nullable: true, properties: { code: { type: string, example: SN-DK-DAKAR }, name: { type: string }, level: { type: string } } }
+        address: { type: string, nullable: true }
+        phone: { type: string, nullable: true }
+        email: { type: string, nullable: true }
+        latitude: { type: number, nullable: true, example: 14.716 }
+        longitude: { type: number, nullable: true, example: -17.458 }
+        accepts_collections: { type: boolean }
+        is_active: { type: boolean }
+        my_role: { type: string, nullable: true, example: structure_manager }
+        can: { type: object, additionalProperties: { type: boolean } }
+    Citizen:
+      type: object
+      properties:
+        uuid: { type: string, format: uuid }
+        first_name: { type: string }
+        last_name: { type: string }
+        birth_date: { type: string, format: date, nullable: true }
+        phone: { type: string, description: "Masqué sauf pour les agents habilités", example: "•••••4567" }
+        has_account: { type: boolean }
+    DeclarationItem:
+      type: object
+      properties:
+        uuid: { type: string, format: uuid }
+        document_type: { type: string, example: Carte nationale d'identité }
+        first_name: { type: string }
+        last_name: { type: string }
+        birth_date: { type: string, format: date, nullable: true }
+        doc_number: { type: string, nullable: true, description: "Complet pour la structure, sinon ••••1234" }
+        status: { type: string, enum: [lost, found, restituted] }
+    Declaration:
+      type: object
+      properties:
+        uuid: { type: string, format: uuid }
+        reference: { type: string, example: DT-2026-000123 }
+        channel: { type: string, enum: [online, counter] }
+        status: { type: string, enum: [registered, matched, restitution_in_progress, restituted, closed, cancelled, expired] }
+        organization: { $ref: '#/components/schemas/OrganizationRef' }
+        recorded_by: { type: object, properties: { uuid: { type: string }, name: { type: string } } }
+        citizen: { $ref: '#/components/schemas/Citizen' }
+        lost_at: { type: string, format: date, nullable: true }
+        lost_place: { type: string, nullable: true }
+        items: { type: array, items: { $ref: '#/components/schemas/DeclarationItem' } }
+        certificate:
+          type: object
+          nullable: true
+          description: "null tant que le frais n'est pas réglé (mode live)"
+          properties:
+            number: { type: string, example: CP-2026-000045 }
+            kind: { type: string, enum: [official, receipt] }
+            verification_code: { type: string, example: 8UQU-PLRD-5X77 }
+            verification_url: { type: string }
+            pdf_url: { type: string, description: "URL signée valable 15 min" }
+        charge: { $ref: '#/components/schemas/ChargeShort' }
+    FoundDocument:
+      type: object
+      properties:
+        uuid: { type: string, format: uuid }
+        reference: { type: string, example: TR-2026-000031 }
+        found_channel: { type: string, enum: [citizen, counter, qr_scan] }
+        lifecycle_status: { type: string, enum: [published, in_custody, matched, restitution_pending, restituted, archived, destroyed] }
+        document_type: { type: object, properties: { id: { type: integer }, name: { type: string } } }
+        first_name: { type: string }
+        last_name: { type: string }
+        birth_date: { type: string, format: date, nullable: true }
+        doc_number: { type: string, nullable: true }
+        found_at: { type: string, format: date, nullable: true }
+        found_place: { type: string, nullable: true }
+        custody:
+          type: object
+          nullable: true
+          properties:
+            organization: { $ref: '#/components/schemas/OrganizationRef' }
+            since: { type: string, format: date-time }
+            deposited_by: { type: string }
+        image_url: { type: string, nullable: true, description: "URL signée 15 min" }
+        matches: { type: array, items: { type: object, properties: { uuid: { type: string }, score: { type: integer }, status: { type: string } } } }
+    Match:
+      type: object
+      properties:
+        uuid: { type: string, format: uuid }
+        status: { type: string, enum: [proposed, pending_review, confirmed, rejected, superseded] }
+        score: { type: integer, minimum: 0, maximum: 100, example: 91 }
+        number_match: { type: boolean }
+        engine: { type: string, example: rules rules-1.0 }
+        score_details:
+          type: object
+          description: "Explication du score critère par critère (noms, naissance, temporel, lieu, numéro)"
+        organization: { $ref: '#/components/schemas/OrganizationRef' }
+        lost_item: { type: object, description: "Pièce déclarée (jamais le téléphone du déclarant)" }
+        found_document: { type: object, description: "Document trouvé (4 derniers chiffres seulement)" }
+        reviewed_by: { type: string, nullable: true }
+        reviewed_at: { type: string, format: date-time, nullable: true }
+        review_note: { type: string, nullable: true }
+    Collection:
+      type: object
+      properties:
+        uuid: { type: string, format: uuid }
+        status: { type: string, enum: [unassigned, assigned, contacted, planned, collected, cancelled] }
+        priority: { type: boolean, description: "Propriétaire probablement identifié" }
+        organization: { $ref: '#/components/schemas/OrganizationRef' }
+        assigned_at: { type: string, format: date-time }
+        assignment_reason: { type: string, enum: [gps, department, region, transfer] }
+        distance_km: { type: number, nullable: true }
+        document: { type: object }
+        finder: { type: object, properties: { name: { type: string }, phone: { type: string, description: "Complet sur la fiche (consultation tracée), masqué dans la liste" } } }
+        contact_attempts: { type: integer }
+        last_contact_outcome: { type: string, nullable: true, enum: [reached, no_answer, wrong_number] }
+        method: { type: string, nullable: true, enum: [drop_off, agent_pickup] }
+        scheduled_at: { type: string, format: date-time, nullable: true }
+        meeting_place: { type: string, nullable: true }
+        history: { type: array, items: { $ref: '#/components/schemas/Transition' } }
+    Transition:
+      type: object
+      properties:
+        from: { type: string, nullable: true }
+        to: { type: string }
+        reason: { type: string, nullable: true }
+        at: { type: string, format: date-time }
+    Restitution:
+      type: object
+      properties:
+        uuid: { type: string, format: uuid }
+        reference: { type: string, example: RS-2026-000001 }
+        status: { type: string, enum: [completed, voided] }
+        handed_over_at: { type: string, format: date-time }
+        organization: { $ref: '#/components/schemas/OrganizationRef' }
+        agent: { type: string }
+        document: { type: object }
+        recipient_type: { type: string, enum: [owner, proxy] }
+        owner: { type: object, properties: { name: { type: string }, id_type: { type: string }, id_last4: { type: string } } }
+        proxy: { type: object, nullable: true }
+        checks: { type: object, properties: { identity_photo_matches: { type: boolean }, power_of_attorney_verified: { type: boolean, nullable: true }, without_prior_declaration: { type: boolean } } }
+        name_similarity: { type: number, example: 0.97 }
+        name_override: { type: string, nullable: true }
+        verification_code: { type: string }
+        verification_url: { type: string }
+        discharge_url: { type: string }
+        signed_scan: { type: boolean }
+    ChargeShort:
+      type: object
+      nullable: true
+      properties:
+        uuid: { type: string, format: uuid }
+        reference: { type: string, example: FA-2026-000123 }
+        status: { type: string, enum: [pending, paid, exempted, waived_pilot, cancelled] }
+        amount: { type: integer, example: 3000 }
+        list_amount: { type: integer, example: 3000, description: "Prix du catalogue (valeur théorique en pilote)" }
+        currency: { type: string, example: XOF }
+    Charge:
+      allOf:
+        - $ref: '#/components/schemas/ChargeShort'
+        - type: object
+          properties:
+            service: { type: object, properties: { code: { type: string, enum: [counter_declaration, qr_renewal, restitution] }, name: { type: string } } }
+            organization: { $ref: '#/components/schemas/OrganizationRef' }
+            paid_with: { type: string, nullable: true, enum: [cash, wave] }
+            settled_at: { type: string, format: date-time, nullable: true }
+            exemption_reason: { type: string, nullable: true }
+            authority_amount: { type: integer }
+            platform_amount: { type: integer }
+            authority_share_pct: { type: integer, example: 50 }
+    PriceRule:
+      type: object
+      properties:
+        amount: { type: integer }
+        currency: { type: string }
+        authority_share_pct: { type: integer }
+        institution: { $ref: '#/components/schemas/OrganizationRef' }
+        valid_from: { type: string, format: date-time }
+        valid_to: { type: string, format: date-time, nullable: true }
+        note: { type: string, nullable: true }
+    DocumentTag:
+      type: object
+      properties:
+        uuid: { type: string, format: uuid }
+        status: { type: string, enum: [active, pending_payment, revoked, replaced] }
+        document_type: { type: string }
+        label: { type: string, nullable: true, example: Ma CNI }
+        doc_number_last4: { type: string, nullable: true }
+        scans_count: { type: integer }
+        last_scanned_at: { type: string, format: date-time, nullable: true }
+        qr_svg: { type: string, nullable: true, description: "Image du QR (data URI SVG) à imprimer" }
+        scan_url: { type: string, nullable: true, example: "https://sendoctrack.netlify.app/t/AbC…" }
+    InboxMessage:
+      type: object
+      properties:
+        uuid: { type: string, format: uuid }
+        event: { type: string, example: collection.assigned }
+        title: { type: string }
+        body: { type: string }
+        link: { type: string, nullable: true, example: "collections/5f0c…" }
+        priority: { type: boolean }
+        is_read: { type: boolean }
+        organization: { $ref: '#/components/schemas/OrganizationRef' }
+        created_at: { type: string, format: date-time }
+    Report:
+      type: object
+      properties:
+        uuid: { type: string, format: uuid }
+        reference: { type: string, example: RP-2026-000007 }
+        title: { type: string }
+        scope: { oneOf: [ { $ref: '#/components/schemas/OrganizationRef' }, { type: string, example: national } ] }
+        period: { type: object, properties: { from: { type: string, format: date }, to: { type: string, format: date }, label: { type: string, example: Septembre 2026 } } }
+        level: { type: string, enum: [bon, à surveiller, critique] }
+        score: { type: integer, example: 85 }
+        alerts_count: { type: integer }
+        automatic: { type: boolean }
+        pdf_url: { type: string }
+        xlsx_url: { type: string }
+    Verification:
+      type: object
+      properties:
+        found: { type: boolean }
+        type: { type: string, enum: [certificate, restitution] }
+        status: { type: string, enum: [valid, revoked, unknown] }
+        kind_label: { type: string }
+        certificate_number: { type: string }
+        issued_at: { type: string, format: date }
+        issued_by: { type: object, properties: { structure: { type: string }, institution: { type: string } } }
+        document_types: { type: array, items: { type: string } }
+        holder_initials: { type: string, example: "A. N." }
+
+paths:
+  # ════════════════════════ PUBLIC ════════════════════════
+  /api/v2/verify/{code}:
+    get:
+      tags: [Public]
+      summary: Vérifier un certificat de perte ou une décharge de restitution (QR imprimé)
+      description: Aucune donnée personnelle (initiales seulement). Même code que la page `/verifier/{code}`.
+      security: []
+      parameters: [ { name: code, in: path, required: true, schema: { type: string, example: 8UQU-PLRD-5X77 } } ]
+      responses:
+        '200': { description: Trouvé, content: { application/json: { schema: { $ref: '#/components/schemas/Verification' } } } }
+        '404': { description: Code inconnu — document à considérer comme non authentique }
+  /api/v2/tags/{token}:
+    get:
+      tags: [Public, QR codes]
+      summary: Page du trouveur après scan d'un QR de document
+      security: []
+      parameters: [ { name: token, in: path, required: true, schema: { type: string } } ]
+      responses:
+        '200': { description: QR actif, content: { application/json: { schema: { type: object, properties: { valid: { type: boolean }, document_type: { type: string }, message: { type: string } } } } } }
+        '404': { description: QR inconnu ou désactivé }
+  /api/v2/tags/{token}/found:
+    post:
+      tags: [Public, QR codes]
+      summary: Le trouveur signale le document (propriétaire prévenu, collecte si accord)
+      description: |
+        Crée un document `qr_scan` (non publié), prévient le propriétaire par SMS/email et, si `contact_consent`,
+        ouvre une collecte vers la structure la plus proche. Un même trouveur ne déclenche qu'un signalement par 24 h.
+        Limité à 5 requêtes/minute.
+      security: []
+      parameters: [ { name: token, in: path, required: true, schema: { type: string } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [finder_phone]
+              properties:
+                finder_phone: { type: string, example: "78 555 44 33" }
+                finder_name: { type: string, example: Moussa }
+                place: { type: string, example: Marché Sandaga }
+                latitude: { type: number, minimum: 12, maximum: 17 }
+                longitude: { type: number, minimum: -18, maximum: -11 }
+                territory_code: { type: string, example: SN-DK-DAKAR }
+                contact_consent: { type: boolean, description: "J'accepte que la structure la plus proche m'appelle" }
+                allow_owner_contact: { type: boolean, default: true, description: "Transmettre mon numéro au propriétaire" }
+      responses:
+        '200': { description: Signalement enregistré, content: { application/json: { schema: { type: object, properties: { success: { type: boolean }, duplicate: { type: boolean }, message: { type: string }, structure: { type: object, nullable: true } } } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/webhooks/{provider}:
+    post:
+      tags: [Public, Paiements]
+      summary: Notification de paiement du prestataire (Wave)
+      description: |
+        Signature vérifiée : en-tête `Wave-Signature: t=<timestamp>,v1=<hmac>` avec
+        HMAC-SHA256(WAVE_WEBHOOK_SECRET, timestamp + corps brut). Notification de plus de 10 min refusée.
+        Idempotent ; le montant est contrôlé ; le frais réglé déclenche la démarche (certificat, QR…).
+      security: []
+      parameters: [ { name: provider, in: path, required: true, schema: { type: string, enum: [wave] } } ]
+      responses:
+        '200': { description: "Traité (result = ok | unknown_payment | amount_mismatch)" }
+        '401': { description: Signature invalide }
+
+  # ════════════════════════ ORGANISATIONS ════════════════════════
+  /api/v2/me/organizations:
+    get:
+      tags: [Organisations]
+      summary: Mes affectations et la structure active
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { memberships: { type: array, items: { type: object } }, active_organization: { type: string, format: uuid, nullable: true } } } } } }
+  /api/v2/territories:
+    get:
+      tags: [Organisations]
+      summary: Régions et départements du Sénégal
+      parameters:
+        - { name: level, in: query, schema: { type: string, enum: [region, department] } }
+        - { name: parent, in: query, description: Code de la région, schema: { type: string, example: SN-ZG } }
+      responses: { '200': { description: OK } }
+  /api/v2/organization-types:
+    get:
+      tags: [Organisations]
+      summary: Types d'organisation (police_nationale, commissariat, brigade…)
+      responses: { '200': { description: OK } }
+    post:
+      tags: [Organisations]
+      summary: Créer un type (super admin)
+      requestBody: { content: { application/json: { schema: { type: object, required: [code, name, level], properties: { code: { type: string }, name: { type: string }, level: { type: string, enum: [institution, intermediate, structure] } } } } } }
+      responses: { '201': { description: Créé }, '403': { $ref: '#/components/responses/Forbidden' } }
+  /api/v2/organization-types/{code}:
+    parameters: [ { name: code, in: path, required: true, schema: { type: string } } ]
+    patch: { tags: [Organisations], summary: "Modifier un type (super admin)", responses: { '200': { description: OK } } }
+    delete: { tags: [Organisations], summary: "Supprimer un type inutilisé (super admin)", responses: { '200': { description: OK }, '409': { $ref: '#/components/responses/Conflict' } } }
+  /api/v2/organizations:
+    get:
+      tags: [Organisations]
+      summary: Organisations de mon périmètre
+      parameters:
+        - { name: type, in: query, schema: { type: string } }
+        - { name: level, in: query, schema: { type: string } }
+        - { name: parent, in: query, schema: { type: string, format: uuid } }
+        - { name: territory, in: query, schema: { type: string } }
+        - { name: q, in: query, schema: { type: string } }
+      responses: { '200': { description: OK, content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/Organization' } } } } } } } }
+    post:
+      tags: [Organisations]
+      summary: Créer une institution (super admin) ou une organisation fille (institution_admin)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [organization_type, name]
+              properties:
+                organization_type: { type: string, example: commissariat }
+                parent_uuid: { type: string, format: uuid }
+                name: { type: string, example: Commissariat de Dieuppeul }
+                code: { type: string }
+                territory_code: { type: string, example: SN-DK-DAKAR }
+                address: { type: string }
+                phone: { type: string }
+                email: { type: string }
+                latitude: { type: number }
+                longitude: { type: number }
+                accepts_collections: { type: boolean, default: true }
+      responses: { '201': { description: Créée }, '403': { $ref: '#/components/responses/Forbidden' }, '422': { $ref: '#/components/responses/ValidationError' } }
+  /api/v2/organizations/{uuid}:
+    parameters: [ { $ref: '#/components/parameters/Uuid' } ]
+    get: { tags: [Organisations], summary: "Fiche d'une organisation", responses: { '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Organization' } } } }, '403': { $ref: '#/components/responses/Forbidden' } } }
+    patch:
+      tags: [Organisations]
+      summary: Modifier (coordonnées, GPS, participation à la collecte ; rattachement = super admin)
+      requestBody: { content: { application/json: { schema: { type: object, properties: { name: { type: string }, phone: { type: string }, email: { type: string }, address: { type: string }, latitude: { type: number }, longitude: { type: number }, accepts_collections: { type: boolean }, territory_code: { type: string }, parent_uuid: { type: string, format: uuid } } } } } }
+      responses: { '200': { description: OK } }
+  /api/v2/organizations/{uuid}/deactivate:
+    parameters: [ { $ref: '#/components/parameters/Uuid' } ]
+    post: { tags: [Organisations], summary: "Désactiver (ses agents perdent l'accès)", responses: { '200': { description: OK } } }
+  /api/v2/organizations/{uuid}/activate:
+    parameters: [ { $ref: '#/components/parameters/Uuid' } ]
+    post: { tags: [Organisations], summary: "Réactiver", responses: { '200': { description: OK } } }
+  /api/v2/organizations/{uuid}/members:
+    parameters: [ { $ref: '#/components/parameters/Uuid' } ]
+    get: { tags: [Organisations], summary: "Agents de l'organisation", responses: { '200': { description: OK } } }
+    post:
+      tags: [Organisations]
+      summary: Ajouter un agent (compte créé si besoin, identifiants envoyés par email)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, FirstName, LastName, Phone, role]
+              properties:
+                email: { type: string }
+                FirstName: { type: string }
+                LastName: { type: string }
+                Phone: { type: string }
+                role: { type: string, enum: [institution_admin, structure_manager, agent] }
+                matricule: { type: string, description: "Imprimé sur les certificats et décharges" }
+                position: { type: string }
+                is_primary: { type: boolean }
+      responses: { '201': { description: Ajouté }, '403': { $ref: '#/components/responses/Forbidden' } }
+  /api/v2/memberships/{uuid}:
+    parameters: [ { $ref: '#/components/parameters/Uuid' } ]
+    patch:
+      tags: [Organisations]
+      summary: Modifier une affectation (rôle, matricule, poste, principale)
+      requestBody: { content: { application/json: { schema: { type: object, properties: { role: { type: string }, matricule: { type: string }, position: { type: string }, is_primary: { type: boolean } } } } } }
+      responses: { '200': { description: OK } }
+  /api/v2/memberships/{uuid}/end:
+    parameters: [ { $ref: '#/components/parameters/Uuid' } ]
+    post: { tags: [Organisations], summary: "Mettre fin à une affectation", responses: { '200': { description: OK } } }
+
+  # ════════════════════════ GUICHET — DÉCLARATIONS ════════════════════════
+  /api/v2/citizens:
+    get:
+      tags: [Guichet — déclarations]
+      summary: Retrouver une victime (par téléphone, ou nom + prénom)
+      parameters:
+        - { name: phone, in: query, schema: { type: string } }
+        - { name: last_name, in: query, schema: { type: string } }
+        - { name: first_name, in: query, schema: { type: string } }
+        - { $ref: '#/components/parameters/XOrganization' }
+      responses: { '200': { description: OK, content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/Citizen' } } } } } } } }
+    post:
+      tags: [Guichet — déclarations]
+      summary: Enregistrer une victime sans compte DocTrack
+      parameters: [ { $ref: '#/components/parameters/XOrganization' } ]
+      requestBody: { content: { application/json: { schema: { type: object, required: [first_name, last_name, phone], properties: { first_name: { type: string }, last_name: { type: string }, birth_date: { type: string, format: date }, phone: { type: string }, email: { type: string } } } } } }
+      responses: { '201': { description: Créée }, '409': { description: Profil déjà existant (renvoyé) } }
+  /api/v2/declarations:
+    get:
+      tags: [Guichet — déclarations]
+      summary: Déclarations de mon périmètre
+      parameters:
+        - { name: status, in: query, schema: { type: string } }
+        - { name: reference, in: query, schema: { type: string } }
+        - { $ref: '#/components/parameters/From' }
+        - { $ref: '#/components/parameters/To' }
+        - { name: organization, in: query, schema: { type: string, format: uuid } }
+        - { $ref: '#/components/parameters/Page' }
+      responses: { '200': { description: OK } }
+    post:
+      tags: [Guichet — déclarations]
+      summary: Enregistrer une déclaration de perte au guichet (plusieurs pièces possibles)
+      description: |
+        Crée la déclaration (DT-…), les pièces (numéros chiffrés), le frais `counter_declaration`
+        puis — si le frais est réglé (pilote, gratuit, payé ou exonéré) — le certificat officiel (CP-…)
+        et le SMS de reçu. Lance la recherche de correspondances.
+      parameters: [ { $ref: '#/components/parameters/XOrganization' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                citizen_profile_uuid: { type: string, format: uuid, description: "Victime existante, sinon `citizen`" }
+                citizen:
+                  type: object
+                  properties: { first_name: { type: string }, last_name: { type: string }, birth_date: { type: string, format: date }, phone: { type: string }, email: { type: string } }
+                lost_at: { type: string, format: date }
+                lost_place: { type: string }
+                territory_code: { type: string }
+                circumstances: { type: string }
+                items:
+                  type: array
+                  minItems: 1
+                  maxItems: 10
+                  items:
+                    type: object
+                    required: [document_type_id, first_name, last_name]
+                    properties: { document_type_id: { type: integer }, first_name: { type: string }, last_name: { type: string }, birth_date: { type: string, format: date }, doc_number: { type: string } }
+            example:
+              citizen: { first_name: Awa, last_name: Ndiaye, phone: "77 123 45 67" }
+              lost_at: "2026-09-25"
+              lost_place: Marché HLM
+              items: [ { document_type_id: 1, first_name: Awa, last_name: Ndiaye, birth_date: "1990-05-12", doc_number: "1 234 5678 90123" } ]
+      responses:
+        '201': { description: Créée, content: { application/json: { schema: { $ref: '#/components/schemas/Declaration' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v2/declarations/{uuid}:
+    parameters: [ { $ref: '#/components/parameters/Uuid' } ]
+    get: { tags: [Guichet — déclarations], summary: "Fiche d'une déclaration", responses: { '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Declaration' } } } } } }
+  /api/v2/declarations/{uuid}/cancel:
+    parameters: [ { $ref: '#/components/parameters/Uuid' } ]
+    post:
+      tags: [Guichet — déclarations]
+      summary: Annuler (auteur dans les 24 h, ou responsable) — certificat révoqué, SMS à la victime
+      requestBody: { content: { application/json: { schema: { type: object, required: [reason], properties: { reason: { type: string, minLength: 5 } } } } } }
+      responses: { '200': { description: Annulée }, '409': { $ref: '#/components/responses/Conflict' } }
+  /api/v2/declarations/{uuid}/certificate:
+    parameters: [ { $ref: '#/components/parameters/Uuid' } ]
+    get: { tags: [Guichet — déclarations], summary: "Certificat officiel (PDF)", responses: { '200': { description: PDF, content: { application/pdf: {} } }, '404': { $ref: '#/components/responses/NotFound' } } }
+
+  # ════════════════════════ DOCUMENTS TROUVÉS ════════════════════════
+  /api/v2/found-documents:
+    get:
+      tags: [Documents trouvés]
+      summary: Documents sous la garde de mes structures
+      parameters:
+        - { name: status, in: query, schema: { type: string } }
+        - { name: reference, in: query, schema: { type: string } }
+        - { name: type, in: query, schema: { type: integer } }
+        - { $ref: '#/components/parameters/From' }
+        - { $ref: '#/components/parameters/To' }
+      responses: { '200': { description: OK } }
+    post:
+      tags: [Documents trouvés]
+      summary: Un trouveur dépose un document au guichet
+      description: Numéro chiffré (jamais en clair), référence TR-…, SMS de remerciement au trouveur, recherche de correspondances.
+      parameters: [ { $ref: '#/components/parameters/XOrganization' } ]
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [document_type_id, first_name, last_name]
+              properties:
+                document_type_id: { type: integer }
+                first_name: { type: string }
+                last_name: { type: string }
+                birth_date: { type: string, format: date }
+                doc_number: { type: string }
+                found_at: { type: string, format: date }
+                found_place: { type: string }
+                territory_code: { type: string }
+                image: { type: string, format: binary }
+                finder[first_name]: { type: string }
+                finder[last_name]: { type: string }
+                finder[phone]: { type: string }
+      responses: { '201': { description: Déposé, content: { application/json: { schema: { $ref: '#/components/schemas/FoundDocument' } } } }, '403': { $ref: '#/components/responses/Forbidden' } }
+  /api/v2/found-documents/{uuid}:
+    parameters: [ { $ref: '#/components/parameters/Uuid' } ]
+    get: { tags: [Documents trouvés], summary: "Fiche (consultation tracée)", responses: { '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/FoundDocument' } } } } } }
+  /api/v2/found-documents/{uuid}/take-custody:
+    parameters: [ { $ref: '#/components/parameters/Uuid' }, { $ref: '#/components/parameters/XOrganization' } ]
+    post: { tags: [Documents trouvés], summary: "Prendre en garde un document publié en ligne (le trouveur l'apporte)", responses: { '200': { description: OK }, '403': { $ref: '#/components/responses/Forbidden' } } }
+
+  # ════════════════════════ CORRESPONDANCES ════════════════════════
+  /api/v2/matches:
+    get:
+      tags: [Correspondances]
+      summary: File de revue (par défaut pending_review, meilleur score d'abord)
+      parameters: [ { name: status, in: query, description: "Un ou plusieurs statuts séparés par des virgules", schema: { type: string, example: "pending_review,proposed" } } ]
+      responses: { '200': { description: OK } }
+  /api/v2/matches/{uuid}:
+    parameters: [ { $ref: '#/components/parameters/Uuid' } ]
+    get: { tags: [Correspondances], summary: "Les deux fiches côte à côte + explication du score", responses: { '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Match' } } } } } }
+  /api/v2/matches/{uuid}/confirm:
+    parameters: [ { $ref: '#/components/parameters/Uuid' } ]
+    post:
+      tags: [Correspondances]
+      summary: Confirmer — le propriétaire est prévenu (SMS + email)
+      requestBody: { content: { application/json: { schema: { type: object, properties: { note: { type: string } } } } } }
+      responses: { '200': { description: Confirmée }, '403': { $ref: '#/components/responses/Forbidden' } }
+  /api/v2/matches/{uuid}/reject:
+    parameters: [ { $ref: '#/components/parameters/Uuid' } ]
+    post:
+      tags: [Correspondances]
+      summary: Rejeter (la paire ne sera jamais reproposée)
+      requestBody: { content: { application/json: { schema: { type: object, required: [reason], properties: { reason: { type: string, minLength: 5 } } } } } }
+      responses: { '200': { description: Rejetée } }
+
+  # ════════════════════════ COLLECTE ════════════════════════
+  /api/v2/collections:
+    get:
+      tags: [Collecte]
+      summary: Collectes de mes structures (prioritaires puis plus anciennes)
+      parameters: [ { name: status, in: query, schema: { type: string, example: "assigned,contacted,planned" } } ]
+      responses: { '200': { description: OK } }
+  /api/v2/collections/{uuid}:
+    parameters: [ { $ref: '#/components/parameters/Uuid' } ]
+    get: { tags: [Collecte], summary: "Fiche avec le numéro du trouveur (consultation tracée) et l'historique", responses: { '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Collection' } } } } } }
+  /api/v2/collections/{uuid}/contact:
+    parameters: [ { $ref: '#/components/parameters/Uuid' } ]
+    post:
+      tags: [Collecte]
+      summary: Noter un appel au trouveur
+      requestBody: { content: { application/json: { schema: { type: object, required: [outcome], properties: { outcome: { type: string, enum: [reached, no_answer, wrong_number] }, note: { type: string } } } } } }
+      responses: { '200': { description: OK } }
+  /api/v2/collections/{uuid}/plan:
+    parameters: [ { $ref: '#/components/parameters/Uuid' } ]
+    post:
+      tags: [Collecte]
+      summary: Organiser la récupération (SMS de rendez-vous au trouveur)
+      requestBody: { content: { application/json: { schema: { type: object, required: [method], properties: { method: { type: string, enum: [drop_off, agent_pickup] }, scheduled_at: { type: string, format: date-time }, meeting_place: { type: string }, pickup_agent_uuid: { type: string, format: uuid } } } } } }
+      responses: { '200': { description: OK }, '422': { $ref: '#/components/responses/ValidationError' } }
+  /api/v2/collections/{uuid}/collected:
+    parameters: [ { $ref: '#/components/parameters/Uuid' } ]
+    post: { tags: [Collecte], summary: "Document reçu → sous la garde de la structure", responses: { '200': { description: OK } } }
+  /api/v2/collections/{uuid}/transfer:
+    parameters: [ { $ref: '#/components/parameters/Uuid' } ]
+    post:
+      tags: [Collecte]
+      summary: Transférer à une autre structure
+      requestBody: { content: { application/json: { schema: { type: object, required: [organization_uuid, reason], properties: { organization_uuid: { type: string, format: uuid }, reason: { type: string } } } } } }
+      responses: { '200': { description: OK }, '422': { $ref: '#/components/responses/ValidationError' } }
+  /api/v2/collections/{uuid}/decline:
+    parameters: [ { $ref: '#/components/parameters/Uuid' } ]
+    post:
+      tags: [Collecte]
+      summary: Refuser — réaffectation automatique à la structure suivante la plus proche
+      requestBody: { content: { application/json: { schema: { type: object, required: [reason], properties: { reason: { type: string } } } } } }
+      responses: { '200': { description: OK } }
+  /api/v2/collections/{uuid}/cancel:
+    parameters: [ { $ref: '#/components/parameters/Uuid' } ]
+    post:
+      tags: [Collecte]
+      summary: Annuler la collecte
+      requestBody: { content: { application/json: { schema: { type: object, required: [reason], properties: { reason: { type: string } } } } } }
+      responses: { '200': { description: OK } }
+
+  # ════════════════════════ RESTITUTION OFFICIELLE ════════════════════════
+  /api/v2/found-documents/{uuid}/restitution:
+    parameters: [ { $ref: '#/components/parameters/Uuid' }, { $ref: '#/components/parameters/XOrganization' } ]
+    get:
+      tags: [Restitution officielle]
+      summary: Préparer la remise (déclaration liée, procuration permise, pièces à demander)
+      responses: { '200': { description: OK }, '403': { $ref: '#/components/responses/Forbidden' } }
+    post:
+      tags: [Restitution officielle]
+      summary: Remettre le document (contrôles d'identité, décharge RS-…, SMS)
+      description: |
+        Règles : document sous la garde de la structure active ; photo certifiée conforme ; nom présenté ≈ nom
+        du document (variantes sénégalaises acceptées) sinon dérogation motivée d'un responsable ;
+        date de naissance différente = refus ; procuration si le type de pièce l'autorise.
+        Aucune copie de pièce : type + 4 derniers chiffres + empreinte.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [recipient_type, owner, checks]
+              properties:
+                recipient_type: { type: string, enum: [owner, proxy] }
+                owner:
+                  type: object
+                  required: [first_name, last_name]
+                  properties: { first_name: { type: string }, last_name: { type: string }, birth_date: { type: string, format: date }, id_type: { type: string, enum: [cni, passeport, permis, carte_consulaire, carte_militaire, extrait_naissance, autre] }, id_number: { type: string }, phone: { type: string } }
+                proxy:
+                  type: object
+                  properties: { first_name: { type: string }, last_name: { type: string }, id_type: { type: string }, id_number: { type: string }, phone: { type: string }, relationship: { type: string }, power_of_attorney_ref: { type: string } }
+                checks:
+                  type: object
+                  properties: { identity_photo_matches: { type: boolean }, power_of_attorney_verified: { type: boolean } }
+                name_override_reason: { type: string, description: "Dérogation sur le nom (responsable uniquement)" }
+            example:
+              recipient_type: owner
+              owner: { first_name: Awa, last_name: Ndiaye, birth_date: "1990-05-12", id_type: passeport, id_number: A01234567, phone: "77 123 45 67" }
+              checks: { identity_photo_matches: true }
+      responses:
+        '201': { description: Remis, content: { application/json: { schema: { $ref: '#/components/schemas/Restitution' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v2/restitutions:
+    get:
+      tags: [Restitution officielle]
+      summary: Restitutions de mon périmètre
+      parameters: [ { name: status, in: query, schema: { type: string } }, { name: reference, in: query, schema: { type: string } }, { $ref: '#/components/parameters/From' }, { $ref: '#/components/parameters/To' } ]
+      responses: { '200': { description: OK } }
+  /api/v2/restitutions/{uuid}:
+    parameters: [ { $ref: '#/components/parameters/Uuid' } ]
+    get: { tags: [Restitution officielle], summary: "Fiche + historique", responses: { '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Restitution' } } } } } }
+  /api/v2/restitutions/{uuid}/discharge:
+    parameters: [ { $ref: '#/components/parameters/Uuid' } ]
+    get: { tags: [Restitution officielle], summary: "Décharge PDF à imprimer et faire signer", responses: { '200': { description: PDF, content: { application/pdf: {} } } } }
+  /api/v2/restitutions/{uuid}/signed-scan:
+    parameters: [ { $ref: '#/components/parameters/Uuid' } ]
+    post:
+      tags: [Restitution officielle]
+      summary: Joindre le scan de la décharge signée (PDF/JPG/PNG, 5 Mo)
+      requestBody: { content: { multipart/form-data: { schema: { type: object, required: [file], properties: { file: { type: string, format: binary } } } } } }
+      responses: { '200': { description: OK } }
+  /api/v2/restitutions/{uuid}/void:
+    parameters: [ { $ref: '#/components/parameters/Uuid' } ]
+    post:
+      tags: [Restitution officielle]
+      summary: Annuler une remise erronée (responsable, dans les 72 h) — le document revient sous garde
+      requestBody: { content: { application/json: { schema: { type: object, required: [reason], properties: { reason: { type: string } } } } } }
+      responses: { '200': { description: Annulée }, '403': { $ref: '#/components/responses/Forbidden' }, '422': { $ref: '#/components/responses/ValidationError' } }
+
+  # ════════════════════════ RESTITUTION DIRECTE (API V1, CITOYEN) ════════════════════════
+  /api/documents/{uuid}/restitution:
+    parameters: [ { $ref: '#/components/parameters/Uuid' } ]
+    post:
+      tags: [Restitution directe (citoyen)]
+      summary: Le propriétaire confirmé demande le document au trouveur (double accord)
+      description: |
+        Réservé au propriétaire dont la déclaration est liée à une correspondance **confirmée**.
+        Le trouveur reçoit SMS + email **sans** le numéro du demandeur ; il a 48 h pour répondre.
+      responses:
+        '201': { description: Demande envoyée, content: { application/json: { schema: { type: object, properties: { request: { type: object, properties: { uuid: { type: string }, status: { type: string, example: pending }, expires_at: { type: string, format: date-time } } } } } } } }
+        '400': { description: Une demande est déjà en cours }
+        '403': { description: "`code: no_confirmed_match` — pas de correspondance confirmée à votre nom" }
+        '409': { description: Document sous la garde d'une structure (restitution au guichet) ou signalé par QR }
+  /api/documents/{uuid}/collection:
+    parameters: [ { $ref: '#/components/parameters/Uuid' } ]
+    get: { tags: [Collecte], summary: "(Trouveur) Suivi de la collecte de ma publication", responses: { '200': { description: OK } } }
+  /api/restitution-requests:
+    get: { tags: [Restitution directe (citoyen)], summary: "Mes demandes (envoyées et reçues)", responses: { '200': { description: OK } } }
+  /api/restitution-requests/{uuid}:
+    parameters: [ { $ref: '#/components/parameters/Uuid' } ]
+    get: { tags: [Restitution directe (citoyen)], summary: "Détail (numéro de l'autre partie seulement après acceptation)", responses: { '200': { description: OK } } }
+  /api/restitution-requests/{uuid}/accept:
+    parameters: [ { $ref: '#/components/parameters/Uuid' } ]
+    post: { tags: [Restitution directe (citoyen)], summary: "(Trouveur) Accepter — chacun reçoit le numéro de l'autre", responses: { '200': { description: OK }, '409': { $ref: '#/components/responses/Conflict' } } }
+  /api/restitution-requests/{uuid}/decline:
+    parameters: [ { $ref: '#/components/parameters/Uuid' } ]
+    post:
+      tags: [Restitution directe (citoyen)]
+      summary: "(Trouveur) Refuser — la structure la plus proche prend le relais"
+      requestBody: { content: { application/json: { schema: { type: object, properties: { reason: { type: string } } } } } }
+      responses: { '200': { description: OK } }
+  /api/restitution-requests/{uuid}/cancel:
+    parameters: [ { $ref: '#/components/parameters/Uuid' } ]
+    post: { tags: [Restitution directe (citoyen)], summary: "(Propriétaire) Retirer ma demande", responses: { '200': { description: OK } } }
+
+  # ════════════════════════ QR CODES (API V1, CITOYEN) ════════════════════════
+  /api/document-tags:
+    get: { tags: [QR codes], summary: "Mes QR de documents", responses: { '200': { description: OK } } }
+    post:
+      tags: [QR codes]
+      summary: Créer le QR d'un document (le premier est gratuit)
+      requestBody: { content: { application/json: { schema: { type: object, required: [document_type_id], properties: { document_type_id: { type: integer }, label: { type: string, example: Ma CNI }, doc_number: { type: string } } } } } }
+      responses: { '201': { description: Créé, content: { application/json: { schema: { $ref: '#/components/schemas/DocumentTag' } } } }, '422': { description: Un QR existe déjà pour ce document } }
+  /api/document-tags/{uuid}:
+    parameters: [ { $ref: '#/components/parameters/Uuid' } ]
+    get: { tags: [QR codes], summary: "Fiche + image du QR à imprimer", responses: { '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/DocumentTag' } } } } } }
+  /api/document-tags/{uuid}/renew:
+    parameters: [ { $ref: '#/components/parameters/Uuid' } ]
+    post:
+      tags: [QR codes]
+      summary: Renouveler (frais qr_renewal) — l'ancien QR est désactivé au règlement
+      responses: { '201': { description: Nouveau QR actif (pilote ou gratuit) }, '402': { $ref: '#/components/responses/PaymentRequired' } }
+  /api/document-tags/{uuid}/revoke:
+    parameters: [ { $ref: '#/components/parameters/Uuid' } ]
+    post: { tags: [QR codes], summary: "Désactiver un QR", responses: { '200': { description: OK } } }
+  /api/renew-qr-code:
+    post: { tags: [QR codes], summary: "Renouveler le QR personnel (V1) — facturé", responses: { '200': { description: Renouvelé }, '402': { $ref: '#/components/responses/PaymentRequired' } } }
+
+  # ════════════════════════ PAIEMENTS ════════════════════════
+  /api/my-charges:
+    get: { tags: [Paiements], summary: "(Citoyen) Mes frais", responses: { '200': { description: OK } } }
+  /api/charges/{uuid}/checkout:
+    parameters: [ { $ref: '#/components/parameters/Uuid' } ]
+    post:
+      tags: [Paiements]
+      summary: "(Citoyen) Payer un de mes frais par Wave"
+      responses: { '200': { description: Lien de paiement, content: { application/json: { schema: { type: object, properties: { payment: { type: string }, checkout_url: { type: string, example: "https://pay.wave.com/c/cos-18qq25rgr100a" } } } } } }, '502': { description: Wave indisponible ou non configuré } }
+  /api/v2/charges:
+    get:
+      tags: [Paiements]
+      summary: Frais de mes structures (par défaut en attente)
+      parameters: [ { name: status, in: query, schema: { type: string, example: "pending" } } ]
+      responses: { '200': { description: OK } }
+  /api/v2/charges/{uuid}:
+    parameters: [ { $ref: '#/components/parameters/Uuid' } ]
+    get: { tags: [Paiements], summary: "Détail (reçu, parts, paiements)", responses: { '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Charge' } } } } } }
+  /api/v2/charges/{uuid}/cash:
+    parameters: [ { $ref: '#/components/parameters/Uuid' } ]
+    post:
+      tags: [Paiements]
+      summary: Encaisser en espèces au guichet (débloque la démarche)
+      requestBody: { content: { application/json: { schema: { type: object, properties: { amount_received: { type: integer, example: 5000 } } } } } }
+      responses: { '200': { description: "Payé ; `change_due` = monnaie à rendre" }, '422': { $ref: '#/components/responses/ValidationError' } }
+  /api/v2/charges/{uuid}/exempt:
+    parameters: [ { $ref: '#/components/parameters/Uuid' } ]
+    post:
+      tags: [Paiements]
+      summary: Exonérer (responsable, motif obligatoire)
+      requestBody: { content: { application/json: { schema: { type: object, required: [reason], properties: { reason: { type: string } } } } } }
+      responses: { '200': { description: Exonéré }, '403': { $ref: '#/components/responses/Forbidden' } }
+  /api/v2/charges/{uuid}/cancel:
+    parameters: [ { $ref: '#/components/parameters/Uuid' } ]
+    post:
+      tags: [Paiements]
+      summary: Annuler un frais en attente (responsable)
+      requestBody: { content: { application/json: { schema: { type: object, required: [reason], properties: { reason: { type: string } } } } } }
+      responses: { '200': { description: OK } }
+  /api/v2/charges/{uuid}/checkout:
+    parameters: [ { $ref: '#/components/parameters/Uuid' } ]
+    post:
+      tags: [Paiements]
+      summary: Générer un lien Wave au guichet (le citoyen paie avec son téléphone)
+      requestBody: { content: { application/json: { schema: { type: object, properties: { payer_phone: { type: string, description: "Restreint le paiement à ce compte Wave" } } } } } }
+      responses: { '200': { description: Lien de paiement }, '502': { description: Wave indisponible } }
+  /api/v2/billing/services:
+    get: { tags: [Paiements], summary: "(Super admin) Catalogue, tarifs en vigueur et historique", responses: { '200': { description: OK } } }
+  /api/v2/billing/prices:
+    post:
+      tags: [Paiements]
+      summary: "(Super admin) Nouveau tarif — national ou propre à une institution ; l'ancien est clôturé"
+      requestBody: { content: { application/json: { schema: { type: object, required: [service, amount, authority_share_pct], properties: { service: { type: string, enum: [counter_declaration, qr_renewal, restitution] }, amount: { type: integer }, authority_share_pct: { type: integer, minimum: 0, maximum: 100 }, institution_uuid: { type: string, format: uuid }, valid_from: { type: string, format: date }, note: { type: string } } } } } }
+      responses: { '201': { description: Créé, content: { application/json: { schema: { $ref: '#/components/schemas/PriceRule' } } } } }
+  /api/v2/billing/report:
+    get:
+      tags: [Paiements]
+      summary: Rapport de reversement (perçu, part autorités / DocTrack, exonérations, valeur théorique du pilote)
+      parameters:
+        - { name: month, in: query, schema: { type: string, example: "2026-10" } }
+        - { $ref: '#/components/parameters/ScopeOrganization' }
+        - { $ref: '#/components/parameters/From' }
+        - { $ref: '#/components/parameters/To' }
+        - { name: format, in: query, schema: { type: string, enum: [json, csv] } }
+      responses: { '200': { description: JSON ou CSV } }
+
+  # ════════════════════════ NOTIFICATIONS ════════════════════════
+  /api/v2/inbox:
+    get:
+      tags: [Notifications]
+      summary: Ma boîte de réception (messages de mes structures + personnels)
+      parameters: [ { name: unread, in: query, schema: { type: boolean } }, { $ref: '#/components/parameters/Page' } ]
+      responses: { '200': { description: OK, content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/InboxMessage' } } } } } } } }
+  /api/v2/inbox/unread-count:
+    get: { tags: [Notifications], summary: "Compteur de non-lus (pastille)", responses: { '200': { description: OK, content: { application/json: { schema: { type: object, properties: { unread: { type: integer } } } } } } } }
+  /api/v2/inbox/{uuid}/read:
+    parameters: [ { $ref: '#/components/parameters/Uuid' } ]
+    post: { tags: [Notifications], summary: "Marquer comme lu", responses: { '200': { description: OK } } }
+  /api/v2/inbox/read-all:
+    post: { tags: [Notifications], summary: "Tout marquer comme lu", responses: { '200': { description: OK } } }
+  /api/v2/notification-deliveries:
+    get:
+      tags: [Notifications]
+      summary: Journal des envois (SMS, emails, boîte) — responsables et super admin
+      parameters: [ { name: status, in: query, schema: { type: string, enum: [pending, sent, failed, skipped] } }, { name: channel, in: query, schema: { type: string, enum: [sms, email, inbox] } }, { name: event, in: query, schema: { type: string } }, { $ref: '#/components/parameters/From' }, { $ref: '#/components/parameters/To' } ]
+      responses: { '200': { description: OK } }
+  /api/v2/notification-deliveries/summary:
+    get: { tags: [Notifications], summary: "Volumes et taux d'échec des SMS", parameters: [ { name: days, in: query, schema: { type: integer, default: 30 } } ], responses: { '200': { description: OK } } }
+  /api/v2/notification-deliveries/{uuid}/retry:
+    parameters: [ { $ref: '#/components/parameters/Uuid' } ]
+    post: { tags: [Notifications], summary: "Relancer un SMS en échec", responses: { '200': { description: OK }, '409': { $ref: '#/components/responses/Conflict' } } }
+
+  # ════════════════════════ STATISTIQUES ════════════════════════
+  /api/v2/stats/overview:
+    get:
+      tags: [Statistiques]
+      summary: Indicateurs clés du périmètre (déclarations, garde, correspondances, collectes, restitutions, SMS)
+      parameters: [ { $ref: '#/components/parameters/ScopeOrganization' }, { $ref: '#/components/parameters/From' }, { $ref: '#/components/parameters/To' } ]
+      responses: { '200': { description: OK }, '403': { $ref: '#/components/responses/Forbidden' } }
+  /api/v2/stats/structures:
+    get:
+      tags: [Statistiques]
+      summary: Comparatif des structures (délais de réaction, retards, stock) — `format=csv` pour Excel
+      parameters: [ { $ref: '#/components/parameters/ScopeOrganization' }, { $ref: '#/components/parameters/From' }, { $ref: '#/components/parameters/To' }, { name: format, in: query, schema: { type: string, enum: [json, csv] } } ]
+      responses: { '200': { description: OK } }
+  /api/v2/stats/timeseries:
+    get:
+      tags: [Statistiques]
+      summary: Évolution d'un indicateur
+      parameters:
+        - { name: metric, in: query, required: true, schema: { type: string, enum: [counter_declarations, deposits, collections_assigned, collected, matches_confirmed, restitutions] } }
+        - { name: interval, in: query, schema: { type: string, enum: [day, week, month], default: week } }
+        - { $ref: '#/components/parameters/ScopeOrganization' }
+        - { $ref: '#/components/parameters/From' }
+        - { $ref: '#/components/parameters/To' }
+      responses: { '200': { description: OK } }
+  /api/v2/stats/overdue-collections:
+    get: { tags: [Statistiques], summary: "Collectes sans premier appel au-delà du délai", parameters: [ { $ref: '#/components/parameters/ScopeOrganization' } ], responses: { '200': { description: OK } } }
+
+  # ════════════════════════ RAPPORTS ════════════════════════
+  /api/v2/reports:
+    get:
+      tags: [Rapports]
+      summary: Rapports de mon périmètre (générés automatiquement le 1er du mois ou à la demande)
+      parameters: [ { $ref: '#/components/parameters/ScopeOrganization' }, { name: national, in: query, schema: { type: boolean } }, { $ref: '#/components/parameters/Page' } ]
+      responses: { '200': { description: OK, content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/Report' } } } } } } } }
+    post:
+      tags: [Rapports]
+      summary: Générer un rapport (PDF + Excel) — défaut, mois précédent de son périmètre
+      requestBody: { content: { application/json: { schema: { type: object, properties: { organization: { type: string, format: uuid }, month: { type: string, example: "2026-09" }, year: { type: integer }, from: { type: string, format: date }, to: { type: string, format: date } } } } } }
+      responses: { '201': { description: Généré (données + analyse incluses), content: { application/json: { schema: { $ref: '#/components/schemas/Report' } } } }, '403': { $ref: '#/components/responses/Forbidden' } }
+  /api/v2/reports/{uuid}:
+    parameters: [ { $ref: '#/components/parameters/Uuid' } ]
+    get: { tags: [Rapports], summary: "Détail (chiffres, analyse, alertes, recommandations)", responses: { '200': { description: OK } } }
+    delete: { tags: [Rapports], summary: "Supprimer (super admin)", responses: { '200': { description: OK } } }
+  /api/v2/reports/{uuid}/pdf:
+    parameters: [ { $ref: '#/components/parameters/Uuid' } ]
+    get: { tags: [Rapports], summary: "Télécharger le PDF", responses: { '200': { description: PDF, content: { application/pdf: {} } } } }
+  /api/v2/reports/{uuid}/xlsx:
+    parameters: [ { $ref: '#/components/parameters/Uuid' } ]
+    get: { tags: [Rapports], summary: "Télécharger le classeur Excel", responses: { '200': { description: XLSX, content: { application/vnd.openxmlformats-officedocument.spreadsheetml.sheet: {} } } } }
