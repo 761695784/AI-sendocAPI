@@ -85,6 +85,23 @@ class Document extends Model implements HasMedia
         return $this->hasMany(Commentaire::class);
     }
 
+    /** Numéros supplémentaires lus sur la pièce (ex. NIN au dos de la carte). */
+    public function numbers()
+    {
+        return $this->hasMany(DocumentNumber::class);
+    }
+
+    /** Toutes les empreintes de numéro de ce document (principal + supplémentaires). */
+    public function numberHashes(): array
+    {
+        $hashes = $this->relationLoaded('numbers') || $this->exists ? $this->numbers->pluck('hash')->all() : [];
+        if ($this->doc_number_hash) {
+            array_unshift($hashes, $this->doc_number_hash);
+        }
+
+        return array_values(array_unique($hashes));
+    }
+
     public function custodyOrganization()
     {
         return $this->belongsTo(Organization::class, 'custody_organization_id');
@@ -211,18 +228,31 @@ class Document extends Model implements HasMedia
                  'image/png',
                  'image/webp',
              ]);
+
+        // Copie de la photo avec numéros et zone MRZ masqués (lecture OCR) :
+        // quand elle existe, c'est elle qui sert aux versions publiques.
+        $this->addMediaCollection('document_public')
+             ->singleFile()
+             ->useDisk('local')
+             ->storeConversionsOnDisk('public')
+             ->acceptsMimeTypes(['image/jpeg', 'image/png', 'image/webp']);
     }
 
     // ── MediaLibrary : conversions (toutes floutées) ─
     public function registerMediaConversions(?Media $media = null): void
     {
+        // Original accompagné d'une copie masquée : aucune version publique tirée de l'original.
+        if ($media && $media->getCustomProperty('public_version') === 'masked') {
+            return;
+        }
+
         // Vignette floutée — listes
         $this->addMediaConversion('thumb')
              ->width(400)
              ->height(300)
              ->blur(8)
              ->format('webp')
-             ->performOnCollections('document_image')
+             ->performOnCollections('document_image', 'document_public')
              ->nonQueued();
 
         // Version floutée — détail public
@@ -230,7 +260,7 @@ class Document extends Model implements HasMedia
              ->blur(8)
              ->width(800)
              ->format('webp')
-             ->performOnCollections('document_image')
+             ->performOnCollections('document_image', 'document_public')
              ->nonQueued();
     }
 }

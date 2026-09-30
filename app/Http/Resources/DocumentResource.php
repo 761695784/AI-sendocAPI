@@ -21,8 +21,10 @@ class DocumentResource extends JsonResource
         $viewer     = $request->user('api');
         $privileged = $viewer && ($viewer->id === $this->user_id || $viewer->isSuperAdmin());
 
-        $blurred  = $this->getFirstMediaUrl('document_image', 'blurred') ?: null;
-        $thumb    = $this->getFirstMediaUrl('document_image', 'thumb') ?: $blurred;
+        // Version masquée (numéros cachés par l'OCR) en priorité, sinon la photo floutée.
+        $public   = $this->getFirstMedia('document_public') ? 'document_public' : 'document_image';
+        $blurred  = $this->getFirstMediaUrl($public, 'blurred') ?: null;
+        $thumb    = $this->getFirstMediaUrl($public, 'thumb') ?: $blurred;
         $original = $privileged && $this->getFirstMedia('document_image')
             ? URL::temporarySignedRoute('documents.image', now()->addMinutes(15), ['uuid' => $this->uuid])
             : null;

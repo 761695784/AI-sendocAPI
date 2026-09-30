@@ -33,7 +33,8 @@ class MatchingService
             return collect();
         }
 
-        $keys = array_values(array_filter([$document->first_name_key, $document->last_name_key]));
+        $keys   = array_values(array_filter([$document->first_name_key, $document->last_name_key]));
+        $hashes = $document->numberHashes();
 
         $items = DeclarationItem::query()
             ->with('declaration')
@@ -43,14 +44,14 @@ class MatchingService
                 ->whereIn('status', [DeclarationDePerte::STATUS_REGISTERED, DeclarationDePerte::STATUS_MATCHED])
                 // Pas de correspondance avec sa propre déclaration (V1 : même compte).
                 ->where(fn ($q) => $q->whereNull('user_id')->orWhere('user_id', '!=', $document->user_id)))
-            ->where(function (Builder $q) use ($document, $keys) {
-                if ($document->doc_number_hash) {
-                    $q->orWhere('doc_number_hash', $document->doc_number_hash);
+            ->where(function (Builder $q) use ($hashes, $keys) {
+                if ($hashes) {
+                    $q->orWhereIn('doc_number_hash', $hashes);
                 }
                 if ($keys) {
                     $q->orWhereIn('last_name_key', $keys)->orWhereIn('first_name_key', $keys);
                 }
-                if (! $document->doc_number_hash && ! $keys) {
+                if (! $hashes && ! $keys) {
                     $q->whereRaw('1 = 0');
                 }
             })
@@ -90,7 +91,8 @@ class MatchingService
                 ->when($declaration->user_id, fn ($q) => $q->where(fn ($q) => $q->whereNull('user_id')->orWhere('user_id', '!=', $declaration->user_id)))
                 ->where(function (Builder $q) use ($item, $keys) {
                     if ($item->doc_number_hash) {
-                        $q->orWhere('doc_number_hash', $item->doc_number_hash);
+                        $q->orWhere('doc_number_hash', $item->doc_number_hash)
+                            ->orWhereHas('numbers', fn ($n) => $n->where('hash', $item->doc_number_hash));
                     }
                     if ($keys) {
                         $q->orWhereIn('last_name_key', $keys)->orWhereIn('first_name_key', $keys);

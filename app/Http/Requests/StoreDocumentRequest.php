@@ -16,7 +16,9 @@ class StoreDocumentRequest extends FormRequest
     {
         return [
             // Images uniquement : la collection MediaLibrary n'accepte pas les PDF.
-            'image'             => 'required|file|mimes:jpeg,png,jpg,webp|max:5120', // 5 Mo
+            // Photo facultative si la pièce a été scannée juste avant (le scan contient la photo).
+            'image'             => 'required_without:ocr_scan_id|file|mimes:jpeg,png,jpg,webp|max:5120', // 5 Mo
+            'ocr_scan_id'       => 'nullable|uuid',
             'OwnerFirstName'    => 'required|string|max:255',
             'OwnerLastName'     => 'required|string|max:255',
             'DocIdentification' => 'nullable|string|max:50',
@@ -39,6 +41,12 @@ class StoreDocumentRequest extends FormRequest
     public function withValidator($validator): void
     {
         $validator->after(function ($validator) {
+            if ($this->input('ocr_scan_id')) {
+                $scan = \App\Models\OcrScan::where('uuid', $this->input('ocr_scan_id'))->first();
+                if (! $scan || $scan->user_id !== $this->user()?->id || ! $scan->isUsable()) {
+                    $validator->errors()->add('ocr_scan_id', 'Ce scan est introuvable, expiré ou déjà utilisé. Scannez à nouveau la pièce.');
+                }
+            }
             if ($this->boolean('contact_consent') && ! $this->input('contact_phone') && ! $this->user()?->Phone) {
                 $validator->errors()->add('contact_phone', 'Indiquez un numéro pour que la structure puisse vous joindre.');
             }

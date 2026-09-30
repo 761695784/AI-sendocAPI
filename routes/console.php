@@ -88,3 +88,11 @@ Artisan::command('doctrack:assistant-prune', function () {
 })->purpose('Supprime les conversations de l\'assistant au-delà de la durée de conservation');
 
 Schedule::command('doctrack:assistant-prune')->dailyAt('03:30');
+
+// Scans OCR jamais publiés : suppression des photos (pièces d'identité) après expiration.
+Artisan::command('doctrack:ocr-purge', function () {
+    $n = app(\App\Services\Ocr\OcrScanService::class)->purgeExpired();
+    $this->info("{$n} scan(s) expiré(s) supprimé(s).");
+})->purpose('Supprime les scans OCR non publiés et leurs images');
+
+Schedule::command('doctrack:ocr-purge')->hourly();

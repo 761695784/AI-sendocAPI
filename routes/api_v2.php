@@ -4,6 +4,7 @@ use App\Http\Controllers\CertificateVerificationController;
 use App\Http\Controllers\TagScanController;
 use App\Http\Controllers\V2\ActivityReportController;
 use App\Http\Controllers\V2\AssistantController;
+use App\Http\Controllers\V2\OcrController;
 use App\Http\Controllers\V2\BillingController;
 use App\Http\Controllers\V2\ChargeController;
 use App\Http\Controllers\V2\CitizenProfileController;
@@ -50,6 +51,14 @@ Route::prefix('assistant')->group(function () {
     Route::get('audio/{lang}/{key}', [AssistantController::class, 'audio'])
         ->middleware('throttle:120,1')->where(['lang' => '[a-z]{2}', 'key' => '[a-z0-9_]{2,60}']);
 });
+
+// Scan OCR d'une pièce trouvée (citoyen connecté) : lecture, champs proposés, photo publique masquée.
+Route::middleware(['auth:api', 'active'])->prefix('ocr')->group(function () {
+    Route::post('scan', [OcrController::class, 'scan'])->middleware('throttle:10,1');
+    Route::get('scans/{scan}', [OcrController::class, 'show'])->middleware('throttle:60,1');
+});
+Route::get('ocr/scans/{scan}/preview', [OcrController::class, 'preview'])
+    ->middleware(['signed', 'throttle:60,1'])->name('ocr.preview');
 
 Route::middleware(['auth:api', 'active', 'organization', 'throttle:120,1'])->group(function () {
 

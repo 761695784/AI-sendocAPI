@@ -55,6 +55,8 @@ tags:
     description: Indicateurs par périmètre et délais de réaction.
   - name: Rapports
     description: Rapports d'activité PDF + Excel par périmètre.
+  - name: OCR
+    description: Scan d'une pièce trouvée — lecture des champs (MRZ, numéro CEDEAO), contrôles, photo publique masquée.
   - name: Assistant
     description: Assistant conversationnel guidé (texte + voix, français + wolof). Ouvert aux visiteurs ; le jeton JWT, s'il est fourni, identifie le citoyen.
   - name: Public
@@ -367,6 +369,51 @@ components:
         automatic: { type: boolean }
         pdf_url: { type: string }
         xlsx_url: { type: string }
+    OcrField:
+      type: object
+      properties:
+        value: { type: string }
+        confidence: { type: number, example: 0.99 }
+        source: { type: string, enum: [mrz, label, pattern], description: "mrz = zone codée validée par chiffres de contrôle" }
+    OcrScan:
+      type: object
+      properties:
+        scan_id: { type: string, format: uuid }
+        status: { type: string, enum: [read, partial, unreadable, used, expired] }
+        usable: { type: boolean, description: "Peut encore servir à une publication" }
+        expires_at: { type: string, format: date-time }
+        quality:
+          type: object
+          properties:
+            score: { type: integer, example: 91 }
+            average_confidence: { type: number }
+            issues: { type: array, items: { type: string, enum: [unreadable, blurry, type_unknown, mrz_invalid, name_mismatch, number_structure, birth_date_mismatch, sex_mismatch] } }
+            status: { type: string }
+        document_type: { type: object, nullable: true, properties: { id: { type: integer }, name: { type: string }, confidence: { type: number }, source: { type: string } } }
+        fields:
+          type: object
+          properties:
+            first_name: { $ref: '#/components/schemas/OcrField' }
+            last_name: { $ref: '#/components/schemas/OcrField' }
+            doc_number: { $ref: '#/components/schemas/OcrField' }
+            nin: { $ref: '#/components/schemas/OcrField' }
+            birth_date: { $ref: '#/components/schemas/OcrField' }
+            sex: { $ref: '#/components/schemas/OcrField' }
+            expiry_date: { $ref: '#/components/schemas/OcrField' }
+        numbers: { type: array, items: { type: object, properties: { kind: { type: string, enum: [card_number, nin, passport_number, document_number] }, value: { type: string } } } }
+        mrz: { type: object, properties: { present: { type: boolean }, format: { type: string, enum: [TD1, TD3] }, valid: { type: boolean }, checks: { type: object } } }
+        checks: { type: array, items: { type: object, properties: { code: { type: string }, level: { type: string, enum: [ok, info, warning] }, message: { type: string } } } }
+        masked_regions: { type: integer, description: "Zones masquées sur la photo publique (numéros, dates, MRZ)" }
+        preview_url: { type: string, nullable: true, description: "Aperçu de la photo masquée (URL signée, 15 min)" }
+        prefill:
+          type: object
+          description: À reprendre tel quel dans POST /api/documents (le citoyen vérifie et corrige avant d'envoyer).
+          properties:
+            ocr_scan_id: { type: string, format: uuid }
+            document_type_id: { type: integer, nullable: true }
+            OwnerFirstName: { type: string, nullable: true }
+            OwnerLastName: { type: string, nullable: true }
+            DocIdentification: { type: string, nullable: true }
     AssistantReply:
       type: object
       properties:
@@ -417,6 +464,54 @@ components:
         holder_initials: { type: string, example: "A. N." }
 
 paths:
+  # ════════════════════════ OCR ════════════════════════
+  /api/v2/ocr/scan:
+    post:
+      tags: [OCR]
+      summary: Scanner la photo d'une pièce trouvée (champs proposés + photo publique masquée)
+      description: |
+        La photo est remise à l'endroit, lue par le service OCR (AI_OCR_PROVIDER), puis interprétée par DocTrack :
+        type de pièce, prénoms, nom, numéro(s), dates, sexe ; zone MRZ vérifiée par ses chiffres de contrôle (norme OACI) ;
+        structure du numéro de carte CEDEAO (17 chiffres) comparée à la date de naissance et au sexe.
+        Les numéros, dates et la zone MRZ sont **masqués** sur la copie qui servira aux images publiques.
+        Le résultat est chiffré en base ; le scan expire après 60 minutes s'il n'est pas publié (photo supprimée).
+        Publier ensuite avec `POST /api/documents` + `ocr_scan_id` (la photo n'a pas besoin d'être renvoyée).
+        503 si aucun service OCR n'est branché : le formulaire reste utilisable à la main. 10 requêtes/minute.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [image]
+              properties:
+                image: { type: string, format: binary, description: "jpeg, png, webp — 8 Mo max" }
+                purpose: { type: string, enum: [found_document], default: found_document }
+      responses:
+        '201': { description: Pièce lue, content: { application/json: { schema: { $ref: '#/components/schemas/OcrScan' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { description: Image illisible ou invalide }
+        '503': { description: Service OCR non branché ou injoignable }
+  /api/v2/ocr/scans/{scan}:
+    get:
+      tags: [OCR]
+      summary: Relire un scan (son auteur uniquement)
+      parameters: [ { name: scan, in: path, required: true, schema: { type: string, format: uuid } } ]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/OcrScan' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v2/ocr/scans/{scan}/preview:
+    get:
+      tags: [OCR]
+      summary: Aperçu de la photo masquée (URL signée fournie par le scan)
+      security: []
+      parameters:
+        - { name: scan, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: signature, in: query, required: true, schema: { type: string } }
+        - { name: expires, in: query, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Image JPEG, content: { image/jpeg: { schema: { type: string, format: binary } } } }
+        '403': { description: Signature absente ou expirée }
   # ════════════════════════ ASSISTANT ════════════════════════
   /api/v2/assistant/capabilities:
     get:

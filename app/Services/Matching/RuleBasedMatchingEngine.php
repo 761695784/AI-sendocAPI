@@ -87,8 +87,9 @@ class RuleBasedMatchingEngine implements MatchingEngine
 
         // ── Numéro de document ─────────────────────────────────
         $numberMatch = false;
-        if ($item->doc_number_hash && $document->doc_number_hash) {
-            if (hash_equals($item->doc_number_hash, $document->doc_number_hash)) {
+        $documentHashes = $document->numberHashes();
+        if ($item->doc_number_hash && $documentHashes) {
+            if (in_array($item->doc_number_hash, $documentHashes, true)) {
                 $numberMatch = true;
                 $score = max($score, 95);
                 $details['document_number'] = ['result' => 'identique'];

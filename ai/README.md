@@ -19,6 +19,8 @@ Services DocTrack existants (déclaration, structure la plus proche, suivi…)
 | Dossier | Contenu | Où ça tourne |
 |---|---|---|
 | `doctrack-voice/` | Service de transcription (FastAPI + Omnilingual ASR) | Hugging Face Space gratuit (CPU) |
+| `doctrack-ocr/` | Lecture des pièces photographiées (FastAPI + RapidOCR / PaddleOCR) | Hugging Face Space gratuit (CPU) |
+| `doctrack-ocr/specimens/make_specimens.py` | Génère des pièces **fictives** (CNI CEDEAO recto/verso, passeport, photos de travers) pour tester | Colab ou tout PC avec Python |
 | `notebooks/01_banc_essai_transcription.ipynb` | Compare les modèles sur vos vocaux (WER, CER, mots-clés) | Google Colab (GPU gratuit) |
 | `notebooks/02_generer_voix_wolof.ipynb` | Génère les MP3 wolof des phrases de l'assistant | Google Colab (GPU gratuit) |
 | `corpus/transcriptions_modele.csv` | Modèle du fichier de « bonnes réponses » du banc d'essai | — |
@@ -98,3 +100,53 @@ AI_LLM_MODEL=llama-3.1-8b-instant
 
 **Confidentialité** : une formule gratuite peut servir à entraîner le modèle du fournisseur → uniquement avec des **données fictives** (démo).
 Pour un pilote avec de vrais citoyens : laisser `AI_LLM_PROVIDER=none` ou passer à une offre payante qui garantit la confidentialité.
+
+---
+
+## Scan OCR des pièces trouvées
+
+```
+Photo (trouveur) ──► API Laravel  POST /api/v2/ocr/scan
+                       │  remet à l'endroit, envoie au Space « doctrack-ocr » (RapidOCR : lit le texte + positions)
+                       │  DocumentReader : type, nom, prénoms, numéro(s), dates, sexe
+                       │     • zone MRZ (verso CNI, passeport) vérifiée par chiffres de contrôle OACI
+                       │     • numéro CEDEAO 17 chiffres : structure comparée à la date de naissance et au sexe
+                       │  copie de la photo avec numéros / dates / MRZ MASQUÉS
+                       ▼
+Formulaire pré-rempli ─► la personne vérifie ─► POST /api/documents + ocr_scan_id
+                                                  original privé · copie masquée pour le public · NIN gardé pour les correspondances
+```
+
+### Mettre en ligne le service OCR (Hugging Face)
+
+Même procédure que le service vocal (étape 3), avec les fichiers du dossier `doctrack-ocr/`
+(`README.md`, `Dockerfile`, `app.py`, `requirements.txt`) dans un Space **Docker** nommé `doctrack-ocr`, matériel **CPU basic**.
+Le moteur est léger (≈ 1 à 2 s par photo sur le processeur gratuit, aucune carte graphique nécessaire).
+
+- Secret **`DOCTRACK_API_KEY`** : obligatoire en pratique, ce sont des pièces d'identité.
+- `.env` de l'API :
+
+```
+AI_OCR_PROVIDER=hf_space
+AI_OCR_URL=https://<compte>-doctrack-ocr.hf.space
+AI_OCR_TOKEN=<la même phrase secrète>
+```
+
+Vérification : `POST /api/v2/ocr/scan` avec une photo de spécimen (`python specimens/make_specimens.py`).
+
+### Tester avec des pièces fictives
+
+`doctrack-ocr/specimens/make_specimens.py` fabrique des cartes et un passeport **inventés** (avec une vraie zone MRZ calculée),
+y compris une photo de travers et une photo prise de côté. Les tests automatiques de l'API utilisent de vraies lectures
+RapidOCR de ces spécimens (`tests/Fixtures/ocr/`).
+
+**Pour aller plus loin (pilote)** : photographier quelques vraies pièces **avec l'accord écrit** des titulaires,
+ne jamais les partager, et mesurer le taux de champs corrects (le journal « Pièce lue par OCR » enregistre les corrections faites
+par les utilisateurs : c'est l'indicateur de qualité à suivre).
+
+### Limites connues
+
+- La mise en page réelle de la CNI CEDEAO peut différer des spécimens : les libellés sont réglables dans `config/ocr.php`.
+- Les espaces entre prénoms composés se perdent parfois à la lecture de la face avant (« MOUSSAIBRAHIMA ») ; la zone MRZ, elle, les conserve.
+- L'algorithme du chiffre de contrôle du numéro CEDEAO n'est pas public : seule sa structure est vérifiée.
+- Pièces sans zone MRZ (permis, carte grise) : lecture générale seulement.

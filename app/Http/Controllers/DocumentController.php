@@ -80,8 +80,13 @@ class DocumentController extends Controller
     {
         $validatedData = $request->validated();
 
+        // Pièce scannée juste avant : la photo vient du scan (déjà lue et masquée).
+        $scan = ! empty($validatedData['ocr_scan_id'])
+            ? \App\Models\OcrScan::where('uuid', $validatedData['ocr_scan_id'])->where('user_id', Auth::id())->first()
+            : null;
+
         // ── Vérifie l'image AVANT de créer le document ──
-        if (! $request->hasFile('image') || ! $request->file('image')->isValid()) {
+        if (! $scan && (! $request->hasFile('image') || ! $request->file('image')->isValid())) {
             return response()->json(['error' => 'Aucun fichier image valide fourni'], 400);
         }
 
@@ -104,8 +109,17 @@ class DocumentController extends Controller
         ]);
 
         // ── Upload + conversions via MediaLibrary ── génère automatiquement : thumb, blurred, optimized en WebP
-        $document->addMediaFromRequest('image')
-            ->toMediaCollection('document_image');
+        $ocr = app(\App\Services\Ocr\OcrScanService::class);
+        if ($scan) {
+            // Original privé + copie masquée pour le public ; numéros supplémentaires pour les correspondances.
+            $ocr->attachToDocument($scan, $document, $validatedData);
+        } else {
+            // Photo envoyée directement : masquage automatique si le service OCR est branché (AI_OCR_MASK_ON_UPLOAD).
+            $masked = $ocr->maskUploadedImage($request->file('image'), $document, Auth::user());
+            $document->addMediaFromRequest('image')
+                ->withCustomProperties($masked ? ['public_version' => 'masked'] : [])
+                ->toMediaCollection('document_image');
+        }
 
         // ── Log d'activité ──
         activity()

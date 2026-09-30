@@ -28,6 +28,7 @@
    - [S11 — Corriger une erreur](#s11--corriger-une-erreur)
    - [S12 — Une banque vérifie un certificat](#s12--une-banque-vérifie-un-certificat)
    - [S13 — Awa parle à l'assistant, en wolof](#s13--awa-parle-à-lassistant-en-wolof)
+   - [S14 — Moussa scanne la carte qu'il a trouvée](#s14--moussa-scanne-la-carte-quil-a-trouvée)
 5. [Cycles de vie (statuts)](#5-cycles-de-vie-statuts)
 6. [Règles clés en un tableau](#6-règles-clés-en-un-tableau)
 7. [Confidentialité : qui voit quoi](#7-confidentialité--qui-voit-quoi)
@@ -185,8 +186,10 @@ les mêmes contrôles ; la remise est marquée « sans déclaration préalable �
 
 **Histoire.** Fatou trouve un passeport au marché Sandaga. Elle n'a pas le temps d'aller au commissariat.
 
-1. Depuis l'application, elle publie le document (photo floutée automatiquement), partage sa **position GPS**,
-   choisit son département et coche **« j'accepte d'être contacté par la structure la plus proche »** — `POST /api/documents`.
+1. Depuis l'application, elle **scanne** le passeport : le type, le nom, les prénoms et le numéro se remplissent seuls
+   (voir S14) — `POST /api/v2/ocr/scan`. Elle vérifie, partage sa **position GPS**, choisit son département et coche
+   **« j'accepte d'être contacté par la structure la plus proche »**, puis publie — `POST /api/documents` (+ `ocr_scan_id`).
+   Sur la photo publique, les numéros sont **masqués** puis l'image est floutée.
 2. DocTrack choisit la structure : **la plus proche en GPS (≤ 25 km)**, sinon une structure du **même département**,
    puis de la **même région**. Ici : le commissariat du Plateau.
 3. Le Plateau reçoit : un message dans sa **boîte de réception**, un **SMS** au numéro de la structure (et un email si elle en a un).
@@ -379,6 +382,34 @@ Routes : `POST /api/v2/assistant/messages`, `POST /api/v2/assistant/voice`, `GET
 
 ---
 
+### S14 — Moussa scanne la carte qu'il a trouvée
+
+**Histoire.** Moussa trouve une carte d'identité CEDEAO devant la gare. Plutôt que de tout recopier, il la photographie.
+
+**Étapes**
+
+1. Il prend la photo (recto ou verso) — `POST /api/v2/ocr/scan`. La photo est remise à l'endroit (même prise de travers
+   ou de côté) et lue par le service OCR (RapidOCR, hébergé sur Hugging Face).
+2. DocTrack **interprète** la lecture :
+   - **type de pièce** (mots « CEDEAO », « PASSEPORT »… ou code de la zone MRZ) ;
+   - **prénoms, nom, numéro, date de naissance, sexe, date d'expiration** (libellés de la carte) ;
+   - au verso ou sur un passeport : la **zone codée MRZ**, dont les **chiffres de contrôle** (norme OACI) garantissent la lecture ;
+   - le **numéro CEDEAO à 17 chiffres** : sa structure (sexe + région + date de naissance…) est comparée aux autres champs.
+3. Moussa voit le formulaire **pré-rempli**, les éventuelles alertes (« photo floue », « la date ne correspond pas au numéro »)
+   et l'**aperçu public** : numéros, dates et zone MRZ **masqués**. Il corrige si besoin et publie — `POST /api/documents`
+   avec `ocr_scan_id` (pas besoin de renvoyer la photo).
+4. À la publication : la photo **originale reste privée** (agents, publicateur) ; seules des versions **floutées de la copie
+   masquée** sont publiques. Le **NIN** lu au dos est gardé (empreinte seulement) : une victime qui a déclaré avec son NIN
+   est retrouvée même si Moussa a saisi le numéro de carte → **correspondance confirmée par le numéro**.
+5. Le journal garde la trace : score de lecture, MRZ valide ou non, **champs corrigés par Moussa** (indicateur de qualité
+   de l'OCR et signal de vigilance).
+
+**Règles.** L'OCR propose, la personne valide : rien n'est publié sans elle. Un scan non publié expire après 60 minutes
+et sa photo est supprimée (`doctrack:ocr-purge`, toutes les heures). Le résultat du scan est chiffré en base.
+Si le service OCR n'est pas branché, le formulaire reste utilisable à la main.
+
+---
+
 ## 5. Cycles de vie (statuts)
 
 **Déclaration**
@@ -450,6 +481,7 @@ Sur le serveur, une seule tâche planifiée suffit : `* * * * * php artisan sche
 | `doctrack:sla-check` | toutes les heures | Relances et alertes de retard (S8) |
 | `doctrack:expire-restitution-requests` | toutes les heures | Demandes de remise directe sans réponse → relais structure (S6) |
 | `doctrack:monthly-reports` | le 1er à 6 h 15 | Rapports mensuels national + institutions (S10) |
+| `doctrack:ocr-purge` | toutes les heures | Supprime les scans OCR non publiés et leurs photos (S14) |
 | `doctrack:assistant-prune` | chaque jour à 3 h 30 | Supprime les conversations de l'assistant de plus de 30 jours (S13) |
 | `backup:run` / `backup:clean` / `backup:monitor` | chaque nuit | Sauvegardes |
 
@@ -471,4 +503,5 @@ Sur le serveur, une seule tâche planifiée suffit : `* * * * * php artisan sche
 | `PAYMENT_SUCCESS_URL`, `PAYMENT_ERROR_URL` | Pages de retour après paiement |
 | `API_DOCS_ENABLED` | Afficher ou non `/api/documentation/v2` |
 | `AI_STT_PROVIDER`, `AI_STT_URL`, `AI_STT_TOKEN` | Reconnaissance vocale (`hf_space` = service doctrack-voice) — voir `ai/README.md` |
+| `AI_OCR_PROVIDER`, `AI_OCR_URL`, `AI_OCR_TOKEN`, `AI_OCR_MASK_ON_UPLOAD` | Lecture des pièces (`hf_space` = service doctrack-ocr) — voir `ai/README.md` |
 | `AI_LLM_PROVIDER`, `GEMINI_API_KEY` / `AI_LLM_URL`, `AI_LLM_KEY`, `AI_LLM_MODEL` | Modèle de langage de secours (facultatif, données fictives en formule gratuite) |

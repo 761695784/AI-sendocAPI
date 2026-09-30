@@ -9,6 +9,8 @@
 |
 |  - stt : voix → texte. « none » ou « hf_space » (notre service Python
 |          doctrack-voice hébergé gratuitement sur Hugging Face).
+|  - ocr : lecture des pièces photographiées. « none » ou « hf_space »
+|          (service Python doctrack-ocr, RapidOCR, sur Hugging Face).
 |  - llm : aide à comprendre les phrases libres que les règles ne
 |          reconnaissent pas. « none », « gemini » ou « openai_compatible »
 |          (Groq, OpenRouter, Ollama en local…).
@@ -37,6 +39,23 @@ return [
 
         'max_upload_kb' => 5120,
         'mimes'         => ['webm', 'ogg', 'oga', 'opus', 'mp3', 'mpga', 'wav', 'm4a', 'mp4', 'aac', 'weba'],
+    ],
+
+    // Lecture des pièces (OCR) : « none » ou « hf_space » (service doctrack-ocr, RapidOCR).
+    'ocr' => [
+        'provider' => env('AI_OCR_PROVIDER', 'none'),
+
+        'hf_space' => [
+            'url'     => env('AI_OCR_URL'),
+            'token'   => env('AI_OCR_TOKEN'),
+            'timeout' => (int) env('AI_OCR_TIMEOUT', 90),
+        ],
+
+        'max_upload_kb'     => 8192,
+        // Durée de vie d'un scan non publié (l'image est ensuite supprimée).
+        'scan_ttl_minutes'  => (int) env('AI_OCR_SCAN_TTL', 60),
+        // Photo publiée SANS passer par le scan : lire quand même pour masquer le numéro.
+        'mask_on_upload'    => (bool) env('AI_OCR_MASK_ON_UPLOAD', false),
     ],
 
     'llm' => [
