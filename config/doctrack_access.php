@@ -35,6 +35,8 @@ return [
             'restitutions.override',
             'billing.view',
             'billing.exempt',
+            'vigilance.view',
+            'vigilance.review',
         ],
         'structure_manager' => [
             'organizations.view',
@@ -61,6 +63,8 @@ return [
             'billing.view',
             'billing.collect',
             'billing.exempt',
+            'vigilance.view',
+            'vigilance.review',
         ],
         'agent' => [
             'organizations.view',

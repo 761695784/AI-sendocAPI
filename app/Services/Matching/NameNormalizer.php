@@ -18,7 +18,9 @@ class NameNormalizer
 
     public function normalize(?string $name): string
     {
-        $name = Str::lower(Str::ascii((string) $name));
+        // Chiffres lus par l'OCR à la place de lettres (« AW4 », « NDIAY3 ») : un nom n'en contient jamais.
+        $name = strtr((string) $name, '0134578', 'oieastb');
+        $name = Str::lower(Str::ascii($name));
         // Apostrophe = même mot : "N'Diaye" → "ndiaye", "M'Bengue" → "mbengue".
         $name = preg_replace("/['’`´]+/u", '', $name);
         $name = preg_replace('/[^a-z ]+/', ' ', $name);
@@ -55,6 +57,7 @@ class NameNormalizer
         $rules = [
             '/ou/'          => 'u',
             '/ph/'          => 'f',
+            '/x/'           => 'k',   // wolof : x = kh (Xadi = Khady)
             '/th/'          => 't',
             '/kh/'          => 'k',
             '/sh|ch/'       => 's',
@@ -110,6 +113,11 @@ class NameNormalizer
             return 0.97;
         }
 
+        // Mots collés ou séparés (« MOUSSAIBRAHIMA » lu par l'OCR, « Mame-Diarra »).
+        if (str_replace(' ', '', $na) === str_replace(' ', '', $nb)) {
+            return 0.98;
+        }
+
         $sortedA = $this->tokens($a);
         sort($sortedA);
         $sortedB = $this->tokens($b);
@@ -120,6 +128,39 @@ class NameNormalizer
             JaroWinkler::similarity(implode(' ', $sortedA), implode(' ', $sortedB)),
             // Graphies proches après simplification phonétique.
             JaroWinkler::similarity((string) $this->key($a), (string) $this->key($b)) * 0.96,
+            $this->tokenCoverage($sortedA, $sortedB),
         );
+    }
+
+    /**
+     * Prénoms composés dont un mot manque d'un côté (« Mame Diarra » / « Diarra »,
+     * « Mamadou Lamine » / « Lamine ») : chaque mot du nom le plus court doit
+     * se retrouver dans l'autre. Légère pénalité pour les mots absents.
+     *
+     * @param  string[]  $a
+     * @param  string[]  $b
+     */
+    private function tokenCoverage(array $a, array $b): float
+    {
+        [$short, $long] = count($a) <= count($b) ? [$a, $b] : [$b, $a];
+        if (! $short || count($short) === count($long)) {
+            return 0.0;
+        }
+
+        $total = 0.0;
+        foreach ($short as $token) {
+            $best = 0.0;
+            foreach ($long as $candidate) {
+                $best = max($best, $this->tokenKey($token) === $this->tokenKey($candidate)
+                    ? 1.0
+                    : JaroWinkler::similarity($token, $candidate));
+            }
+            if ($best < 0.9) {
+                return 0.0;   // un mot sans équivalent : ce n'est pas le même nom
+            }
+            $total += $best;
+        }
+
+        return round(($total / count($short)) * (0.86 + 0.08 * count($short) / count($long)), 4);
     }
 }

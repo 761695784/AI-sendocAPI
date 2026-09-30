@@ -24,7 +24,7 @@ class OcrController extends Controller
     {
         $request->validate([
             'image'   => 'required|file|mimes:jpeg,jpg,png,webp|max:' . config('ai.ocr.max_upload_kb', 8192),
-            'purpose' => 'nullable|in:' . OcrScan::PURPOSE_FOUND_DOCUMENT,
+            'purpose' => 'nullable|in:' . implode(',', OcrScan::PURPOSES),
         ]);
 
         if (! $this->scans->available()) {
@@ -66,6 +66,12 @@ class OcrController extends Controller
         ]);
     }
 
+    /** Type de pièce lu → type de pièce d'identité de la restitution. */
+    public static function idType(?string $documentType): ?string
+    {
+        return $documentType ? (config('ocr.restitution_id_types')[$documentType] ?? 'autre') : null;
+    }
+
     private function payload(OcrScan $scan): array
     {
         $r = $scan->result ?? [];
@@ -84,15 +90,26 @@ class OcrController extends Controller
             'mrz'            => $r['mrz'] ?? null,
             'checks'         => $r['checks'] ?? [],
             'masked_regions' => $scan->masked_regions,
-            'preview_url'    => $usable ? URL::temporarySignedRoute('ocr.preview', now()->addMinutes(15), ['scan' => $scan->uuid]) : null,
-            // Pré-remplissage direct du formulaire de publication (POST /api/documents).
-            'prefill'        => [
-                'ocr_scan_id'       => $scan->uuid,
-                'document_type_id'  => $r['document_type']['id'] ?? null,
-                'OwnerFirstName'    => $value('first_name'),
-                'OwnerLastName'     => $value('last_name'),
-                'DocIdentification' => $value('doc_number'),
-            ],
+            'preview_url'    => $usable && $scan->masked_path ? URL::temporarySignedRoute('ocr.preview', now()->addMinutes(15), ['scan' => $scan->uuid]) : null,
+            'purpose'        => $scan->purpose,
+            // Pré-remplissage direct du formulaire suivant.
+            'prefill'        => $scan->purpose === OcrScan::PURPOSE_IDENTITY_CHECK
+                ? [   // restitution au guichet : owner.* ou proxy.* (POST /api/v2/found-documents/{uuid}/restitution)
+                    'ocr_scan_id' => $scan->uuid,
+                    'first_name'  => $value('first_name'),
+                    'last_name'   => $value('last_name'),
+                    'birth_date'  => $value('birth_date'),
+                    'id_type'     => self::idType($r['document_type']['name'] ?? null),
+                    'id_number'   => $value('doc_number'),
+                ]
+                : [   // publication d'un document trouvé (POST /api/documents ou dépôt au guichet)
+                    'ocr_scan_id'       => $scan->uuid,
+                    'document_type_id'  => $r['document_type']['id'] ?? null,
+                    'OwnerFirstName'    => $value('first_name'),
+                    'OwnerLastName'     => $value('last_name'),
+                    'DocIdentification' => $value('doc_number'),
+                    'birth_date'        => $value('birth_date'),
+                ],
         ];
     }
 }

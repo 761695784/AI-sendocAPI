@@ -21,6 +21,7 @@ use App\Http\Controllers\V2\OrganizationTypeController;
 use App\Http\Controllers\V2\RestitutionController;
 use App\Http\Controllers\V2\StatsController;
 use App\Http\Controllers\V2\TerritoryController;
+use App\Http\Controllers\V2\VigilanceController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -147,6 +148,12 @@ Route::middleware(['auth:api', 'active', 'organization', 'throttle:120,1'])->gro
     Route::get('billing/report', [BillingController::class, 'report']);
 
     // Rapports d'activité (PDF + Excel) par périmètre
+    // Vigilance : doublons et signaux de fraude (relus par les responsables)
+    Route::get('vigilance/alerts', [VigilanceController::class, 'index']);
+    Route::get('vigilance/alerts/{alert}', [VigilanceController::class, 'show']);
+    Route::post('vigilance/alerts/{alert}/dismiss', [VigilanceController::class, 'dismiss']);
+    Route::post('vigilance/alerts/{alert}/confirm', [VigilanceController::class, 'confirm']);
+
     Route::get('reports', [ActivityReportController::class, 'index']);
     Route::post('reports', [ActivityReportController::class, 'store'])->middleware('throttle:10,1');
     Route::get('reports/{report}', [ActivityReportController::class, 'show']);

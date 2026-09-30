@@ -50,7 +50,8 @@ class FoundDocumentController extends Controller
         $structure->loadMissing('type');
         Gate::authorize('depositAtCounter', [Document::class, $structure]);
 
-        $document = $this->service->depositAtCounter($request->user(), $structure, $request->validated(), $request->file('image'));
+        $scan = $request->input('ocr_scan_id') ? \App\Models\OcrScan::where('uuid', $request->input('ocr_scan_id'))->first() : null;
+        $document = $this->service->depositAtCounter($request->user(), $structure, $request->validated(), $request->file('image'), $scan);
 
         return response()->json((new FoundDocumentResource($document))->resolve($request), 201);
     }

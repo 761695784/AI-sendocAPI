@@ -89,6 +89,34 @@ class OfficialRestitutionService
         }
 
         $isProxy  = $data['recipient_type'] === Restitution::RECIPIENT_PROXY;
+
+        // ── Pièces présentées scannées (OCR) : type, numéro, nom et date lus automatiquement ──
+        $scans   = [];
+        $idScans = [];
+        foreach ($isProxy ? ['owner', 'proxy'] : ['owner'] as $role) {
+            if (! empty($data[$role]['ocr_scan_id'])) {
+                [$data[$role], $scans[$role], $idScans[$role]] = $this->applyIdentityScan($document, $agent, $role, $data[$role]);
+            }
+        }
+        foreach ($isProxy ? ['proxy'] : ['owner'] as $role) {
+            if (empty($data[$role]['id_type']) || empty($data[$role]['id_number'])) {
+                throw ValidationException::withMessages(["{$role}.id_number" => 'La pièce d\'identité présentée est obligatoire (saisie ou scan).']);
+            }
+        }
+
+        // ── Vigilance : alerte haute ouverte sur ce document ──
+        $vigilance = app(\App\Services\Vigilance\VigilanceService::class);
+        $vigilanceOverride = null;
+        if ($alert = $vigilance->openHighAlert($document)) {
+            if (empty($data['vigilance_override_reason'])) {
+                throw ValidationException::withMessages(['vigilance_override_reason' => 'Alerte de vigilance ouverte sur ce document (' . config("vigilance.labels.{$alert->kind}", $alert->kind) . ') : un responsable doit autoriser la remise en indiquant le motif, ou traiter l\'alerte.']);
+            }
+            if (! $this->access->can($agent, 'restitutions.override', $structure)) {
+                throw ValidationException::withMessages(['vigilance_override_reason' => 'Seul un responsable de la structure peut autoriser cette remise.']);
+            }
+            $vigilanceOverride = ['alert' => $alert->uuid, 'reason' => $data['vigilance_override_reason'], 'by' => $agent->id];
+        }
+
         $owner    = $data['owner'];
         $checks   = $data['checks'];
 
@@ -128,7 +156,7 @@ class OfficialRestitutionService
         // ── Remise ─────────────────────────────────────────────
         $match = $this->confirmedMatch($document);
 
-        $restitution = DB::transaction(function () use ($document, $agent, $structure, $data, $isProxy, $owner, $checks, $similarity, $override, $match) {
+        $restitution = DB::transaction(function () use ($document, $agent, $structure, $data, $isProxy, $owner, $checks, $similarity, $override, $match, $scans, $idScans, $vigilanceOverride) {
             [$ownerLast4, $ownerHash] = $this->idFingerprint($owner['id_number'] ?? null);
             [$proxyLast4, $proxyHash] = $isProxy ? $this->idFingerprint($data['proxy']['id_number']) : [null, null];
 
@@ -160,6 +188,9 @@ class OfficialRestitutionService
                     'identity_photo_matches'     => true,
                     'power_of_attorney_verified' => $isProxy ? true : null,
                     'without_prior_declaration'  => $match === null,
+                    // Pièces présentées lues par OCR (résumé, sans image ni numéro).
+                    'id_scans'                   => $idScans ?: null,
+                    'vigilance_override'         => $vigilanceOverride,
                 ],
                 'name_similarity'          => round($similarity, 3),
                 'name_override_reason'     => $override,
@@ -176,6 +207,11 @@ class OfficialRestitutionService
             $this->matches->supersedeForDocument($document, $agent, 'Document restitué au guichet');
             $this->direct->cancelForDocument($document, $agent, 'Document restitué au guichet');
             $this->collections->cancelForDocument($document, $agent, 'Document restitué au guichet');
+
+            foreach ($scans as $scan) {
+                // Le scan a servi : on n'en garde que la trace (résultat effacé).
+                $scan->forceFill(['status' => \App\Models\OcrScan::STATUS_USED, 'used_at' => now(), 'document_id' => $document->id, 'result' => null])->save();
+            }
 
             activity()->causedBy($agent)->performedOn($restitution)
                 ->withProperties([
@@ -194,6 +230,59 @@ class OfficialRestitutionService
         $this->notifyAfterHandover($restitution);
 
         return $restitution->fresh(['document.documentType', 'organization', 'agent']);
+    }
+
+    /**
+     * Pièce d'identité présentée, scannée par l'agent : complète type / numéro /
+     * date de naissance, vérifie que la pièce est bien au nom de la personne et
+     * qu'il ne s'agit pas… du document à restituer.
+     *
+     * @return array{0: array, 1: \App\Models\OcrScan, 2: array}
+     */
+    private function applyIdentityScan(Document $document, User $agent, string $role, array $person): array
+    {
+        $scan = \App\Models\OcrScan::where('uuid', $person['ocr_scan_id'])->first();
+        if (! $scan || $scan->user_id !== $agent->id || $scan->purpose !== \App\Models\OcrScan::PURPOSE_IDENTITY_CHECK || ! $scan->isUsable()) {
+            throw ValidationException::withMessages(["{$role}.ocr_scan_id" => 'Scan de la pièce introuvable, expiré ou déjà utilisé. Scannez à nouveau la pièce présentée.']);
+        }
+
+        $r = $scan->result ?? [];
+        $read = fn (string $f) => $r['fields'][$f]['value'] ?? null;
+
+        $person['id_type']   = $person['id_type'] ?? \App\Http\Controllers\V2\OcrController::idType($r['document_type']['name'] ?? null);
+        $person['id_number'] = $person['id_number'] ?? $read('doc_number');
+        if ($role === 'owner' && empty($person['birth_date']) && $read('birth_date')) {
+            $person['birth_date'] = $read('birth_date');
+        }
+
+        // Le numéro présenté est celui du document détenu par la structure : impossible, sauf fraude.
+        $presented = SensitiveData::hash(SensitiveData::normalizeDocNumber($person['id_number']));
+        if ($presented && in_array($presented, $document->numberHashes(), true)) {
+            app(\App\Services\Vigilance\VigilanceService::class)->presentedSameDocument($document, $role);
+            throw ValidationException::withMessages(["{$role}.ocr_scan_id" => 'La pièce présentée porte le numéro du document à restituer : remise refusée, alerte transmise au responsable.']);
+        }
+
+        // La pièce scannée doit être au nom de la personne déclarée.
+        $scanned = null;
+        if ($read('last_name')) {
+            $scanned = $this->nameSimilarity($person['first_name'] ?? '', $person['last_name'] ?? '', $read('first_name'), $read('last_name'));
+            if ($scanned < config('doctrack.restitution.name_threshold', 0.85)) {
+                throw ValidationException::withMessages(["{$role}.ocr_scan_id" => sprintf(
+                    'La pièce scannée est au nom de %s %s, pas de %s %s.',
+                    $read('first_name'), $read('last_name'), $person['first_name'] ?? '', $person['last_name'] ?? '')]);
+            }
+        }
+
+        $summary = [
+            'type'            => $r['document_type']['name'] ?? null,
+            'mrz_valid'       => $r['mrz']['valid'] ?? null,
+            'name_similarity' => $scanned !== null ? round($scanned, 3) : null,
+            'expired'         => in_array('expired', array_column($r['checks'] ?? [], 'code'), true),
+            'quality'         => $r['quality']['score'] ?? null,
+            'issues'          => $r['quality']['issues'] ?? [],
+        ];
+
+        return [$person, $scan, $summary];
     }
 
     /** Remise erronée : annulation dans le délai, le document revient sous garde. */

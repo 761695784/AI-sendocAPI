@@ -29,16 +29,19 @@ class StoreRestitutionRequest extends FormRequest
             'owner.first_name'        => 'required|string|max:100',
             'owner.last_name'         => 'required|string|max:100',
             'owner.birth_date'        => 'nullable|date|before:today',
-            'owner.id_type'           => [$proxy ? 'nullable' : 'required', Rule::in(Restitution::ID_TYPES)],
-            'owner.id_number'         => ($proxy ? 'nullable' : 'required') . '|string|min:4|max:50',
+            // Pièce présentée scannée (POST /api/v2/ocr/scan, purpose=identity_check) : type et numéro lus automatiquement.
+            'owner.ocr_scan_id'       => 'nullable|uuid',
+            'owner.id_type'           => [$proxy ? 'nullable' : 'required_without:owner.ocr_scan_id', 'nullable', Rule::in(Restitution::ID_TYPES)],
+            'owner.id_number'         => ($proxy ? 'nullable' : 'required_without:owner.ocr_scan_id') . '|nullable|string|min:4|max:50',
             'owner.phone'             => 'nullable|string|max:20',
 
             // Mandataire
             'proxy'                        => $proxy ? 'required|array' : 'prohibited',
             'proxy.first_name'             => $proxy ? 'required|string|max:100' : 'nullable',
             'proxy.last_name'              => $proxy ? 'required|string|max:100' : 'nullable',
-            'proxy.id_type'                => $proxy ? ['required', Rule::in(Restitution::ID_TYPES)] : 'nullable',
-            'proxy.id_number'              => $proxy ? 'required|string|min:4|max:50' : 'nullable',
+            'proxy.ocr_scan_id'            => 'nullable|uuid',
+            'proxy.id_type'                => $proxy ? ['required_without:proxy.ocr_scan_id', 'nullable', Rule::in(Restitution::ID_TYPES)] : 'nullable',
+            'proxy.id_number'              => $proxy ? 'required_without:proxy.ocr_scan_id|nullable|string|min:4|max:50' : 'nullable',
             'proxy.phone'                  => 'nullable|string|max:20',
             'proxy.relationship'           => 'nullable|string|max:60',
             'proxy.power_of_attorney_ref'  => 'nullable|string|max:100',
@@ -49,6 +52,8 @@ class StoreRestitutionRequest extends FormRequest
             'checks.power_of_attorney_verified'  => 'sometimes|boolean',
 
             'name_override_reason'    => 'nullable|string|min:5|max:255',
+            // Alerte de vigilance haute ouverte sur le document : accord motivé d'un responsable.
+            'vigilance_override_reason' => 'nullable|string|min:5|max:255',
         ];
     }
 }

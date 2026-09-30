@@ -84,6 +84,53 @@ class ImageTools
         return count($boxes);
     }
 
+    /**
+     * Empreinte visuelle (dHash 64 bits, 16 caractères hexadécimaux) : deux
+     * photos de la même pièce, même recadrées ou recompressées, ont des
+     * empreintes proches (distance de Hamming faible).
+     */
+    public static function dHash(string $path): ?string
+    {
+        try {
+            $img = self::load($path);
+        } catch (RuntimeException) {
+            return null;
+        }
+        $small = imagecreatetruecolor(9, 8);
+        imagecopyresampled($small, $img, 0, 0, 0, 0, 9, 8, imagesx($img), imagesy($img));
+
+        $bits = '';
+        for ($y = 0; $y < 8; $y++) {
+            for ($x = 0; $x < 8; $x++) {
+                $bits .= self::gray($small, $x, $y) > self::gray($small, $x + 1, $y) ? '1' : '0';
+            }
+        }
+
+        $hex = '';
+        foreach (str_split($bits, 4) as $nibble) {
+            $hex .= dechex(bindec($nibble));
+        }
+
+        return $hex;
+    }
+
+    public static function hammingDistance(string $a, string $b): int
+    {
+        $distance = 0;
+        for ($i = 0; $i < min(strlen($a), strlen($b)); $i++) {
+            $distance += substr_count(decbin(hexdec($a[$i]) ^ hexdec($b[$i])), '1');
+        }
+
+        return $distance;
+    }
+
+    private static function gray(\GdImage $img, int $x, int $y): float
+    {
+        $rgb = imagecolorat($img, $x, $y);
+
+        return 0.299 * (($rgb >> 16) & 0xFF) + 0.587 * (($rgb >> 8) & 0xFF) + 0.114 * ($rgb & 0xFF);
+    }
+
     private static function load(string $path): \GdImage
     {
         $data = @file_get_contents($path);

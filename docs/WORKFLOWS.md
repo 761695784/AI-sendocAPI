@@ -29,6 +29,7 @@
    - [S12 — Une banque vérifie un certificat](#s12--une-banque-vérifie-un-certificat)
    - [S13 — Awa parle à l'assistant, en wolof](#s13--awa-parle-à-lassistant-en-wolof)
    - [S14 — Moussa scanne la carte qu'il a trouvée](#s14--moussa-scanne-la-carte-quil-a-trouvée)
+   - [S15 — Une même photo pour deux noms : la vigilance s'en mêle](#s15--une-même-photo-pour-deux-noms--la-vigilance-sen-mêle)
 5. [Cycles de vie (statuts)](#5-cycles-de-vie-statuts)
 6. [Règles clés en un tableau](#6-règles-clés-en-un-tableau)
 7. [Confidentialité : qui voit quoi](#7-confidentialité--qui-voit-quoi)
@@ -139,8 +140,9 @@ Dieuppeul. Elle n'a pas de compte DocTrack.
 
 **Histoire.** Moussa trouve la CNI d'Awa à l'arrêt de bus et la dépose à la brigade la plus proche.
 
-1. L'agent enregistre le document (type, nom, numéro, lieu, photo) et, si Moussa le souhaite, ses coordonnées —
-   `POST /api/v2/found-documents`. Le document devient **TR-2026-000031**, **sous la garde** de la brigade.
+1. L'agent **scanne** la carte (S14 : champs pré-remplis, NIN lu au dos, numéros masqués sur la photo publique) — `POST /api/v2/ocr/scan` —,
+   vérifie, ajoute le lieu et, si Moussa le souhaite, ses coordonnées — `POST /api/v2/found-documents` (+ `ocr_scan_id`).
+   Sans scan, il saisit tout à la main comme avant. Le document devient **TR-2026-000031**, **sous la garde** de la brigade.
 2. Moussa reçoit un **SMS de remerciement**.
 3. Le moteur trouve la déclaration d'Awa : **même numéro** → la correspondance est **confirmée automatiquement**.
 4. Awa reçoit un **SMS** (et un email si elle a un compte) : « votre CNI a été retrouvée, elle est conservée par la brigade X (tél.), réf. TR-… ».
@@ -152,6 +154,9 @@ Dieuppeul. Elle n'a pas de compte DocTrack.
 > plafonne le score à 30 ; une date de naissance différente le plafonne à 45 (homonymes).
 > - score ≥ 75 → **à vérifier** par un agent (S5) ; 55 à 74 → **proposée** ; numéro identique → **confirmée**.
 > - Une paire rejetée par un agent n'est **jamais reproposée**.
+> - Noms mal orthographiés : orthographe wolof (Caw = Thiaw, Xadi = Khady, Jeju = Diédhiou…), mots collés par l'OCR
+>   (« MOUSSAIBRAHIMA »), chiffres lus à la place de lettres (« NDIAY3 »), prénom composé incomplet (« Mame Diarra » / « Diarra »).
+>   Les équivalences se complètent dans `config/matching.php`.
 
 ---
 
@@ -162,8 +167,11 @@ Dieuppeul. Elle n'a pas de compte DocTrack.
 1. L'agent ouvre le document et prépare la remise — `GET /api/v2/found-documents/{uuid}/restitution` :
    il voit la déclaration liée et la liste des contrôles à faire.
 2. Il vérifie l'identité et coche **« la photo de la pièce correspond à la personne »**.
-3. Il saisit le nom, la date de naissance et la pièce présentée (type + numéro) — `POST /api/v2/found-documents/{uuid}/restitution`.
-   DocTrack vérifie :
+3. Il **scanne la pièce présentée** (`POST /api/v2/ocr/scan`, `purpose=identity_check` : **aucune photo conservée**) : type, numéro,
+   nom et date de naissance sont lus. Ou il les saisit à la main. Puis il valide — `POST /api/v2/found-documents/{uuid}/restitution`
+   (+ `owner.ocr_scan_id`). DocTrack vérifie :
+   - la pièce scannée est bien **au nom de la personne** (sinon : refus, « la pièce est au nom de … ») ;
+   - la pièce présentée **n'est pas le document à restituer** (même numéro) : sinon refus et **alerte de vigilance haute** (S15) ;
    - le **nom** présenté correspond au document (variantes acceptées) ; sinon, seul un **chef** peut déroger en écrivant le motif (ex. nom d'épouse) ;
    - une **date de naissance différente est toujours refusée** ;
    - on ne garde **aucune copie** de la pièce : seulement son type et ses 4 derniers chiffres.
@@ -407,6 +415,35 @@ Routes : `POST /api/v2/assistant/messages`, `POST /api/v2/assistant/voice`, `GET
 **Règles.** L'OCR propose, la personne valide : rien n'est publié sans elle. Un scan non publié expire après 60 minutes
 et sa photo est supprimée (`doctrack:ocr-purge`, toutes les heures). Le résultat du scan est chiffré en base.
 Si le service OCR n'est pas branché, le formulaire reste utilisable à la main.
+
+---
+
+### S15 — Une même photo pour deux noms : la vigilance s'en mêle
+
+**Histoire.** Un compte publie une carte « Moussa Diop » avec **la même photo** qu'une carte « Awa Ndiaye » publiée la veille.
+
+1. À chaque document et chaque déclaration, DocTrack cherche les **doublons** et les **signaux de fraude** (sans rien bloquer) :
+
+| Alerte | Quand | Niveau |
+|---|---|---|
+| Document en double | même numéro (y compris NIN lu au dos), ou même titulaire + même date de naissance, ou même photo pour le même nom | à surveiller |
+| Photo réutilisée | même photo (empreinte visuelle) pour un **autre** nom | **haute** |
+| Incohérence de lecture | MRZ invalide, date/sexe contraires au numéro CEDEAO, nom imprimé ≠ MRZ | à surveiller |
+| Numéro modifié | numéro validé par la MRZ puis changé avant publication | **haute** |
+| Déclaration en double | même pièce déclarée deux fois par la même personne | info |
+| Nombreuses identités | un compte déclare les pièces de 4 personnes ou plus en 30 jours | à surveiller |
+| Publications en série | 5 documents ou plus publiés par un compte en 7 jours (bénévole… ou circuit) | info |
+| Pièce présentée = document | au guichet, la pièce d'identité présentée porte le numéro du document à restituer | **haute** |
+
+2. Une alerte **haute** part dans la **boîte de réception** de la structure concernée (ou du super admin s'il n'y en a pas).
+3. Le responsable ouvre la liste — `GET /api/v2/vigilance/alerts` — et tranche avec une note :
+   **écarter** (fausse alerte) ou **confirmer** — `POST /api/v2/vigilance/alerts/{uuid}/dismiss|confirm`.
+   Un doublon confirmé **archive la publication la plus récente** (elle n'est plus proposée en correspondance).
+4. Tant qu'une alerte **haute** est ouverte sur un document, sa **restitution exige l'accord motivé d'un responsable**
+   (`vigilance_override_reason`), tracé sur la décharge.
+
+**Règles.** Aucune sanction automatique ; un agent ne tranche pas (droit `vigilance.review` : chefs de structure, responsables d'institution).
+Seuils réglables dans `config/vigilance.php`.
 
 ---
 

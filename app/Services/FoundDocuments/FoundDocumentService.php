@@ -6,12 +6,14 @@ use App\Jobs\MatchDocumentJob;
 use App\Models\CitizenProfile;
 use App\Models\CollectionRequest;
 use App\Models\Document;
+use App\Models\OcrScan;
 use App\Models\Organization;
 use App\Models\StatusTransition;
 use App\Models\Territory;
 use App\Models\User;
 use App\Services\Declarations\CitizenProfileService;
 use App\Services\Notifications\Notifier;
+use App\Services\Ocr\OcrScanService;
 use App\Support\SensitiveData;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -26,7 +28,7 @@ class FoundDocumentService
     /**
      * Un trouveur (ou une patrouille) dépose une pièce au guichet.
      */
-    public function depositAtCounter(User $agent, Organization $structure, array $data, ?UploadedFile $image = null): Document
+    public function depositAtCounter(User $agent, Organization $structure, array $data, ?UploadedFile $image = null, ?OcrScan $scan = null): Document
     {
         $document = DB::transaction(function () use ($agent, $structure, $data) {
             $finder = null;
@@ -72,8 +74,20 @@ class FoundDocumentService
             return $document;
         });
 
-        if ($image) {
-            $document->addMedia($image)->toMediaCollection('document_image');
+        $ocr = app(OcrScanService::class);
+        if ($scan) {
+            // Pièce scannée au guichet : original privé, copie masquée, numéros supplémentaires (NIN).
+            $ocr->attachToDocument($scan, $document, [
+                'OwnerFirstName'    => $data['first_name'],
+                'OwnerLastName'     => $data['last_name'],
+                'DocIdentification' => $data['doc_number'] ?? null,
+                'document_type_id'  => $data['document_type_id'],
+            ]);
+        } elseif ($image) {
+            $masked = $ocr->maskUploadedImage($image, $document, $agent);
+            $document->addMedia($image)
+                ->withCustomProperties($masked ? ['public_version' => 'masked'] : [])
+                ->toMediaCollection('document_image');
         }
 
         if ($document->finder) {

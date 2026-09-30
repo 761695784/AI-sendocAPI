@@ -72,4 +72,23 @@ class NameNormalizerTest extends TestCase
         $this->assertSame(1.0, JaroWinkler::similarity('abc', 'abc'));
         $this->assertSame(0.0, JaroWinkler::similarity('abc', ''));
     }
+
+    public function test_misspelled_and_partial_names_phase_8(): void
+    {
+        // Orthographe wolof / française / arabe
+        $this->assertGreaterThanOrEqual(0.95, $this->names->similarity('Thiaw', 'Caw'));
+        $this->assertGreaterThanOrEqual(0.95, $this->names->similarity('Khady', 'Xadi'));
+        $this->assertGreaterThanOrEqual(0.95, $this->names->similarity('Diédhiou', 'Jeju'));
+        $this->assertGreaterThanOrEqual(0.95, $this->names->similarity('Ousseynou', 'Housseynou'));
+        // Lecture OCR : mots collés, chiffres à la place de lettres
+        $this->assertGreaterThanOrEqual(0.95, $this->names->similarity('MOUSSAIBRAHIMA', 'Moussa Ibrahima'));
+        $this->assertSame(1.0, $this->names->similarity('NDIAY3', 'Ndiaye'));
+        // Prénom composé incomplet
+        $this->assertGreaterThanOrEqual(0.88, $this->names->similarity('Mame Diarra', 'Diarra'));
+        $this->assertGreaterThanOrEqual(0.88, $this->names->similarity('Mamadou Lamine', 'Lamine'));
+        // … mais pas de rapprochement abusif
+        $this->assertLessThan(0.8, $this->names->similarity('Awa', 'Astou'));
+        $this->assertLessThan(0.8, $this->names->similarity('Sow', 'Sall'));
+        $this->assertLessThan(0.85, $this->names->similarity('Fatou Diop', 'Moussa'));
+    }
 }

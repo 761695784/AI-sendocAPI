@@ -57,6 +57,8 @@ tags:
     description: Rapports d'activité PDF + Excel par périmètre.
   - name: OCR
     description: Scan d'une pièce trouvée — lecture des champs (MRZ, numéro CEDEAO), contrôles, photo publique masquée.
+  - name: Vigilance
+    description: Doublons et signaux de fraude, relus et tranchés par les responsables (jamais de sanction automatique).
   - name: Assistant
     description: Assistant conversationnel guidé (texte + voix, français + wolof). Ouvert aux visiteurs ; le jeton JWT, s'il est fourni, identifie le citoyen.
   - name: Public
@@ -369,6 +371,22 @@ components:
         automatic: { type: boolean }
         pdf_url: { type: string }
         xlsx_url: { type: string }
+    VigilanceAlert:
+      type: object
+      properties:
+        uuid: { type: string, format: uuid }
+        kind: { type: string, enum: [duplicate_document, reused_photo, ocr_inconsistency, serial_finder, duplicate_declaration, many_identities, presented_same_document] }
+        label: { type: string, example: Document en double }
+        level: { type: string, enum: [info, warning, high], description: "high ouverte sur un document = accord motivé d'un responsable avant restitution" }
+        status: { type: string, enum: [open, confirmed, dismissed] }
+        message: { type: string }
+        details: { type: object }
+        subject: { type: object, properties: { type: { type: string, example: Document }, uuid: { type: string }, reference: { type: string } } }
+        organization: { type: object, nullable: true, properties: { uuid: { type: string }, name: { type: string } } }
+        reviewed_by: { type: string, nullable: true }
+        reviewed_at: { type: string, format: date-time, nullable: true }
+        review_note: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
     OcrField:
       type: object
       properties:
@@ -464,6 +482,60 @@ components:
         holder_initials: { type: string, example: "A. N." }
 
 paths:
+  # ════════════════════════ VIGILANCE ════════════════════════
+  /api/v2/vigilance/alerts:
+    get:
+      tags: [Vigilance]
+      summary: Alertes de vigilance du périmètre (les hautes d'abord)
+      description: |
+        Responsables de structure / d'institution : alertes de leurs organisations. Super admin : toutes, y compris celles sans structure
+        (publications en ligne, comptes citoyens). Détections : même numéro (y compris NIN lu par OCR), même titulaire + date de naissance,
+        même photo (empreinte visuelle) — pour un autre nom = alerte haute —, incohérences de lecture OCR, numéro validé par la MRZ puis modifié,
+        déclarations en double, nombreuses identités déclarées par un compte, publications en série, pièce présentée identique au document à restituer.
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [open, confirmed, dismissed], default: open } }
+        - { name: level, in: query, schema: { type: string, enum: [info, warning, high] } }
+        - { name: kind, in: query, schema: { type: string } }
+        - { name: per_page, in: query, schema: { type: integer, maximum: 100 } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/VigilanceAlert' } }
+                  summary: { type: object, description: "Alertes ouvertes par niveau", example: { high: 1, warning: 3 } }
+                  meta: { type: object }
+  /api/v2/vigilance/alerts/{alert}:
+    get:
+      tags: [Vigilance]
+      summary: Détail d'une alerte
+      parameters: [ { name: alert, in: path, required: true, schema: { type: string, format: uuid } } ]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/VigilanceAlert' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v2/vigilance/alerts/{alert}/dismiss:
+    post:
+      tags: [Vigilance]
+      summary: Écarter une alerte (fausse alerte) — note obligatoire
+      parameters: [ { name: alert, in: path, required: true, schema: { type: string, format: uuid } } ]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [note], properties: { note: { type: string, minLength: 5 } } } } } }
+      responses:
+        '200': { description: Écartée, content: { application/json: { schema: { $ref: '#/components/schemas/VigilanceAlert' } } } }
+        '404': { description: Hors périmètre ou droit vigilance.review manquant }
+        '409': { description: Alerte déjà traitée }
+  /api/v2/vigilance/alerts/{alert}/confirm:
+    post:
+      tags: [Vigilance]
+      summary: Confirmer une alerte — un doublon confirmé archive la publication la plus récente (hors garde)
+      parameters: [ { name: alert, in: path, required: true, schema: { type: string, format: uuid } } ]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [note], properties: { note: { type: string, minLength: 5 } } } } } }
+      responses:
+        '200': { description: Confirmée, content: { application/json: { schema: { $ref: '#/components/schemas/VigilanceAlert' } } } }
+        '404': { description: Hors périmètre ou droit vigilance.review manquant }
+        '409': { description: Alerte déjà traitée }
   # ════════════════════════ OCR ════════════════════════
   /api/v2/ocr/scan:
     post:
@@ -486,7 +558,7 @@ paths:
               required: [image]
               properties:
                 image: { type: string, format: binary, description: "jpeg, png, webp — 8 Mo max" }
-                purpose: { type: string, enum: [found_document], default: found_document }
+                purpose: { type: string, enum: [found_document, identity_check], default: found_document, description: "identity_check = pièce présentée au guichet pour une restitution : AUCUNE photo conservée, prefill {first_name, last_name, birth_date, id_type, id_number}" }
       responses:
         '201': { description: Pièce lue, content: { application/json: { schema: { $ref: '#/components/schemas/OcrScan' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
@@ -893,6 +965,7 @@ paths:
                 found_place: { type: string }
                 territory_code: { type: string }
                 image: { type: string, format: binary }
+                ocr_scan_id: { type: string, format: uuid, description: "Scan fait juste avant (POST /api/v2/ocr/scan) : photo, numéros supplémentaires (NIN), copie publique masquée" }
                 finder[first_name]: { type: string }
                 finder[last_name]: { type: string }
                 finder[phone]: { type: string }
@@ -1005,14 +1078,15 @@ paths:
                 owner:
                   type: object
                   required: [first_name, last_name]
-                  properties: { first_name: { type: string }, last_name: { type: string }, birth_date: { type: string, format: date }, id_type: { type: string, enum: [cni, passeport, permis, carte_consulaire, carte_militaire, extrait_naissance, autre] }, id_number: { type: string }, phone: { type: string } }
+                  properties: { first_name: { type: string }, last_name: { type: string }, birth_date: { type: string, format: date }, id_type: { type: string, enum: [cni, passeport, permis, carte_consulaire, carte_militaire, extrait_naissance, autre] }, id_number: { type: string }, phone: { type: string }, ocr_scan_id: { type: string, format: uuid, description: "Pièce présentée scannée (purpose=identity_check) : remplace id_type / id_number, vérifie le nom et que ce n'est pas le document à restituer" } }
                 proxy:
                   type: object
-                  properties: { first_name: { type: string }, last_name: { type: string }, id_type: { type: string }, id_number: { type: string }, phone: { type: string }, relationship: { type: string }, power_of_attorney_ref: { type: string } }
+                  properties: { first_name: { type: string }, last_name: { type: string }, id_type: { type: string }, id_number: { type: string }, phone: { type: string }, relationship: { type: string }, power_of_attorney_ref: { type: string }, ocr_scan_id: { type: string, format: uuid } }
                 checks:
                   type: object
                   properties: { identity_photo_matches: { type: boolean }, power_of_attorney_verified: { type: boolean } }
                 name_override_reason: { type: string, description: "Dérogation sur le nom (responsable uniquement)" }
+                vigilance_override_reason: { type: string, description: "Obligatoire (responsable uniquement) si une alerte de vigilance HAUTE est ouverte sur le document" }
             example:
               recipient_type: owner
               owner: { first_name: Awa, last_name: Ndiaye, birth_date: "1990-05-12", id_type: passeport, id_number: A01234567, phone: "77 123 45 67" }

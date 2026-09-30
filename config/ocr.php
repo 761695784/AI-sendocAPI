@@ -30,6 +30,13 @@ return [
         'C' => "Carte nationale d'identité",
     ],
 
+    // Type de pièce lu → type de pièce d'identité enregistré à la restitution (Restitution::ID_TYPES).
+    'restitution_id_types' => [
+        "Carte nationale d'identité" => 'cni',
+        'Passeport'                  => 'passeport',
+        'Permis de conduire'         => 'permis',
+    ],
+
     // Libellés des champs sur la face visible (français / anglais).
     'labels' => [
         'first_name'  => ['prenoms', 'prenom', 'given names', 'given name', 'forenames'],

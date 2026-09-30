@@ -35,5 +35,8 @@ class MatchDocumentJob implements ShouldQueue
             Log::error('Matching document en échec', ['document_id' => $this->documentId, 'error' => $e->getMessage()]);
             report($e);
         }
+
+        // Doublons et signaux de fraude (n'interrompt jamais le traitement).
+        app(\App\Services\Vigilance\VigilanceService::class)->checkDocument($document);
     }
 }

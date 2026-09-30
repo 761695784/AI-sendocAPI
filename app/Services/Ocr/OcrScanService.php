@@ -56,6 +56,24 @@ class OcrScanService
 
         $result = $this->reader->read($ocr);
 
+        // Pièce présentée au guichet : on ne garde AUCUNE image, seulement le résultat (chiffré, 60 min).
+        if ($purpose === OcrScan::PURPOSE_IDENTITY_CHECK) {
+            $disk->delete($image);
+            unset($result['sensitive_lines']);
+
+            return OcrScan::create([
+                'uuid'             => $uuid,
+                'user_id'          => $user?->id,
+                'purpose'          => $purpose,
+                'status'           => $result['quality']['status'],
+                'engine'           => $ocr['engine'] ?? null,
+                'result'           => $result,
+                'quality_score'    => $result['quality']['score'],
+                'document_type_id' => $result['document_type']['id'] ?? null,
+                'expires_at'       => now()->addMinutes((int) config('ai.ocr.scan_ttl_minutes', 60)),
+            ]);
+        }
+
         $masked = "ocr/scans/{$uuid}_public.jpg";
         $regions = ImageTools::mask(
             $disk->path($image), $disk->path($masked), $result['sensitive_lines'],
@@ -109,6 +127,8 @@ class OcrScanService
             'image_path'  => null,
             'masked_path' => null,
         ])->save();
+
+        app(\App\Services\Vigilance\VigilanceService::class)->checkOcr($document, $scan);
     }
 
     /**
