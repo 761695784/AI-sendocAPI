@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreDeclarationDePerteRequest;
 use App\Models\DeclarationDePerte;
 use App\Models\Document;
+use App\Models\DocumentMatch;
+use App\Models\RestitutionRequest;
 use App\Services\Declarations\OnlineDeclarationService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
@@ -157,9 +159,21 @@ class DeclarationDePerteController extends Controller
 
         // Récupérer les déclarations faites par l'utilisateur connecté avec les informations de l'utilisateur et du type de document
         $declarations = DeclarationDePerte::where('user_id', $user->id)
-            ->with(['user', 'documentType', 'certificat']) // Charger les relations user et documentType
-            ->get();
-        // dd($declarations->first()->certificat);
+            ->with([
+                'user', 'documentType', 'certificat',
+                'matches' => fn ($q) => $q->where('status', DocumentMatch::STATUS_CONFIRMED)
+                    ->with(['document.documentType', 'document.custodyOrganization', 'document.restitutionRequests']),
+            ])
+            ->latest('id')
+            ->get()
+            ->each(function (DeclarationDePerte $declaration) use ($user) {
+                // Documents retrouvés (correspondances confirmées) et ce que le propriétaire peut faire.
+                $declaration->setAttribute('found_documents', $declaration->matches
+                    ->filter(fn ($m) => $m->document)
+                    ->map(fn ($m) => self::foundDocumentForOwner($m->document, $user->id))
+                    ->values());
+                $declaration->unsetRelation('matches');
+            });
 
         return response()->json([
             'success' => true,
@@ -253,5 +267,43 @@ class DeclarationDePerteController extends Controller
             'success' => false,
             'message' => 'Accès refusé. Vous ne pouvez supprimer que vos propres déclarations.',
         ], 403);
+    }
+
+    /**
+     * Document retrouvé, vu par le propriétaire (aucune donnée du trouveur).
+     * next_step : « counter » (se présenter à la structure qui le garde),
+     *             « direct » (demander la remise directe au trouveur),
+     *             « done » (déjà restitué), « wait » (en cours de récupération par une structure).
+     */
+    public static function foundDocumentForOwner(Document $doc, int $ownerId): array
+    {
+        $custody = $doc->custodyOrganization;
+        $request = $doc->restitutionRequests
+            ->where('requester_user_id', $ownerId)
+            ->sortByDesc('id')
+            ->first();
+
+        $nextStep = match (true) {
+            $doc->lifecycle_status === Document::LIFECYCLE_RESTITUTED => 'done',
+            $custody !== null                                      => 'counter',
+            $doc->found_channel === Document::CHANNEL_CITIZEN        => 'direct',
+            default                                                => 'wait',
+        };
+
+        return [
+            'uuid'             => $doc->uuid,
+            'reference'        => $doc->reference,
+            'document_type'    => $doc->documentType?->TypeName,
+            'lifecycle_status' => $doc->lifecycle_status,
+            'found_channel'    => $doc->found_channel,
+            'custody'          => $custody ? $custody->only(['uuid', 'name', 'address', 'phone']) : null,
+            'next_step'        => $nextStep,
+            'restitution_request' => $request ? [
+                'uuid'       => $request->uuid,
+                'status'     => $request->status,
+                'expires_at' => $request->expires_at,
+                'active'     => in_array($request->status, RestitutionRequest::ACTIVE_STATUSES, true),
+            ] : null,
+        ];
     }
 }

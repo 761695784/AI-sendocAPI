@@ -270,4 +270,26 @@ class RestitutionRequestFlowTest extends OrganizationTestCase
         $this->asUser($this->owner)->postJson("/api/documents/{$docUuid}/restitution")
             ->assertStatus(409)->assertJsonPath('custody.name', 'Commissariat A');
     }
+
+    public function test_my_declarations_show_the_found_document_and_the_next_step(): void
+    {
+        $this->declareOnline();
+        $uuid = $this->publish();
+
+        $found = $this->asUser($this->owner)->getJson('/api/my-declarations')->assertOk()->json('data.0.found_documents');
+        $this->assertCount(1, $found);
+        $this->assertSame($uuid, $found[0]['uuid']);
+        $this->assertSame('direct', $found[0]['next_step']);
+        $this->assertNull($found[0]['restitution_request']);
+        $this->assertArrayNotHasKey('matches', $this->asUser($this->owner)->getJson('/api/my-declarations')->json('data.0'));
+
+        // Demande envoyée → visible dans la déclaration.
+        $this->asUser($this->owner)->postJson("/api/documents/{$uuid}/restitution")->assertSuccessful();
+        $found = $this->asUser($this->owner)->getJson('/api/my-declarations')->json('data.0.found_documents.0');
+        $this->assertSame('pending', $found['restitution_request']['status']);
+        $this->assertTrue($found['restitution_request']['active']);
+
+        // Rien du trouveur n'apparaît.
+        $this->assertStringNotContainsString('784445566', $this->asUser($this->owner)->getJson('/api/my-declarations')->getContent());
+    }
 }
