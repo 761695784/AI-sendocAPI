@@ -371,6 +371,22 @@ components:
         automatic: { type: boolean }
         pdf_url: { type: string }
         xlsx_url: { type: string }
+        delivered_at: { type: string, format: date-time, nullable: true, description: "Rapport mensuel envoyé (null = en attente de validation de la synthèse IA)" }
+        narrative_status: { type: string, enum: [none, pending, approved, rejected, failed], description: "Synthèse rédigée avec l'aide de l'IA : none = IA non branchée ; pending = à valider par le super admin ; failed = IA indisponible ou chiffres non vérifiés (analyse par règles seule)" }
+        narrative:
+          type: object
+          nullable: true
+          description: Visible de tous une fois validée ; brouillon visible du seul super admin.
+          properties:
+            summary_fr: { type: string }
+            summary_en: { type: string }
+            highlights: { type: array, items: { type: string } }
+            structures: { type: array, items: { type: object, properties: { name: { type: string }, comment: { type: string } } } }
+            recommendations: { type: array, items: { type: object, properties: { priority: { type: string, enum: [haute, moyenne, basse] }, text: { type: string } } } }
+            provider: { type: string, example: qwen }
+            model: { type: string, example: qwen-plus }
+            verified: { type: boolean }
+            edited_by_reviewer: { type: boolean }
     VigilanceAlert:
       type: object
       properties:
@@ -1322,3 +1338,46 @@ paths:
   /api/v2/reports/{uuid}/xlsx:
     parameters: [ { $ref: '#/components/parameters/Uuid' } ]
     get: { tags: [Rapports], summary: "Télécharger le classeur Excel", responses: { '200': { description: XLSX, content: { application/vnd.openxmlformats-officedocument.spreadsheetml.sheet: {} } } } }
+  /api/v2/reports/{uuid}/narrative/approve:
+    parameters: [ { $ref: '#/components/parameters/Uuid' } ]
+    post:
+      tags: [Rapports]
+      summary: Valider la synthèse rédigée par l'IA (super admin), avec corrections éventuelles — PDF/Excel refaits, rapport mensuel envoyé
+      description: |
+        La synthèse est produite par un modèle de langage (AI_REPORTS_PROVIDERS, ex. qwen puis glm) à partir des seuls chiffres agrégés
+        (effectifs < 3 masqués). Tout nombre absent des données fait rejeter le texte (nouvelle tentative, fournisseur suivant, puis analyse par règles).
+        Les champs envoyés remplacent ceux de l'IA (relecture humaine).
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                summary_fr: { type: string }
+                summary_en: { type: string }
+                highlights: { type: array, items: { type: string } }
+                recommendations: { type: array, items: { type: object, properties: { priority: { type: string, enum: [haute, moyenne, basse] }, text: { type: string } } } }
+                structures: { type: array, items: { type: object, properties: { name: { type: string }, comment: { type: string } } } }
+                note: { type: string }
+      responses:
+        '200': { description: Validée et publiée, content: { application/json: { schema: { $ref: '#/components/schemas/Report' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { description: Aucune synthèse en attente }
+  /api/v2/reports/{uuid}/narrative/reject:
+    parameters: [ { $ref: '#/components/parameters/Uuid' } ]
+    post:
+      tags: [Rapports]
+      summary: Refuser la synthèse IA (super admin) — le rapport part avec l'analyse par règles
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [note], properties: { note: { type: string, minLength: 5 } } } } } }
+      responses:
+        '200': { description: "Refusée : rapport publié sans synthèse IA", content: { application/json: { schema: { $ref: '#/components/schemas/Report' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { description: Aucune synthèse en attente }
+  /api/v2/reports/{uuid}/narrative/regenerate:
+    parameters: [ { $ref: '#/components/parameters/Uuid' } ]
+    post:
+      tags: [Rapports]
+      summary: Redemander une synthèse à l'IA (super admin)
+      responses:
+        '200': { description: "Nouvelle synthèse (à valider) ou échec", content: { application/json: { schema: { $ref: '#/components/schemas/Report' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }

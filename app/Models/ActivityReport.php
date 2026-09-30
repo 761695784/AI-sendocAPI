@@ -17,7 +17,23 @@ class ActivityReport extends Model
         'period_from' => 'date',
         'period_to'   => 'date',
         'automatic'   => 'boolean',
+        'narrative'   => 'array',
+        'narrative_attempts'    => 'array',
+        'narrative_reviewed_at' => 'datetime',
+        'delivered_at'          => 'datetime',
     ];
+
+    public const NARRATIVE_NONE     = 'none';
+    public const NARRATIVE_PENDING  = 'pending';
+    public const NARRATIVE_APPROVED = 'approved';
+    public const NARRATIVE_REJECTED = 'rejected';
+    public const NARRATIVE_FAILED   = 'failed';
+
+    /** Texte rédigé par l'IA publiable dans le rapport. */
+    public function publishedNarrative(): ?array
+    {
+        return $this->narrative_status === self::NARRATIVE_APPROVED ? $this->narrative : null;
+    }
 
     protected static function booted(): void
     {

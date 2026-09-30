@@ -150,3 +150,33 @@ par les utilisateurs : c'est l'indicateur de qualité à suivre).
 - Les espaces entre prénoms composés se perdent parfois à la lecture de la face avant (« MOUSSAIBRAHIMA ») ; la zone MRZ, elle, les conserve.
 - L'algorithme du chiffre de contrôle du numéro CEDEAO n'est pas public : seule sa structure est vérifiée.
 - Pièces sans zone MRZ (permis, carte grise) : lecture générale seulement.
+
+---
+
+## Rapports : synthèse rédigée par l'IA (Qwen, GLM…)
+
+Le modèle ne reçoit **que des chiffres agrégés** (effectifs < 3 masqués, aucun nom, numéro, téléphone), rédige synthèse, constats,
+commentaires par structure, recommandations et résumé anglais ; **chaque nombre est vérifié** ; le **super admin valide** avant l'envoi.
+
+### Qwen (recommandé pour démarrer)
+
+1. Créer un compte sur **Alibaba Cloud** (international) et ouvrir **Model Studio** — région **Singapour** (seule région avec quota gratuit :
+   environ 1 million de jetons **par modèle**, valable 90 jours ; un rapport mensuel consomme ~5 000 à 10 000 jetons).
+2. Activer **« Free quota only »** : une fois le quota épuisé, l'appel échoue au lieu d'être facturé (DocTrack passe alors au fournisseur suivant).
+3. Créer une clé API, puis dans le `.env` :
+
+```
+AI_REPORTS_ENABLED=true
+AI_REPORTS_PROVIDERS=qwen,glm
+QWEN_API_KEY=sk-...
+QWEN_MODEL=qwen-plus
+```
+
+### GLM-4.7-Flash (secours gratuit, sans limite de durée)
+
+Compte sur **z.ai** (Zhipu) → clé API → `GLM_API_KEY=...`. Utilisé automatiquement si Qwen échoue ou si son quota est épuisé.
+
+### Plus tard
+
+- `deepseek` (payant mais très peu cher), `openrouter` (modèles gratuits hébergés hors de Chine).
+- `local` : un modèle ouvert (Qwen, GLM ou DeepSeek) **hébergé au Sénégal** (vLLM / Ollama) — même code, aucune donnée ne sort du pays.

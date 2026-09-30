@@ -85,6 +85,10 @@ return [
             'title' => 'Assistant : un citoyen demande un agent',
             'body'  => ':name (:phone) souhaite parler à un agent (échange en :language). Dernier message : « :question ». Conversation :conversation.',
         ],
+        'report.narrative_pending' => [
+            'title' => 'Rapport à valider — :period (:scope)',
+            'body'  => 'La synthèse rédigée avec l\'aide de l\'IA pour le rapport :reference attend votre validation. Relisez-la, corrigez si besoin, puis validez ou refusez : le rapport sera alors envoyé.',
+        ],
         'report.monthly' => [
             'title' => 'Rapport d\'activité — :period (:scope)',
             'body'  => ':summary Alertes : :alerts. Référence :reference.',

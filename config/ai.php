@@ -58,6 +58,59 @@ return [
         'mask_on_upload'    => (bool) env('AI_OCR_MASK_ON_UPLOAD', false),
     ],
 
+    /*
+    | Rédaction assistée des rapports d'activité (synthèse, commentaires par
+    | structure, recommandations, résumé anglais). Ne reçoit QUE des chiffres
+    | agrégés ; chaque chiffre du texte est vérifié ; validation par le super
+    | admin avant envoi (par défaut). Plusieurs fournisseurs peuvent être
+    | enchaînés : si le premier échoue, le suivant prend le relais, puis
+    | l'analyse par règles.
+    */
+    'reports' => [
+        'enabled'            => (bool) env('AI_REPORTS_ENABLED', false),
+        'providers'          => array_filter(array_map('trim', explode(',', (string) env('AI_REPORTS_PROVIDERS', 'qwen,glm')))),
+        'require_validation' => (bool) env('AI_REPORTS_REQUIRE_VALIDATION', true),
+        // Effectifs plus petits masqués (« <3 ») avant l'envoi.
+        'min_count'          => 3,
+        'timeout'            => (int) env('AI_REPORTS_TIMEOUT', 90),
+        'temperature'        => 0.2,
+        'max_tokens'         => 2500,
+        // Nouvelles tentatives si le texte contient un chiffre absent des données.
+        'max_attempts'       => 2,
+    ],
+
+    // Points d'accès compatibles OpenAI (chat/completions).
+    'endpoints' => [
+        // Alibaba Model Studio, région Singapour : 1 M de jetons gratuits par modèle pendant 90 jours.
+        'qwen' => [
+            'url'   => env('QWEN_API_URL', 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1'),
+            'key'   => env('QWEN_API_KEY'),
+            'model' => env('QWEN_MODEL', 'qwen-plus'),
+        ],
+        // Z.ai (Zhipu) : GLM-4.7-Flash gratuit.
+        'glm' => [
+            'url'   => env('GLM_API_URL', 'https://api.z.ai/api/paas/v4'),
+            'key'   => env('GLM_API_KEY'),
+            'model' => env('GLM_MODEL', 'glm-4.7-flash'),
+        ],
+        'deepseek' => [
+            'url'   => env('DEEPSEEK_API_URL', 'https://api.deepseek.com'),
+            'key'   => env('DEEPSEEK_API_KEY'),
+            'model' => env('DEEPSEEK_MODEL', 'deepseek-chat'),
+        ],
+        'openrouter' => [
+            'url'   => env('OPENROUTER_API_URL', 'https://openrouter.ai/api/v1'),
+            'key'   => env('OPENROUTER_API_KEY'),
+            'model' => env('OPENROUTER_MODEL', 'qwen/qwen3-235b-a22b:free'),
+        ],
+        // Plus tard : un modèle ouvert hébergé au Sénégal (vLLM / Ollama).
+        'local' => [
+            'url'   => env('LOCAL_LLM_URL'),
+            'key'   => env('LOCAL_LLM_KEY'),
+            'model' => env('LOCAL_LLM_MODEL'),
+        ],
+    ],
+
     'llm' => [
         'provider' => env('AI_LLM_PROVIDER', 'none'),
         'timeout'  => (int) env('AI_LLM_TIMEOUT', 15),

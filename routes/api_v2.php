@@ -160,6 +160,9 @@ Route::middleware(['auth:api', 'active', 'organization', 'throttle:120,1'])->gro
     Route::get('reports/{report}/pdf', [ActivityReportController::class, 'pdf']);
     Route::get('reports/{report}/xlsx', [ActivityReportController::class, 'xlsx']);
     Route::delete('reports/{report}', [ActivityReportController::class, 'destroy']);
+    Route::post('reports/{report}/narrative/approve', [ActivityReportController::class, 'approveNarrative']);
+    Route::post('reports/{report}/narrative/reject', [ActivityReportController::class, 'rejectNarrative']);
+    Route::post('reports/{report}/narrative/regenerate', [ActivityReportController::class, 'regenerateNarrative'])->middleware('throttle:10,1');
 
     // Statistiques par périmètre (?organization=uuid&from=&to=)
     Route::get('stats/overview', [StatsController::class, 'overview']);

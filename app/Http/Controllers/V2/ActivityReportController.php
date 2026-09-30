@@ -96,6 +96,49 @@ class ActivityReportController extends Controller
         return response()->json(['deleted' => true]);
     }
 
+    // ── Synthèse rédigée avec l'aide de l'IA : validation par le super admin ──
+
+    public function approveNarrative(Request $request, ActivityReport $report, ActivityReportService $service)
+    {
+        abort_unless($request->user()->isSuperAdmin(), 403, 'Seul le super administrateur valide les synthèses.');
+        abort_unless($report->narrative_status === ActivityReport::NARRATIVE_PENDING, 409, 'Aucune synthèse en attente de validation.');
+
+        $data = $request->validate([
+            'summary_fr'                 => 'nullable|string|min:20|max:5000',
+            'summary_en'                 => 'nullable|string|max:5000',
+            'highlights'                 => 'nullable|array|max:8',
+            'highlights.*'               => 'string|max:500',
+            'recommendations'            => 'nullable|array|max:10',
+            'recommendations.*.priority' => 'required_with:recommendations|in:haute,moyenne,basse',
+            'recommendations.*.text'     => 'required_with:recommendations|string|max:500',
+            'structures'                 => 'nullable|array',
+            'structures.*.name'          => 'required_with:structures|string|max:255',
+            'structures.*.comment'       => 'required_with:structures|string|max:1000',
+            'note'                       => 'nullable|string|max:500',
+        ]);
+
+        $report = $service->approveNarrative($report, $request->user(), collect($data)->except('note')->filter(fn ($v) => $v !== null)->all(), $data['note'] ?? null);
+
+        return response()->json($this->present($report, full: true));
+    }
+
+    public function rejectNarrative(Request $request, ActivityReport $report, ActivityReportService $service)
+    {
+        abort_unless($request->user()->isSuperAdmin(), 403, 'Seul le super administrateur valide les synthèses.');
+        abort_unless($report->narrative_status === ActivityReport::NARRATIVE_PENDING, 409, 'Aucune synthèse en attente de validation.');
+        $data = $request->validate(['note' => 'required|string|min:5|max:500']);
+
+        return response()->json($this->present($service->rejectNarrative($report, $request->user(), $data['note']), full: true));
+    }
+
+    public function regenerateNarrative(Request $request, ActivityReport $report, ActivityReportService $service)
+    {
+        abort_unless($request->user()->isSuperAdmin(), 403, 'Seul le super administrateur relance la rédaction.');
+        abort_if($report->delivered_at !== null && $report->narrative_status === ActivityReport::NARRATIVE_APPROVED, 409, 'Rapport déjà publié avec sa synthèse.');
+
+        return response()->json($this->present($service->regenerateNarrative($report, $request->user()), full: true));
+    }
+
     private function file(Request $request, ActivityReport $report, ?string $path, string $mime, string $ext)
     {
         $this->authorizeReport($request, $report);
@@ -131,6 +174,18 @@ class ActivityReportController extends Controller
             'pdf_url'      => url('/api/v2/reports/' . $r->uuid . '/pdf'),
             'xlsx_url'     => url('/api/v2/reports/' . $r->uuid . '/xlsx'),
             'created_at'   => $r->created_at,
-        ] + ($full ? ['analysis' => $r->analysis, 'data' => $r->data] : []);
+            'delivered_at' => $r->delivered_at,
+            'narrative_status' => $r->narrative_status,
+        ] + ($full ? [
+            'analysis'  => $r->analysis,
+            'data'      => $r->data,
+            // Brouillon visible du seul super admin tant qu'il n'est pas validé.
+            'narrative' => $r->narrative_status === ActivityReport::NARRATIVE_APPROVED || request()->user()?->isSuperAdmin() ? $r->narrative : null,
+            'narrative_review' => [
+                'reviewed_at' => $r->narrative_reviewed_at,
+                'note'        => $r->narrative_review_note,
+                'attempts'    => request()->user()?->isSuperAdmin() ? $r->narrative_attempts : null,
+            ],
+        ] : []);
     }
 }

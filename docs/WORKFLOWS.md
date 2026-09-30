@@ -325,6 +325,13 @@ les exonérations, la valeur théorique du pilote — en JSON ou CSV.
 
 **Histoire.** Le 1er novembre à 6 h 15, DocTrack produit le rapport d'octobre pour le **national** et pour **chaque institution**.
 
+0. **Synthèse rédigée avec l'aide de l'IA** (si `AI_REPORTS_ENABLED=true`) : un modèle de langage (Qwen, puis GLM en secours) reçoit
+   **uniquement les chiffres agrégés** du rapport (aucun nom, numéro ni téléphone ; effectifs < 3 masqués) et rédige : synthèse,
+   constats clés, commentaire par structure, recommandations priorisées et **résumé en anglais**.
+   **Chaque nombre du texte est vérifié** : s'il n'existe pas dans les données, le texte est rejeté (nouvelle tentative, fournisseur suivant,
+   sinon analyse par règles seule). Le super admin reçoit « Rapport à valider » : il relit, **corrige si besoin**, puis valide
+   (`POST /api/v2/reports/{uuid}/narrative/approve`) ou refuse (`…/reject`). **Rien n'est envoyé aux directeurs avant sa décision.**
+   Le rapport indique que la synthèse a été rédigée avec l'aide de l'IA, vérifiée et validée.
 1. Le Directeur de la Police trouve dans sa boîte de réception « Rapport d'activité — Octobre 2026 (Police nationale) » et reçoit un email.
 2. Il télécharge le **PDF** (synthèse, niveau global sur 100, alertes, recommandations, évolution, délais de chaque structure,
    types de documents, régions, finances) et le **classeur Excel** (mêmes données, une feuille par thème)
@@ -541,4 +548,5 @@ Sur le serveur, une seule tâche planifiée suffit : `* * * * * php artisan sche
 | `API_DOCS_ENABLED` | Afficher ou non `/api/documentation/v2` |
 | `AI_STT_PROVIDER`, `AI_STT_URL`, `AI_STT_TOKEN` | Reconnaissance vocale (`hf_space` = service doctrack-voice) — voir `ai/README.md` |
 | `AI_OCR_PROVIDER`, `AI_OCR_URL`, `AI_OCR_TOKEN`, `AI_OCR_MASK_ON_UPLOAD` | Lecture des pièces (`hf_space` = service doctrack-ocr) — voir `ai/README.md` |
+| `AI_REPORTS_ENABLED`, `AI_REPORTS_PROVIDERS`, `QWEN_API_KEY`, `GLM_API_KEY`… | Synthèse des rapports rédigée par l'IA (S10) — voir `ai/README.md` |
 | `AI_LLM_PROVIDER`, `GEMINI_API_KEY` / `AI_LLM_URL`, `AI_LLM_KEY`, `AI_LLM_MODEL` | Modèle de langage de secours (facultatif, données fictives en formule gratuite) |

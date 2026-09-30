@@ -62,7 +62,13 @@
 </div>
 
 <h2>1. Synthèse</h2>
-<p>{{ $a['summary'] }}</p>
+@if (! empty($n))
+    <p>{{ $n['summary_fr'] }}</p>
+    @foreach ($n['highlights'] ?? [] as $h)<div class="reco">{{ $h }}</div>@endforeach
+    <p class="small muted">Synthèse rédigée avec l'aide de l'IA à partir des seuls chiffres agrégés de ce rapport ; chaque chiffre a été vérifié automatiquement ; texte validé avant publication.</p>
+@else
+    <p>{{ $a['summary'] }}</p>
+@endif
 
 <table class="kpi">
     <tr>
@@ -86,9 +92,16 @@
     <div class="ok">Aucune alerte sur la période.</div>
 @endforelse
 @foreach ($a['positives'] as $p)<div class="ok">{{ $p }}</div>@endforeach
-@if ($a['recommendations'])
+@if (! empty($n['recommendations']))
+    <h3>Recommandations</h3>
+    @foreach ($n['recommendations'] as $i => $reco)<div class="reco">{{ $i + 1 }}. <strong>[{{ $reco['priority'] }}]</strong> {{ $reco['text'] }}</div>@endforeach
+@elseif ($a['recommendations'])
     <h3>Recommandations</h3>
     @foreach ($a['recommendations'] as $i => $reco)<div class="reco">{{ $i + 1 }}. {{ $reco }}</div>@endforeach
+@endif
+@if (! empty($n['structures']))
+    <h3>Commentaires par structure</h3>
+    @foreach ($n['structures'] as $st)<div class="reco"><strong>{{ $st['name'] }}</strong> — {{ $st['comment'] }}</div>@endforeach
 @endif
 
 <h2>3. Évolution</h2>
@@ -194,7 +207,12 @@
 <h2>9. Notifications</h2>
 <p>SMS envoyés : {{ $o['sms']['sent'] }} — en échec : {{ $o['sms']['failed'] }} — non envoyés faute de numéro : {{ $o['sms']['skipped'] }}.</p>
 
+@if (! empty($n['summary_en']))
+<h2>Executive summary (English)</h2>
+<p>{{ $n['summary_en'] }}</p>
+@endif
+
 <h2>Méthodologie</h2>
-<p class="small muted">Chiffres calculés automatiquement à partir des données enregistrées dans DocTrack pour le périmètre « {{ $d['meta']['scope']['name'] }} » (l'organisation et toutes ses structures rattachées). Les médianes sont exprimées en heures ou en jours. La comparaison porte sur la période précédente de même durée ({{ \Illuminate\Support\Carbon::parse($d['meta']['previous']['from'])->format('d/m/Y') }} – {{ \Illuminate\Support\Carbon::parse($d['meta']['previous']['to'])->format('d/m/Y') }}). Les indicateurs « aujourd'hui » reflètent la situation au moment de la génération. L'analyse applique des règles explicites (seuils publiés) : aucune donnée personnelle n'apparaît dans ce rapport.</p>
+<p class="small muted">Chiffres calculés automatiquement à partir des données enregistrées dans DocTrack pour le périmètre « {{ $d['meta']['scope']['name'] }} » (l'organisation et toutes ses structures rattachées). Les médianes sont exprimées en heures ou en jours. La comparaison porte sur la période précédente de même durée ({{ \Illuminate\Support\Carbon::parse($d['meta']['previous']['from'])->format('d/m/Y') }} – {{ \Illuminate\Support\Carbon::parse($d['meta']['previous']['to'])->format('d/m/Y') }}). Les indicateurs « aujourd'hui » reflètent la situation au moment de la génération. L'analyse applique des règles explicites (seuils publiés) : aucune donnée personnelle n'apparaît dans ce rapport.@if (! empty($n)) La synthèse, les commentaires et les recommandations ont été rédigés par un modèle de langage ({{ $n['model'] ?? '' }}) qui n'a reçu que des chiffres agrégés (effectifs inférieurs à {{ config('ai.reports.min_count', 3) }} masqués) ; tout chiffre absent des données entraîne le rejet du texte ; le texte a été relu et validé{{ ! empty($n['edited_by_reviewer']) ? ' (et corrigé)' : '' }} avant publication.@endif</p>
 </body>
 </html>

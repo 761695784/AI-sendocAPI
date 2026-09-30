@@ -24,6 +24,7 @@ class ActivityReportService
         private ReportBuilder $builder,
         private ReportAnalyzer $analyzer,
         private Notifier $notifier,
+        private ReportNarrator $narrator,
     ) {}
 
     public function generate(?Organization $scope, CarbonInterface $from, CarbonInterface $to, ?User $author = null, bool $automatic = false): ActivityReport
@@ -55,19 +56,10 @@ class ActivityReportService
             'generated_by'    => $author?->id,
         ]);
 
-        $base = 'rapports/v2/' . $report->reference;
+        // Partie rédigée avec l'aide de l'IA (chiffres vérifiés) — publiée après validation.
+        $this->narrate($report);
 
-        $pdf = Pdf::loadView('rapports.activite_v2', ['r' => $report, 'd' => $data, 'a' => $analysis])
-            ->setPaper('A4', 'portrait')
-            ->setOptions(['defaultFont' => 'DejaVu Sans', 'isRemoteEnabled' => false]);
-        PrivateFiles::put($base . '.pdf', $pdf->output());
-
-        $tmp = tempnam(sys_get_temp_dir(), 'dtx');
-        $this->workbook($data, $analysis)->save($tmp);
-        PrivateFiles::put($base . '.xlsx', file_get_contents($tmp));
-        @unlink($tmp);
-
-        $report->forceFill(['pdf_path' => $base . '.pdf', 'xlsx_path' => $base . '.xlsx'])->save();
+        $this->render($report);
 
         activity()->causedBy($author)->performedOn($report)
             ->withProperties(['reference' => $report->reference, 'scope' => $scope?->name ?? 'national', 'automatic' => $automatic])
@@ -88,27 +80,150 @@ class ActivityReportService
         $made  = [];
 
         $national = $this->generate(null, $from, $to, null, true);
-        $this->deliver($national, null);
+        $this->deliverOrHold($national);
         $made[] = $national;
 
         Organization::with('type')->where('is_active', true)
             ->whereHas('type', fn ($q) => $q->where('level', OrganizationType::LEVEL_INSTITUTION))
             ->get()->each(function (Organization $institution) use ($from, $to, &$made) {
                 $report = $this->generate($institution, $from, $to, null, true);
-                $this->deliver($report, $institution);
+                $this->deliverOrHold($report);
                 $made[] = $report;
             });
 
         return $made;
     }
 
+    // ── Rédaction assistée par l'IA ──────────────────────────────────
+
+    /** Demande le texte à l'IA ; état « à valider », « validé d'office » ou « échec ». */
+    public function narrate(ActivityReport $report): void
+    {
+        if (! $this->narrator->enabled()) {
+            $report->forceFill(['narrative_status' => ActivityReport::NARRATIVE_NONE])->save();
+
+            return;
+        }
+
+        $result = $this->narrator->write($report);
+        $report->forceFill([
+            'narrative'          => $result['narrative'],
+            'narrative_attempts' => $result['attempts'],
+            'narrative_status'   => match (true) {
+                $result['narrative'] === null           => ActivityReport::NARRATIVE_FAILED,
+                config('ai.reports.require_validation') => ActivityReport::NARRATIVE_PENDING,
+                default                                 => ActivityReport::NARRATIVE_APPROVED,
+            },
+            'narrative_reviewed_by' => null,
+            'narrative_reviewed_at' => null,
+            'narrative_review_note' => null,
+        ])->save();
+    }
+
+    /** Validation par le super admin (avec corrections éventuelles), puis publication et envoi. */
+    public function approveNarrative(ActivityReport $report, User $reviewer, array $edits = [], ?string $note = null): ActivityReport
+    {
+        $narrative = array_replace($report->narrative ?? [], array_filter([
+            'summary_fr'      => $edits['summary_fr'] ?? null,
+            'summary_en'      => $edits['summary_en'] ?? null,
+            'highlights'      => $edits['highlights'] ?? null,
+            'recommendations' => $edits['recommendations'] ?? null,
+            'structures'      => $edits['structures'] ?? null,
+        ], fn ($v) => $v !== null));
+        if ($edits) {
+            $narrative['edited_by_reviewer'] = true;
+        }
+
+        $report->forceFill([
+            'narrative'             => $narrative,
+            'narrative_status'      => ActivityReport::NARRATIVE_APPROVED,
+            'narrative_reviewed_by' => $reviewer->id,
+            'narrative_reviewed_at' => now(),
+            'narrative_review_note' => $note,
+        ])->save();
+
+        return $this->publishAfterReview($report, $reviewer, 'Synthèse IA validée');
+    }
+
+    /** Refus : le rapport part avec l'analyse par règles seule. */
+    public function rejectNarrative(ActivityReport $report, User $reviewer, string $note): ActivityReport
+    {
+        $report->forceFill([
+            'narrative_status'      => ActivityReport::NARRATIVE_REJECTED,
+            'narrative_reviewed_by' => $reviewer->id,
+            'narrative_reviewed_at' => now(),
+            'narrative_review_note' => $note,
+        ])->save();
+
+        return $this->publishAfterReview($report, $reviewer, 'Synthèse IA refusée');
+    }
+
+    public function regenerateNarrative(ActivityReport $report, User $author): ActivityReport
+    {
+        $this->narrate($report);
+        $this->render($report);
+        activity()->causedBy($author)->performedOn($report)->withProperties(['status' => $report->narrative_status])->log('Synthèse IA régénérée');
+
+        return $report;
+    }
+
+    private function publishAfterReview(ActivityReport $report, User $reviewer, string $log): ActivityReport
+    {
+        $this->render($report);
+        if ($report->automatic && ! $report->delivered_at) {
+            $this->deliver($report, $report->organization);
+        }
+        activity()->causedBy($reviewer)->performedOn($report)
+            ->withProperties(['reference' => $report->reference, 'note' => $report->narrative_review_note])
+            ->log($log);
+
+        return $report->fresh();
+    }
+
+    /** Rapport mensuel : envoyé tout de suite, sauf si une synthèse IA attend validation. */
+    private function deliverOrHold(ActivityReport $report): void
+    {
+        if ($report->narrative_status === ActivityReport::NARRATIVE_PENDING) {
+            $this->notifier->inboxSuperAdmins('report.narrative_pending', [
+                'reference' => $report->reference,
+                'period'    => $report->period_label,
+                'scope'     => $report->organization?->name ?? 'National',
+            ], ['subject' => $report, 'dedupe' => 'report.narrative_pending:' . $report->id], 'reports/' . $report->uuid);
+
+            return;
+        }
+        $this->deliver($report, $report->organization);
+    }
+
+    /** PDF + Excel (avec la synthèse IA si elle est validée). */
+    public function render(ActivityReport $report): void
+    {
+        $data     = $report->data;
+        $analysis = $report->analysis;
+        $base     = 'rapports/v2/' . $report->reference;
+
+        $pdf = Pdf::loadView('rapports.activite_v2', ['r' => $report, 'd' => $data, 'a' => $analysis, 'n' => $report->publishedNarrative()])
+            ->setPaper('A4', 'portrait')
+            ->setOptions(['defaultFont' => 'DejaVu Sans', 'isRemoteEnabled' => false]);
+        PrivateFiles::put($base . '.pdf', $pdf->output());
+
+        $tmp = tempnam(sys_get_temp_dir(), 'dtx');
+        $this->workbook($data, $analysis, $report->publishedNarrative())->save($tmp);
+        PrivateFiles::put($base . '.xlsx', file_get_contents($tmp));
+        @unlink($tmp);
+
+        $report->forceFill(['pdf_path' => $base . '.pdf', 'xlsx_path' => $base . '.xlsx'])->save();
+    }
+
     private function deliver(ActivityReport $report, ?Organization $institution): void
     {
+        $report->forceFill(['delivered_at' => now()])->save();
+
         $params = [
             'period'    => $report->period_label,
             'scope'     => $institution?->name ?? 'National',
             'reference' => $report->reference,
-            'summary'   => $report->analysis['summary'] ?? '',
+            'summary'   => $report->publishedNarrative()['summary_fr'] ?? ($report->analysis['summary'] ?? ''),
             'alerts'    => count($report->analysis['alerts'] ?? []),
         ];
         $context = ['subject' => $report, 'organization_id' => $institution?->id, 'dedupe' => 'report.monthly:' . $report->id];
@@ -131,7 +246,7 @@ class ActivityReportService
         }
     }
 
-    private function workbook(array $d, array $a): XlsxWriter
+    private function workbook(array $d, array $a, ?array $n = null): XlsxWriter
     {
         $o = $d['overview'];
         $x = new XlsxWriter();
@@ -195,6 +310,24 @@ class ActivityReportService
             collect($a['positives'])->map(fn ($p) => ['Point positif', $p])->all(),
             collect($a['recommendations'])->map(fn ($r) => ['Recommandation', $r])->all(),
         ), [22, 110]);
+
+        if ($n) {
+            $rows = [['Rubrique', 'Texte'], ['Synthèse', $n['summary_fr'] ?? '']];
+            foreach ($n['highlights'] ?? [] as $h) {
+                $rows[] = ['Constat', $h];
+            }
+            foreach ($n['structures'] ?? [] as $st) {
+                $rows[] = [$st['name'], $st['comment']];
+            }
+            foreach ($n['recommendations'] ?? [] as $reco) {
+                $rows[] = ['Recommandation (' . $reco['priority'] . ')', $reco['text']];
+            }
+            if (! empty($n['summary_en'])) {
+                $rows[] = ['Summary (English)', $n['summary_en']];
+            }
+            $rows[] = ['Mention', 'Texte rédigé avec l\'aide de l\'IA (' . ($n['model'] ?? '') . '), chiffres vérifiés automatiquement, validé avant publication.'];
+            $x->addSheet('Commentaire', $rows, [30, 120]);
+        }
 
         return $x;
     }
