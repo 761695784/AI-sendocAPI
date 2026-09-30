@@ -21,6 +21,16 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(\App\Services\Matching\MatchingEngine::class, fn ($app) => match (config('matching.engine')) {
             default => $app->make(\App\Services\Matching\RuleBasedMatchingEngine::class),
         });
+
+        // Prises IA (config/ai.php) : gratuites aujourd'hui, remplaçables sans toucher au code.
+        $this->app->bind(\App\Services\Ai\SpeechToText::class, fn () => match (config('ai.stt.provider')) {
+            'hf_space' => new \App\Services\Ai\HfSpaceSpeechToText(),
+            default    => new \App\Services\Ai\NullSpeechToText(),
+        });
+        $this->app->bind(\App\Services\Ai\IntentClassifier::class, fn () => match (config('ai.llm.provider')) {
+            'gemini', 'openai_compatible' => new \App\Services\Ai\LlmIntentClassifier(config('ai.llm.provider')),
+            default                       => new \App\Services\Ai\NullIntentClassifier(),
+        });
     }
 
     public function boot(): void

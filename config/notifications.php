@@ -77,6 +77,10 @@ return [
             'title' => 'Relance — correspondance à vérifier',
             'body'  => 'La correspondance :reference (score :score) attend une vérification depuis :hours h.',
         ],
+        'assistant.handoff' => [
+            'title' => 'Assistant : un citoyen demande un agent',
+            'body'  => ':name (:phone) souhaite parler à un agent (échange en :language). Dernier message : « :question ». Conversation :conversation.',
+        ],
         'report.monthly' => [
             'title' => 'Rapport d\'activité — :period (:scope)',
             'body'  => ':summary Alertes : :alerts. Référence :reference.',

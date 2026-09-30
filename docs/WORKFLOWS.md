@@ -27,6 +27,7 @@
    - [S10 — Le rapport du mois arrive chez le Directeur](#s10--le-rapport-du-mois-arrive-chez-le-directeur)
    - [S11 — Corriger une erreur](#s11--corriger-une-erreur)
    - [S12 — Une banque vérifie un certificat](#s12--une-banque-vérifie-un-certificat)
+   - [S13 — Awa parle à l'assistant, en wolof](#s13--awa-parle-à-lassistant-en-wolof)
 5. [Cycles de vie (statuts)](#5-cycles-de-vie-statuts)
 6. [Règles clés en un tableau](#6-règles-clés-en-un-tableau)
 7. [Confidentialité : qui voit quoi](#7-confidentialité--qui-voit-quoi)
@@ -346,6 +347,38 @@ La même vérification fonctionne pour une **décharge de restitution**. Route :
 
 ---
 
+### S13 — Awa parle à l'assistant, en wolof
+
+**Histoire.** Awa préfère parler plutôt qu'écrire. Dans l'appli, elle appuie sur le micro et dit :
+« Salaam aleekum, sama kart dafa réer ca marsé HLM ».
+
+**Étapes**
+
+1. Le vocal part vers le service de transcription (Omnilingual ASR, hébergé sur Hugging Face) → texte — `POST /api/v2/assistant/voice`.
+   Le fichier audio n'est **jamais conservé**.
+2. L'assistant reconnaît des mots-clés : « réer » = perte, « kart » = carte d'identité. La conversation passe **en wolof**.
+3. Il pose les questions manquantes une à une (nom sur la pièce, numéro si connu, lieu). Réponses possibles :
+   « waaw », « déedéet », « xamuma » (je ne sais pas), ou les boutons.
+4. **Récapitulatif** (numéro masqué, 4 derniers chiffres) → Awa répond « waaw » → la déclaration est créée par le même service que le formulaire
+   (récépissé, recherche de correspondances). Sans « oui », rien n'est enregistré ; « bayyi ko » (annuler) efface tout.
+5. Les phrases fixes de l'assistant sont lues avec une **voix wolof pré-enregistrée** (MP3 générés à l'avance).
+
+**Variantes**
+
+- *Moussa a trouvé une carte* : l'assistant recueille type, nom, lieu et l'accord pour être appelé, puis **ouvre le formulaire de publication déjà
+  rempli** (il ne reste que la photo).
+- *« Fan laa koy jëlé ? »* (où la récupérer ?) : l'assistant donne la structure qui garde la pièce (adresse, téléphone), ou la structure la plus
+  proche à partir de la ville citée.
+- *Visiteur sans compte* : informations (où aller, quoi apporter, procuration) ; pour déclarer ou suivre un dossier, il doit se connecter.
+- *Incompréhension répétée* : proposition de parler à un agent → message prioritaire dans la boîte de réception des administrateurs.
+
+**Règles.** L'IA ne décide rien : un modèle de langage (facultatif) peut seulement *proposer* une intention quand les mots-clés ne suffisent pas,
+chiffres masqués. Conversations purgées après 30 jours (`doctrack:assistant-prune`).
+
+Routes : `POST /api/v2/assistant/messages`, `POST /api/v2/assistant/voice`, `GET /api/v2/assistant/capabilities`, `GET /api/v2/assistant/audio/{lang}/{key}`.
+
+---
+
 ## 5. Cycles de vie (statuts)
 
 **Déclaration**
@@ -417,6 +450,7 @@ Sur le serveur, une seule tâche planifiée suffit : `* * * * * php artisan sche
 | `doctrack:sla-check` | toutes les heures | Relances et alertes de retard (S8) |
 | `doctrack:expire-restitution-requests` | toutes les heures | Demandes de remise directe sans réponse → relais structure (S6) |
 | `doctrack:monthly-reports` | le 1er à 6 h 15 | Rapports mensuels national + institutions (S10) |
+| `doctrack:assistant-prune` | chaque jour à 3 h 30 | Supprime les conversations de l'assistant de plus de 30 jours (S13) |
 | `backup:run` / `backup:clean` / `backup:monitor` | chaque nuit | Sauvegardes |
 
 > Tant qu'aucun processus de file d'attente (`php artisan queue:work`) ne tourne sur le serveur, garder
@@ -436,3 +470,5 @@ Sur le serveur, une seule tâche planifiée suffit : `* * * * * php artisan sche
 | `WAVE_API_KEY`, `WAVE_WEBHOOK_SECRET` | Paiement Wave (webhook : `https://<domaine>/api/webhooks/wave`) |
 | `PAYMENT_SUCCESS_URL`, `PAYMENT_ERROR_URL` | Pages de retour après paiement |
 | `API_DOCS_ENABLED` | Afficher ou non `/api/documentation/v2` |
+| `AI_STT_PROVIDER`, `AI_STT_URL`, `AI_STT_TOKEN` | Reconnaissance vocale (`hf_space` = service doctrack-voice) — voir `ai/README.md` |
+| `AI_LLM_PROVIDER`, `GEMINI_API_KEY` / `AI_LLM_URL`, `AI_LLM_KEY`, `AI_LLM_MODEL` | Modèle de langage de secours (facultatif, données fictives en formule gratuite) |

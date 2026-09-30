@@ -60,3 +60,31 @@ Artisan::command('doctrack:monthly-reports {--month= : AAAA-MM (défaut : mois p
 })->purpose('Génère et envoie les rapports mensuels');
 
 Schedule::command('doctrack:monthly-reports')->monthlyOn(1, '06:15');
+
+// ── Assistant conversationnel ──
+
+// Liste des phrases à enregistrer à l'avance (voix wolof générée sur Colab).
+Artisan::command('doctrack:assistant-phrases {--lang=wo} {--missing : seulement celles sans fichier audio}', function () {
+    $phrases = app(\App\Services\Assistant\Phrasebook::class);
+    $lang    = $this->option('lang');
+    $rows    = collect($phrases->staticPhrases($lang))
+        ->when($this->option('missing'), fn ($c) => $c->reject(
+            fn ($text, $key) => \Illuminate\Support\Facades\Storage::disk('local')->exists($phrases->audioPath($key, $lang))
+        ))
+        ->map(fn ($text, $key) => ['key' => $key, 'lang' => $lang, 'text' => $text])
+        ->values();
+
+    $path = "assistant/phrases_{$lang}.json";
+    \Illuminate\Support\Facades\Storage::disk('local')->put($path, json_encode($rows, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+    $this->info($rows->count() . " phrase(s) → storage/app/{$path}");
+    $this->line('Déposez ensuite les fichiers {clé}.mp3 dans storage/app/' . trim(config('assistant.audio_dir'), '/') . "/{$lang}/");
+})->purpose('Exporte les phrases de l\'assistant pour générer leur audio');
+
+// Purge des conversations anciennes (confidentialité).
+Artisan::command('doctrack:assistant-prune', function () {
+    $days = (int) config('assistant.retention_days', 30);
+    $n = \App\Models\AssistantConversation::where('last_activity_at', '<', now()->subDays($days))->delete();
+    $this->info("{$n} conversation(s) de plus de {$days} jours supprimée(s).");
+})->purpose('Supprime les conversations de l\'assistant au-delà de la durée de conservation');
+
+Schedule::command('doctrack:assistant-prune')->dailyAt('03:30');

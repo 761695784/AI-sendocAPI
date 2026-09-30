@@ -3,6 +3,7 @@
 use App\Http\Controllers\CertificateVerificationController;
 use App\Http\Controllers\TagScanController;
 use App\Http\Controllers\V2\ActivityReportController;
+use App\Http\Controllers\V2\AssistantController;
 use App\Http\Controllers\V2\BillingController;
 use App\Http\Controllers\V2\ChargeController;
 use App\Http\Controllers\V2\CitizenProfileController;
@@ -38,6 +39,17 @@ Route::get('verify/{code}', [CertificateVerificationController::class, 'api'])
 // Scan public d'un QR de document (trouveur sans compte).
 Route::get('tags/{token}', [TagScanController::class, 'show'])->middleware('throttle:30,1')->where('token', '[A-Za-z0-9]{20,40}');
 Route::post('tags/{token}/found', [TagScanController::class, 'report'])->middleware('throttle:5,1')->where('token', '[A-Za-z0-9]{20,40}');
+
+// Assistant conversationnel (texte + voix, français + wolof) : ouvert aux
+// visiteurs pour l'information ; le jeton JWT, s'il est fourni, identifie le citoyen.
+Route::prefix('assistant')->group(function () {
+    Route::get('capabilities', [AssistantController::class, 'capabilities'])->middleware('throttle:60,1');
+    Route::post('messages', [AssistantController::class, 'message'])->middleware('throttle:30,1');
+    Route::post('voice', [AssistantController::class, 'voice'])->middleware('throttle:10,1');
+    Route::get('conversations/{conversation}', [AssistantController::class, 'show'])->middleware('throttle:60,1');
+    Route::get('audio/{lang}/{key}', [AssistantController::class, 'audio'])
+        ->middleware('throttle:120,1')->where(['lang' => '[a-z]{2}', 'key' => '[a-z0-9_]{2,60}']);
+});
 
 Route::middleware(['auth:api', 'active', 'organization', 'throttle:120,1'])->group(function () {
 

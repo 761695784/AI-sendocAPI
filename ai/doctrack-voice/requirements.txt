@@ -1,0 +1,5 @@
+# torch / torchaudio 2.8.0 (version CPU) sont installés à part dans le Dockerfile.
+omnilingual-asr==0.2.0
+fastapi==0.115.*
+uvicorn[standard]==0.32.*
+python-multipart==0.0.*

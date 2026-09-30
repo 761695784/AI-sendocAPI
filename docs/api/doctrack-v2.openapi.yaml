@@ -55,6 +55,8 @@ tags:
     description: Indicateurs par périmètre et délais de réaction.
   - name: Rapports
     description: Rapports d'activité PDF + Excel par périmètre.
+  - name: Assistant
+    description: Assistant conversationnel guidé (texte + voix, français + wolof). Ouvert aux visiteurs ; le jeton JWT, s'il est fourni, identifie le citoyen.
   - name: Public
     description: Routes sans compte (vérification de certificat/décharge, scan de QR, webhooks).
 
@@ -365,6 +367,42 @@ components:
         automatic: { type: boolean }
         pdf_url: { type: string }
         xlsx_url: { type: string }
+    AssistantReply:
+      type: object
+      properties:
+        conversation:
+          type: object
+          properties:
+            id: { type: string, format: uuid, description: "À renvoyer dans conversation_id au message suivant" }
+            language: { type: string, enum: [fr, wo] }
+            flow: { type: string, nullable: true, enum: [declare_loss, report_found, nearest, null] }
+            step: { type: string, nullable: true, example: full_name }
+            status: { type: string, enum: [active, completed, handed_off, abandoned] }
+        reply:
+          type: object
+          properties:
+            messages:
+              type: array
+              items:
+                type: object
+                properties:
+                  key: { type: string, example: ask_owner_name, description: "Clé de la phrase (config/assistant.php)" }
+                  text: { type: string }
+                  audio_url: { type: string, nullable: true, description: "Audio pré-généré (phrases sans paramètre)" }
+            quick_replies:
+              type: array
+              description: Boutons à afficher ; envoyer `value` comme texte (input_mode=button).
+              items: { type: object, properties: { label: { type: string }, value: { type: string } } }
+            card:
+              type: object
+              nullable: true
+              description: |
+                Action pour l'interface : `declaration_created` {uuid, reference}, `open_form` {form: found_document, prefill, login_required},
+                `structure` {uuid, name, address, phone, latitude, longitude, distance_km}, `login_required` {then}.
+              properties:
+                type: { type: string }
+                data: { type: object }
+        transcript: { type: string, nullable: true, description: "Voix uniquement : texte reconnu" }
     Verification:
       type: object
       properties:
@@ -379,6 +417,97 @@ components:
         holder_initials: { type: string, example: "A. N." }
 
 paths:
+  # ════════════════════════ ASSISTANT ════════════════════════
+  /api/v2/assistant/capabilities:
+    get:
+      tags: [Assistant]
+      summary: Ce que l'assistant sait faire sur ce serveur (voix disponible, langues, audios enregistrés)
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  enabled: { type: boolean }
+                  languages: { type: array, items: { type: string } }
+                  default_language: { type: string }
+                  voice_input: { type: boolean, description: "Reconnaissance vocale branchée (AI_STT_PROVIDER)" }
+                  llm_fallback: { type: boolean, description: "Modèle de langage de secours branché (AI_LLM_PROVIDER)" }
+                  audio_phrases: { type: object, additionalProperties: { type: integer }, example: { fr: 0, wo: 37 } }
+  /api/v2/assistant/messages:
+    post:
+      tags: [Assistant]
+      summary: Envoyer un message texte (ou un bouton) à l'assistant
+      description: |
+        Dialogue guidé : l'assistant pose les questions une à une, récapitule, puis agit seulement après « oui ».
+        Sans `conversation_id`, une nouvelle conversation démarre (un texte vide renvoie l'accueil).
+        Déclarer une perte ou suivre un dossier exige d'être connecté ; un trouveur reçoit un formulaire pré-rempli (photo à ajouter).
+        Limité à 30 requêtes/minute.
+      security: [ {}, { bearerAuth: [] } ]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                conversation_id: { type: string, format: uuid }
+                text: { type: string, maxLength: 1000, example: "J'ai perdu ma carte d'identité au marché HLM" }
+                lang: { type: string, enum: [fr, wo], description: "Force la langue (sinon détectée)" }
+                input_mode: { type: string, enum: [text, button], default: text }
+                latitude: { type: number }
+                longitude: { type: number }
+      responses:
+        '200': { description: Réponse de l'assistant, content: { application/json: { schema: { $ref: '#/components/schemas/AssistantReply' } } } }
+        '404': { description: Conversation inconnue ou appartenant à un autre citoyen }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v2/assistant/voice:
+    post:
+      tags: [Assistant]
+      summary: Envoyer un message vocal (français ou wolof)
+      description: |
+        Le vocal est transcrit par le service configuré (AI_STT_PROVIDER, ex. Hugging Face Space Omnilingual ASR), puis traité comme un message texte.
+        Le fichier audio n'est jamais conservé. 503 si aucun service vocal n'est branché (l'interface propose alors d'écrire). 10 requêtes/minute.
+      security: [ {}, { bearerAuth: [] } ]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [audio]
+              properties:
+                audio: { type: string, format: binary, description: "webm, ogg, mp3, wav, m4a… (5 Mo max, < 40 s conseillé)" }
+                conversation_id: { type: string, format: uuid }
+                lang: { type: string, enum: [fr, wo] }
+                latitude: { type: number }
+                longitude: { type: number }
+      responses:
+        '200': { description: Réponse de l'assistant (avec transcript), content: { application/json: { schema: { $ref: '#/components/schemas/AssistantReply' } } } }
+        '503': { description: Reconnaissance vocale indisponible (message voice_unavailable) }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v2/assistant/conversations/{conversation}:
+    get:
+      tags: [Assistant]
+      summary: Historique d'une conversation
+      security: [ {}, { bearerAuth: [] } ]
+      parameters: [ { name: conversation, in: path, required: true, schema: { type: string, format: uuid } } ]
+      responses:
+        '200': { description: OK }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v2/assistant/audio/{lang}/{key}:
+    get:
+      tags: [Assistant]
+      summary: Audio pré-généré d'une phrase (mp3)
+      security: []
+      parameters:
+        - { name: lang, in: path, required: true, schema: { type: string, enum: [fr, wo] } }
+        - { name: key, in: path, required: true, schema: { type: string, example: welcome } }
+      responses:
+        '200': { description: Fichier audio, content: { audio/mpeg: { schema: { type: string, format: binary } } } }
+        '404': { description: Pas d'audio pour cette phrase }
   # ════════════════════════ PUBLIC ════════════════════════
   /api/v2/verify/{code}:
     get:

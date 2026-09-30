@@ -2,10 +2,9 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreDeclarationDePerteRequest;
-use App\Jobs\NotifyDeclarantJob;
 use App\Models\DeclarationDePerte;
 use App\Models\Document;
-use App\Services\CertificatDePerteService;
+use App\Services\Declarations\OnlineDeclarationService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 
@@ -15,9 +14,8 @@ class DeclarationDePerteController extends Controller
     // ══════════════════════════════════════════════════════════════
     // STORE — Créer une déclaration
     // ══════════════════════════════════════════════════════════════
-    public function store(StoreDeclarationDePerteRequest $request, CertificatDePerteService $certificatService, \App\Services\Declarations\CitizenProfileService $citizens)
+    public function store(StoreDeclarationDePerteRequest $request, OnlineDeclarationService $declarations)
     {
-        // Vérifier si l'utilisateur est authentifié
         $user = Auth::user();
         if (! $user) {
             return response()->json([
@@ -25,62 +23,8 @@ class DeclarationDePerteController extends Controller
                 'message' => 'Vous devez être authentifié pour effectuer cette action.',
             ], 401);
         }
-        // Effectuer les validations
-        $validatedData = $request->validated();
-        $declaration   = DeclarationDePerte::create([
-            'Title'             => $validatedData['Title'],
-            'FirstNameInDoc'    => $validatedData['FirstNameInDoc'],
-            'LastNameInDoc'     => $validatedData['LastNameInDoc'],
-            'DocIdentification' => $validatedData['DocIdentification'] ?? null,
-            'document_type_id'  => $validatedData['document_type_id'],
-            'user_id'           => $user->id,
-            'channel'           => DeclarationDePerte::CHANNEL_ONLINE,
-            'citizen_profile_id'=> $citizens->forAccount($user)->id,
-        ]);
 
-        // ── Log d'activité ──
-        /** @var \App\Models\User $user */
-        $user = Auth::user();
-        activity()
-            ->causedBy($user)
-            ->performedOn($declaration)
-            ->withProperties([
-                'Title'            => $declaration->Title,
-                'FirstNameInDoc'   => $declaration->FirstNameInDoc,
-                'LastNameInDoc'    => $declaration->LastNameInDoc,
-                'document_type_id' => $declaration->document_type_id,
-            ])
-            ->log('Déclaration de perte créée');
-
-        // Pièce déclarée (modèle V2) → visible par le moteur de correspondance.
-        $declaration->ensureLegacyItem();
-
-        // Générer automatiquement le certificat
-        $certificat = $certificatService->genererCertificat($declaration);
-
-        // Invalide le cache des stats
-        Cache::forget('statistics_month_' . now()->format('Y_m'));
-        // Recherche des documents trouvés correspondants (non restitués,
-        // non supprimés, publiés par quelqu'un d'autre). Les notifications
-        // partent via le job (file d'attente, ou immédiatement en mode sync).
-        $matchingDocuments = Document::where('document_type_id', $validatedData['document_type_id'])
-            ->whereRaw('LOWER(OwnerFirstName) = LOWER(?)', [$validatedData['FirstNameInDoc']])
-            ->whereRaw('LOWER(OwnerLastName) = LOWER(?)', [$validatedData['LastNameInDoc']])
-            ->where('statut', 'non récupéré')
-            ->where('user_id', '!=', $user->id)
-            ->get();
-
-        foreach ($matchingDocuments as $document) {
-            dispatch(new NotifyDeclarantJob(
-                $document,
-                $user,
-                DocumentController::frontendDocumentUrl($document),
-                $declaration->id
-            ));
-        }
-
-        // Moteur V2 : documents trouvés publiés ou déposés dans une structure.
-        \App\Jobs\MatchDeclarationJob::dispatch($declaration->id);
+        [$declaration, $certificat] = $declarations->create($user, $request->validated());
 
         return response()->json([
             'success' => true,
@@ -88,7 +32,6 @@ class DeclarationDePerteController extends Controller
             'data'    => [
                 'declaration' => $declaration,
                 'certificat'  => $certificat,
-                                                                                         // 'pdf_url' => asset('storage/' . $certificat->pdf_path)
                 'pdf_url'     => url('/api/certificats/' . $certificat->uuid . '/voir'), // Lien pour voir le PDF via l'API
             ],
         ], 201);
