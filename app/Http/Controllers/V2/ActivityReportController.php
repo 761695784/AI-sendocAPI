@@ -35,6 +35,8 @@ class ActivityReportController extends Controller
             })
             ->when($request->query('organization'), fn ($q, $uuid) => $q->whereHas('organization', fn ($o) => $o->where('uuid', $uuid)))
             ->when($request->query('national') && $user->isSuperAdmin(), fn ($q) => $q->whereNull('organization_id'))
+            // File de validation des synthèses IA (super admin) : ?narrative_status=pending
+            ->when($request->query('narrative_status'), fn ($q, $status) => $q->where('narrative_status', $status))
             ->latest('period_from')->latest('id')
             ->paginate(20);
 

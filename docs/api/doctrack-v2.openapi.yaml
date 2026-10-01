@@ -1321,7 +1321,7 @@ paths:
     get:
       tags: [Rapports]
       summary: Rapports de mon périmètre (générés automatiquement le 1er du mois ou à la demande)
-      parameters: [ { $ref: '#/components/parameters/ScopeOrganization' }, { name: national, in: query, schema: { type: boolean } }, { $ref: '#/components/parameters/Page' } ]
+      parameters: [ { $ref: '#/components/parameters/ScopeOrganization' }, { name: national, in: query, schema: { type: boolean } }, { name: narrative_status, in: query, description: "Synthèse IA : none, pending (à valider), approved, rejected, failed", schema: { type: string, enum: [none, pending, approved, rejected, failed] } }, { $ref: '#/components/parameters/Page' } ]
       responses: { '200': { description: OK, content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/Report' } } } } } } } }
     post:
       tags: [Rapports]

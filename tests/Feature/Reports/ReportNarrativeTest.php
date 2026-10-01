@@ -119,6 +119,22 @@ class ReportNarrativeTest extends OrganizationTestCase
         $this->asUser($admin)->postJson("/api/v2/reports/{$report->uuid}/narrative/approve")->assertStatus(409);
     }
 
+    public function test_pending_narratives_can_be_listed_for_review(): void
+    {
+        $admin = $this->admin(['email' => 'admin@doctrack.sn']);
+        Http::fake(['dashscope-intl.aliyuncs.com/*' => Http::response($this->answer(
+            'Sur la période, 1 déclaration au guichet et 1 document déposé ont été enregistrés ; 1 correspondance a été détectée.'
+        ))]);
+        $report = $this->monthly();
+
+        $this->asUser($admin)->getJson('/api/v2/reports?narrative_status=pending')
+            ->assertOk()
+            ->assertJsonPath('total', ActivityReport::where('narrative_status', ActivityReport::NARRATIVE_PENDING)->count())
+            ->assertJsonFragment(['uuid' => $report->uuid, 'narrative_status' => 'pending']);
+        $this->asUser($admin)->getJson('/api/v2/reports?narrative_status=approved')
+            ->assertOk()->assertJsonPath('total', 0);
+    }
+
     public function test_invented_numbers_are_rejected_and_the_next_provider_takes_over(): void
     {
         Http::fake([
