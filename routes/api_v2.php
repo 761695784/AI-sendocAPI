@@ -4,6 +4,7 @@ use App\Http\Controllers\CertificateVerificationController;
 use App\Http\Controllers\TagScanController;
 use App\Http\Controllers\V2\ActivityReportController;
 use App\Http\Controllers\V2\AssistantController;
+use App\Http\Controllers\V2\AssistantVoiceController;
 use App\Http\Controllers\V2\OcrController;
 use App\Http\Controllers\V2\BillingController;
 use App\Http\Controllers\V2\ChargeController;
@@ -173,6 +174,13 @@ Route::middleware(['auth:api', 'active', 'organization', 'throttle:120,1'])->gro
     // Types d'organisation : super_admin
     Route::middleware('role:super_admin,api')->group(function () {
         Route::post('organization-types', [OrganizationTypeController::class, 'store']);
+
+        // Voix de l'assistant : phrases lues une fois par le modèle de synthèse (Adia_TTS, wolof) puis servies en MP3.
+        Route::get('assistant/voices', [AssistantVoiceController::class, 'index']);
+        Route::post('assistant/voices/{lang}/{key}', [AssistantVoiceController::class, 'generate'])
+            ->middleware('throttle:30,1')->where(['lang' => '[a-z]{2}', 'key' => '[a-z0-9_]{2,60}']);
+        Route::delete('assistant/voices/{lang}/{key}', [AssistantVoiceController::class, 'destroy'])
+            ->where(['lang' => '[a-z]{2}', 'key' => '[a-z0-9_]{2,60}']);
         Route::match(['put', 'patch'], 'organization-types/{organizationType:code}', [OrganizationTypeController::class, 'update']);
         Route::delete('organization-types/{organizationType:code}', [OrganizationTypeController::class, 'destroy']);
     });

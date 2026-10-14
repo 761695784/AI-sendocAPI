@@ -448,6 +448,18 @@ components:
             OwnerFirstName: { type: string, nullable: true }
             OwnerLastName: { type: string, nullable: true }
             DocIdentification: { type: string, nullable: true }
+    AssistantVoice:
+      type: object
+      properties:
+        key: { type: string, example: welcome }
+        text: { type: string, description: "Texte actuel de la phrase" }
+        state: { type: string, enum: [ready, stale, missing, manual] }
+        audio_url: { type: string, nullable: true }
+        spoken_text: { type: string, nullable: true, description: "Si stale : ce que dit encore l'audio" }
+        model: { type: string, nullable: true, example: CONCREE/Adia_TTS }
+        generated_at: { type: string, format: date-time, nullable: true }
+        duration: { type: number, nullable: true, description: "Durée de l'audio (s)" }
+        bytes: { type: integer, nullable: true }
     AssistantReply:
       type: object
       properties:
@@ -619,7 +631,8 @@ paths:
                   default_language: { type: string }
                   voice_input: { type: boolean, description: "Reconnaissance vocale branchée (AI_STT_PROVIDER)" }
                   llm_fallback: { type: boolean, description: "Modèle de langage de secours branché (AI_LLM_PROVIDER)" }
-                  audio_phrases: { type: object, additionalProperties: { type: integer }, example: { fr: 0, wo: 37 } }
+                  voice_output: { type: array, items: { type: string }, example: [wo], description: "Langues pour lesquelles des phrases ont une voix prête (générée par Adia_TTS)" }
+                  audio_phrases: { type: object, additionalProperties: { type: integer }, example: { fr: 0, wo: 37 }, description: "Nombre de phrases dont l'audio est à jour (un texte corrigé invalide son audio)" }
   /api/v2/assistant/messages:
     post:
       tags: [Assistant]
@@ -691,6 +704,48 @@ paths:
       responses:
         '200': { description: Fichier audio, content: { audio/mpeg: { schema: { type: string, format: binary } } } }
         '404': { description: Pas d'audio pour cette phrase }
+  /api/v2/assistant/voices:
+    get:
+      tags: [Assistant]
+      summary: Voix de l'assistant — état de chaque phrase fixe (super admin)
+      description: |
+        Les phrases fixes (sans nom ni numéro) sont lues UNE fois par le service de synthèse `doctrack-tts`
+        (modèle **Adia_TTS** de CONCREE, wolof, Apache 2.0 : un réseau entraîné sur 40 h de voix, qui génère l'audio),
+        enregistrées en MP3 puis servies comme des fichiers. États : `ready` (à jour), `stale` (texte corrigé depuis :
+        l'audio n'est plus proposé), `missing`, `manual` (fichier déposé à la main, sans fiche).
+      parameters:
+        - { name: lang, in: query, schema: { type: string, enum: [fr, wo], default: wo } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  lang: { type: string }
+                  provider: { type: string, example: hf_space, description: "AI_TTS_PROVIDER" }
+                  can_generate: { type: boolean, description: "Service de synthèse configuré et langue prise en charge (wolof)" }
+                  summary: { type: object, properties: { total: { type: integer }, ready: { type: integer }, stale: { type: integer }, missing: { type: integer }, manual: { type: integer } } }
+                  data: { type: array, items: { $ref: '#/components/schemas/AssistantVoice' } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v2/assistant/voices/{lang}/{key}:
+    parameters:
+      - { name: lang, in: path, required: true, schema: { type: string, enum: [fr, wo] } }
+      - { name: key, in: path, required: true, schema: { type: string, example: welcome } }
+    post:
+      tags: [Assistant]
+      summary: Générer ou régénérer la voix d'une phrase (super admin)
+      description: Appel long (30 s à 2 min sur un service gratuit). Les phrases à paramètres (nom, référence) sont refusées — aucune donnée personnelle n'est envoyée au service.
+      responses:
+        '200': { description: Audio enregistré, content: { application/json: { schema: { $ref: '#/components/schemas/AssistantVoice' } } } }
+        '404': { description: Phrase inconnue ou à paramètres }
+        '503': { description: Service de synthèse non configuré, endormi ou en erreur (rien n'est enregistré) }
+    delete:
+      tags: [Assistant]
+      summary: Retirer la voix d'une phrase mal prononcée (super admin)
+      responses:
+        '200': { description: Retirée (l'assistant n'affichera plus que le texte), content: { application/json: { schema: { $ref: '#/components/schemas/AssistantVoice' } } } }
   # ════════════════════════ PUBLIC ════════════════════════
   /api/v2/verify/{code}:
     get:

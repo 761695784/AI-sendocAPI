@@ -1,18 +1,18 @@
 @component('mail::message')
-# Notification de Publication d'un Document
+# Un document qui pourrait être le vôtre a été publié
 
-Bonjour {{ $document->FirstName }} ,
+Bonjour{{ $recipientName ? ' ' . $recipientName : '' }},
 
 Suite à votre déclaration de perte, nous avons le plaisir de vous informer que le document portant le prénom **{{ $document->OwnerFirstName }}** et le nom **{{ $document->OwnerLastName }}** a été récemment publié. Il pourrait correspondre à votre déclaration de perte.
 
-Nous vous encourageons à clicquer sur le lien ci dessous pour suivre le processus de la demande de restitution .
+Cliquez sur le bouton ci-dessous pour voir la publication et, si c'est bien votre document, demander sa restitution.
 
-@component('mail::button', ['url' => $documentUrl]) <!-- Assurez-vous que $documentUrl est bien passé -->
+@component('mail::button', ['url' => $documentUrl])
 Voir la publication
 @endcomponent
 
 Nous vous remercions de votre attention et restons à votre disposition pour toute assistance complémentaire.
 
 Cordialement,<br>
-{{ config('app.name') }}
+L'équipe Sénégal DocTrack
 @endcomponent

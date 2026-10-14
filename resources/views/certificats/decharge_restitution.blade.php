@@ -45,28 +45,11 @@
     <div class="voided">RESTITUTION ANNULÉE LE {{ $r->voided_at->timezone('Africa/Dakar')->format('d/m/Y') }} — {{ $r->void_reason }}</div>
 @endif
 
-<table class="header">
-    <tr>
-        <td style="width: 62%;">
-            <div class="institution">{{ $institution->name }}</div>
-            @if ($structure->parent && $structure->parent->id !== $institution->id)
-                <div class="muted">{{ $structure->parent->name }}</div>
-            @endif
-            <div class="structure">{{ $structure->name }}</div>
-            @if ($structure->address)<div class="small muted">{{ $structure->address }}</div>@endif
-            @if ($structure->phone)<div class="small muted">Tél. {{ $structure->phone }}</div>@endif
-        </td>
-        <td>
-            <div class="refbox">
-                <div class="small muted">Décharge n°</div>
-                <div class="num">{{ $r->reference }}</div>
-                <div class="small">Remis le {{ $at->format('d/m/Y à H:i') }}</div>
-            </div>
-        </td>
-    </tr>
-</table>
-
-<div class="rule"></div>
+@include('pdf.entete', [
+    'lh'       => \App\Support\Letterhead::for($structure),
+    'numero'   => 'Décharge N° ' . $r->reference,
+    'lieuDate' => \App\Support\Letterhead::city($structure) . ', le ' . \App\Support\Letterhead::longDate($at),
+])
 <div class="title">DÉCHARGE DE RESTITUTION</div>
 <div class="subtitle muted">Remise d'un document trouvé à son titulaire{{ $r->isProxy() ? ' par l\'intermédiaire d\'un mandataire' : '' }}</div>
 

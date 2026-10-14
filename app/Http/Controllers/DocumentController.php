@@ -37,19 +37,21 @@ class DocumentController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
+        // Taille de page demandée par l'écran public (20 par défaut, 100 au plus).
+        $perPage = max(1, min(100, (int) $request->query('per_page', 20)));
 
         if ($user && $user->isSuperAdmin()) {
             $documents = Document::withTrashed()
                 ->with(['user', 'documentType', 'media', 'custodyOrganization'])
                 ->latest()
-                ->paginate(20);
+                ->paginate($perPage);
         } else {
             $documents = Document::whereNull('deleted_at')
                 // Les signalements par QR ne sont pas publiés : le propriétaire est prévenu directement.
                 ->where(fn ($q) => $q->whereNull('found_channel')->orWhere('found_channel', '!=', Document::CHANNEL_QR_SCAN))
                 ->with(['user', 'documentType', 'media', 'custodyOrganization'])
                 ->latest()
-                ->paginate(20);
+                ->paginate($perPage);
         }
 
         return DocumentResource::collection($documents);

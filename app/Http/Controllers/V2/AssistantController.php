@@ -31,9 +31,10 @@ class AssistantController extends Controller
     {
         $audio = [];
         foreach (config('assistant.languages', []) as $lang) {
+            // Seuls les audios encore fidèles au texte comptent (un texte corrigé invalide son audio).
             $audio[$lang] = count(array_filter(
                 array_keys($this->phrases->staticPhrases($lang)),
-                fn ($key) => Storage::disk('local')->exists($this->phrases->audioPath($key, $lang))
+                fn ($key) => $this->phrases->audioUrl($key, $lang) !== null
             ));
         }
 
@@ -43,6 +44,8 @@ class AssistantController extends Controller
             'default_language' => config('assistant.default_language'),
             'voice_input'      => $stt->available(),
             'llm_fallback'     => $llm->available(),
+            // Réponses parlées : langues pour lesquelles des phrases ont un audio prêt.
+            'voice_output'     => array_keys(array_filter($audio)),
             'audio_phrases'    => $audio,
         ]);
     }

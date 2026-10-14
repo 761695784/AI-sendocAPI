@@ -202,7 +202,12 @@ class ActivityReportService
         $analysis = $report->analysis;
         $base     = 'rapports/v2/' . $report->reference;
 
-        $pdf = Pdf::loadView('rapports.activite_v2', ['r' => $report, 'd' => $data, 'a' => $analysis, 'n' => $report->publishedNarrative()])
+        $pdf = Pdf::loadView('rapports.activite_v2', [
+            'r'  => $report, 'd' => $data, 'a' => $analysis, 'n' => $report->publishedNarrative(),
+            // En-tête : celui de l'institution pour un rapport de structure, celui de la plateforme pour le national.
+            'lh'       => \App\Support\Letterhead::for($report->organization),
+            'reviewer' => $report->narrative_reviewed_by ? \App\Models\User::find($report->narrative_reviewed_by) : null,
+        ])
             ->setPaper('A4', 'portrait')
             ->setOptions(['defaultFont' => 'DejaVu Sans', 'isRemoteEnabled' => false]);
         PrivateFiles::put($base . '.pdf', $pdf->output());

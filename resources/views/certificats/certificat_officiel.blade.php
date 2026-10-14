@@ -2,111 +2,95 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>Certificat de déclaration de perte — {{ $certificat->certificat_number }}</title>
+    <title>Certificat de perte — {{ $certificat->certificat_number }}</title>
     <style>
-        @page { margin: 28px 36px 60px 36px; }
+        @page { margin: 34px 46px 64px 46px; }
         * { font-family: 'DejaVu Sans', sans-serif; }
-        body { font-size: 10.5px; color: #1f2430; line-height: 1.45; }
+        body { font-size: 10.5px; color: #1a1a1a; line-height: 1.55; }
         table { width: 100%; border-collapse: collapse; }
-        .muted { color: #5b6272; }
-        .small { font-size: 9px; }
+        .muted { color: #555; }
+        .small { font-size: 8.8px; }
 
-        .header td { vertical-align: top; }
-        .institution { font-size: 15px; font-weight: bold; letter-spacing: 1px; text-transform: uppercase; }
-        .structure { font-size: 12px; font-weight: bold; margin-top: 2px; }
-        .refbox { border: 1.5px solid #1f2430; padding: 8px 10px; text-align: right; }
-        .refbox .num { font-size: 13px; font-weight: bold; }
-        .rule { border-top: 2px solid #1f2430; margin: 12px 0 14px 0; }
+        .title { text-align: center; margin: 10px 0 18px 0; }
+        .title div { display: inline-block; border: 1.5px solid #1a1a1a; padding: 7px 26px; font-size: 16px; font-weight: bold; letter-spacing: 2px; }
+        .title small { display: block; font-size: 9.5px; margin-top: 5px; letter-spacing: 0; }
 
-        .title { text-align: center; font-size: 17px; font-weight: bold; letter-spacing: 1px; margin: 4px 0 2px 0; }
-        .subtitle { text-align: center; font-size: 10px; margin-bottom: 16px; }
+        .para { text-align: justify; margin: 0 0 10px 0; }
+        .field { border-bottom: 1px dotted #777; font-weight: bold; padding: 0 3px; }
 
-        .para { text-align: justify; margin-bottom: 12px; }
-        .items th { background: #eef0f4; text-align: left; padding: 6px 7px; font-size: 9.5px; border: 1px solid #c9cdd6; }
-        .items td { padding: 6px 7px; border: 1px solid #c9cdd6; font-size: 10px; }
+        .items th { text-align: left; padding: 6px 7px; font-size: 9px; border: 1px solid #333; background: #f1f1f1; text-transform: uppercase; }
+        .items td { padding: 6px 7px; border: 1px solid #333; font-size: 10px; }
 
-        .facts td { padding: 3px 0; }
-        .facts td.label { width: 150px; color: #5b6272; }
-
-        .notice { border-left: 3px solid #1f2430; padding: 6px 10px; background: #f6f7f9; font-size: 9.5px; margin: 14px 0; }
+        .closing { margin-top: 12px; font-weight: bold; text-align: justify; }
+        .done { text-align: right; margin: 14px 0 6px 0; }
 
         .sign td { vertical-align: top; }
-        .stamp { border: 1px dashed #8a90a0; height: 95px; text-align: center; color: #8a90a0; font-size: 9px; padding-top: 38px; }
-        .verify { border: 1px solid #c9cdd6; padding: 8px; }
-        .code { font-size: 12px; font-weight: bold; letter-spacing: 1px; }
+        .box { border: 1px solid #888; height: 74px; text-align: center; color: #888; font-size: 8.5px; padding-top: 30px; }
+        .who { text-align: center; font-weight: bold; text-decoration: underline; margin-bottom: 4px; }
+
+        .notice { margin-top: 18px; padding: 7px 10px; border: 1px solid #bbb; font-size: 8.8px; color: #333; }
+        .verify td { vertical-align: middle; }
+        .code { font-size: 11.5px; font-weight: bold; letter-spacing: 1px; }
 
         .revoked { color: #b3261e; border: 2px solid #b3261e; padding: 6px; text-align: center; font-weight: bold; font-size: 12px; margin-bottom: 10px; }
-
-        .footer { position: fixed; bottom: -40px; left: 0; right: 0; font-size: 8.5px; color: #5b6272; border-top: 1px solid #c9cdd6; padding-top: 5px; }
+        .footer { position: fixed; bottom: -44px; left: 0; right: 0; font-size: 7.8px; color: #555; border-top: 1px solid #bbb; padding-top: 5px; text-align: center; }
     </style>
 </head>
 <body>
+@php
+    $citizen   = $declaration->citizenProfile;
+    $agentName = $agent ? trim($agent->FirstName . ' ' . $agent->LastName) : null;
+    $issued    = $certificat->created_at->timezone('Africa/Dakar');
+    $place     = $lh['city'];
+    $dotted    = fn ($v, $w = 140) => $v !== null && $v !== '' ? e($v) : '<span style="display:inline-block; width:' . $w . 'px; border-bottom:1px dotted #777;">&nbsp;</span>';
+@endphp
 
 <div class="footer">
-    Certificat émis via la plateforme DocTrack le {{ $certificat->created_at->timezone('Africa/Dakar')->format('d/m/Y à H:i') }}
-    — Réf. {{ $declaration->reference }} — Vérification : {{ $certificat->verificationUrl() }}
+    Certificat N° {{ $certificat->certificat_number }} — dossier {{ $declaration->reference }} — émis le {{ $issued->format('d/m/Y à H:i') }} via la plateforme DocTrack.
+    Authenticité vérifiable sur {{ $certificat->verificationUrl() }}
 </div>
 
 @if ($certificat->isRevoked())
     <div class="revoked">CERTIFICAT RÉVOQUÉ LE {{ $certificat->revoked_at->format('d/m/Y') }} — {{ $certificat->revocation_reason }}</div>
 @endif
 
-<table class="header">
-    <tr>
-        <td style="width: 62%;">
-            <div class="institution">{{ $institution->name }}</div>
-            @if ($structure->parent && $structure->parent->id !== $institution->id)
-                <div class="muted">{{ $structure->parent->name }}</div>
-            @endif
-            <div class="structure">{{ $structure->name }}</div>
-            <div class="muted small">
-                {{ $structure->address }}@if($structure->address && $structure->territory), @endif{{ $structure->territory?->name }}
-                @if ($structure->phone) — Tél. {{ $structure->phone }} @endif
-            </div>
-        </td>
-        <td style="width: 38%;">
-            <div class="refbox">
-                <div class="small muted">Certificat N°</div>
-                <div class="num">{{ $certificat->certificat_number }}</div>
-                <div class="small muted" style="margin-top: 4px;">Dossier {{ $declaration->reference }}</div>
-                <div class="small muted">Délivré le {{ $certificat->created_at->timezone('Africa/Dakar')->format('d/m/Y') }}</div>
-            </div>
-        </td>
-    </tr>
-</table>
+@include('pdf.entete', [
+    'lh'       => $lh,
+    'numero'   => 'N° ' . $certificat->certificat_number,
+    'lieuDate' => $place . ', le ' . \App\Support\Letterhead::longDate($issued),
+])
 
-<div class="rule"></div>
-
-<div class="title">CERTIFICAT DE DÉCLARATION DE PERTE</div>
-<div class="subtitle muted">Déclaration reçue au guichet de la structure</div>
-
-@php
-    $citizen = $declaration->citizenProfile;
-    $agentName = $agent ? trim($agent->FirstName . ' ' . $agent->LastName) : '—';
-@endphp
-
-<div class="para">
-    Nous, <strong>{{ $agentName }}</strong>@if ($matricule), matricule <strong>{{ $matricule }}</strong>@endif,
-    en service au <strong>{{ $structure->name }}</strong>, certifions que
-    <strong>{{ $citizen?->first_name }} {{ $citizen?->last_name }}</strong>@if ($citizen?->birth_date),
-    né(e) le {{ $citizen->birth_date->format('d/m/Y') }}@endif,
-    s'est présenté(e) ce jour et a déclaré la perte du ou des document(s) suivant(s) :
+<div class="title">
+    <div>CERTIFICAT DE PERTE</div>
+    <small>(déclaration de perte de pièce(s) ou de document(s))</small>
 </div>
+
+<p class="para">
+    Nous, {!! $agentName ? '<span class="field">' . e($agentName) . '</span>' : $dotted(null, 180) !!}@if ($matricule), matricule <span class="field">{{ $matricule }}</span>@endif,
+    en service au <strong>{{ $structure->name }}</strong>,
+</p>
+<p class="para">
+    certifions que M. / Mme <span class="field">{{ mb_strtoupper($citizen?->last_name ?? '') }} {{ $citizen?->first_name }}</span>,
+    né(e) le {!! $citizen?->birth_date ? '<span class="field">' . $citizen->birth_date->format('d/m/Y') . '</span>' : $dotted(null, 90) !!},
+    s'est présenté(e) ce jour à notre service et a déclaré avoir perdu le(s) document(s) désigné(s) ci-après :
+</p>
 
 <table class="items">
     <thead>
         <tr>
-            <th style="width: 28%;">Type de document</th>
-            <th style="width: 34%;">Titulaire (tel qu'inscrit sur le document)</th>
-            <th style="width: 18%;">Né(e) le</th>
-            <th style="width: 20%;">Numéro</th>
+            <th style="width: 5%;">N°</th>
+            <th style="width: 27%;">Nature du document</th>
+            <th style="width: 32%;">Au nom de</th>
+            <th style="width: 15%;">Né(e) le</th>
+            <th style="width: 21%;">Numéro</th>
         </tr>
     </thead>
     <tbody>
         @foreach ($declaration->items as $item)
             <tr>
+                <td>{{ $loop->iteration }}</td>
                 <td>{{ $item->documentType?->TypeName }}</td>
-                <td>{{ $item->first_name }} {{ $item->last_name }}</td>
+                <td>{{ mb_strtoupper($item->last_name) }} {{ $item->first_name }}</td>
                 <td>{{ $item->birth_date_in_doc?->format('d/m/Y') ?? '—' }}</td>
                 <td>{{ $item->docNumber() ?? 'Non connu' }}</td>
             </tr>
@@ -114,56 +98,52 @@
     </tbody>
 </table>
 
-<table class="facts" style="margin-top: 12px;">
-    <tr>
-        <td class="label">Date de la perte</td>
-        <td>{{ $declaration->lost_at?->format('d/m/Y') ?? 'Non précisée' }}</td>
-    </tr>
-    <tr>
-        <td class="label">Lieu de la perte</td>
-        <td>{{ $declaration->lost_place ?? 'Non précisé' }}@if ($declaration->territory) ({{ $declaration->territory->name }})@endif</td>
-    </tr>
+<p class="para" style="margin-top: 12px;">
+    Perte survenue le {!! $declaration->lost_at ? '<span class="field">' . $declaration->lost_at->format('d/m/Y') . '</span>' : '<em>date non précisée</em>' !!},
+    à {!! $declaration->lost_place ? '<span class="field">' . e($declaration->lost_place) . '</span>' : '<em>lieu non précisé</em>' !!}@if ($declaration->territory) ({{ $declaration->territory->name }})@endif.
     @if ($declaration->circumstances)
-        <tr>
-            <td class="label">Circonstances</td>
-            <td>{{ $declaration->circumstances }}</td>
-        </tr>
+        <br>Circonstances déclarées : {{ $declaration->circumstances }}
     @endif
+</p>
+
+<p class="closing">
+    En foi de quoi, le présent certificat lui est délivré pour servir et valoir ce que de droit.
+</p>
+
+<div class="done">Fait à {{ $place }}, le {{ \App\Support\Letterhead::longDate($issued) }}</div>
+
+<table class="sign" style="margin-top: 6px;">
+    <tr>
+        <td style="width: 30%; padding-right: 10px;">
+            <div class="who">Le déclarant</div>
+            <div class="box" style="border-style: dashed;">Signature</div>
+        </td>
+        <td style="width: 22%; padding-right: 10px;">
+            @if (config('doctrack.letterhead.fiscal_stamp'))
+                <div class="who">&nbsp;</div>
+                <div class="box">Timbre fiscal</div>
+            @endif
+        </td>
+        <td style="width: 48%;">
+            <div class="who">{{ $lh['signatory'] }}</div>
+            <div class="box" style="height: 90px; padding-top: 38px;">Cachet et signature</div>
+        </td>
+    </tr>
 </table>
 
 <div class="notice">
-    Le présent certificat atteste de la déclaration de perte. Il est délivré pour servir et valoir ce que de droit
-    et ne constitue en aucun cas une pièce d'identité ni un document de remplacement.
-    Toute fausse déclaration expose son auteur aux poursuites prévues par la loi.
+    <table class="verify">
+        <tr>
+            <td style="width: 74px;"><img src="{{ $qrDataUri }}" style="width: 66px; height: 66px;"></td>
+            <td style="padding-left: 8px;">
+                Le présent certificat atteste uniquement de la déclaration de perte. Il ne constitue ni une pièce d'identité
+                ni un document de remplacement. Toute fausse déclaration expose son auteur aux poursuites prévues par la loi.<br>
+                <strong>Vérifier l'authenticité :</strong> scannez le QR code ou saisissez le code
+                <span class="code">{{ $certificat->formattedVerificationCode() }}</span> sur {{ $certificat->verificationUrl() }}
+            </td>
+        </tr>
+    </table>
 </div>
-
-<table class="sign">
-    <tr>
-        <td style="width: 34%; padding-right: 12px;">
-            <div class="small muted">L'agent</div>
-            <div style="margin-top: 4px; font-weight: bold;">{{ $agentName }}</div>
-            @if ($matricule)<div class="small">Matricule {{ $matricule }}</div>@endif
-            <div class="small muted" style="margin-top: 36px;">Signature</div>
-        </td>
-        <td style="width: 32%; padding-right: 12px;">
-            <div class="stamp">Cachet de la structure</div>
-        </td>
-        <td style="width: 34%;">
-            <div class="verify">
-                <table>
-                    <tr>
-                        <td style="width: 78px;"><img src="{{ $qrDataUri }}" style="width: 74px; height: 74px;"></td>
-                        <td style="padding-left: 6px; vertical-align: top;">
-                            <div class="small muted">Vérifier l'authenticité</div>
-                            <div class="small">Scannez le QR code ou saisissez le code :</div>
-                            <div class="code" style="margin-top: 4px;">{{ $certificat->formattedVerificationCode() }}</div>
-                        </td>
-                    </tr>
-                </table>
-            </div>
-        </td>
-    </tr>
-</table>
 
 </body>
 </html>

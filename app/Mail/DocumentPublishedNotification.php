@@ -14,8 +14,11 @@ class DocumentPublishedNotification extends Mailable
     public $Phone;
     public $documentUrl;
 
-    public function __construct($document, $Phone, $documentUrl)
+    public $recipientName;
+
+    public function __construct($document, $Phone, $documentUrl, $recipientName = null)
     {
+        $this->recipientName = $recipientName;
         $this->document = $document;
         $this->Phone = $Phone;
         $this->documentUrl = $documentUrl;
@@ -31,6 +34,7 @@ class DocumentPublishedNotification extends Mailable
                         'document' => $this->document,
                         'Phone' => $this->Phone,
                         'documentUrl' => $documentUrl,
+                        'recipientName' => $this->recipientName,
                     ]);
     }
 }

@@ -27,6 +27,10 @@ class AppServiceProvider extends ServiceProvider
             'hf_space' => new \App\Services\Ai\HfSpaceSpeechToText(),
             default    => new \App\Services\Ai\NullSpeechToText(),
         });
+        $this->app->bind(\App\Services\Ai\TextToSpeech::class, fn () => match (config('ai.tts.provider')) {
+            'hf_space' => new \App\Services\Ai\HfSpaceTextToSpeech(),
+            default    => new \App\Services\Ai\NullTextToSpeech(),
+        });
         $this->app->bind(\App\Services\Ai\DocumentOcr::class, fn () => match (config('ai.ocr.provider')) {
             'hf_space' => new \App\Services\Ai\HfSpaceDocumentOcr(),
             default    => new \App\Services\Ai\NullDocumentOcr(),

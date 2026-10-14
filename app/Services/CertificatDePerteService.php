@@ -32,7 +32,7 @@ class CertificatDePerteService
         
 
         // ✅ CHARGER les relations AVANT de rendre la vue
-        $certificat->load(['documentType', 'declarationDePerte']);
+        $certificat->load(['documentType', 'declarationDePerte.user']);
 
         // Générer le PDF
         $pdf = Pdf::loadView('certificats.certificat_perte', ['certificat' => $certificat]);

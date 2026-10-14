@@ -1,0 +1,6 @@
+# torch (version CPU) est installé à part dans le Dockerfile.
+git+https://github.com/huggingface/parler-tts.git
+soundfile==0.12.*
+numpy<2.3
+fastapi==0.115.*
+uvicorn[standard]==0.32.*

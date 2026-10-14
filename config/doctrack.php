@@ -42,4 +42,25 @@ return [
         'name_threshold'   => (float) env('RESTITUTION_NAME_THRESHOLD', 0.85), // similarité minimale nom présenté ↔ document
         'void_window_hours'=> (int) env('RESTITUTION_VOID_WINDOW_HOURS', 72),  // délai pour annuler une remise erronée
     ],
+
+    // En-tête des documents officiels (certificats, décharges, rapports), selon l'institution de rattachement.
+    // Format administratif sénégalais : « République du Sénégal », devise, puis la hiérarchie jusqu'à la structure.
+    // À faire valider par chaque institution avant usage réel (intitulés exacts, sigles, signataires).
+    'letterhead' => [
+        'institutions' => [
+            'POLICE' => [
+                'lines'     => ["Ministère de l'Intérieur et de la Sécurité publique", 'Direction générale de la Police nationale'],
+                'signatory' => ['commissariat' => 'Le Commissaire de police', 'poste' => 'Le Chef de poste', 'default' => 'Le Chef de service'],
+            ],
+            'GENDARMERIE' => [
+                'lines'     => ['Ministère des Forces armées', 'Haut-Commandement de la Gendarmerie nationale'],
+                'signatory' => ['brigade' => 'Le Commandant de brigade', 'poste_gendarmerie' => 'Le Chef de poste', 'compagnie' => 'Le Commandant de compagnie', 'default' => 'Le Commandant d\'unité'],
+            ],
+        ],
+        // Mention de la plateforme (documents émis par DocTrack, sans autorité).
+        'platform' => 'Plateforme nationale DocTrack',
+        // Case réservée au timbre fiscal sur le certificat de perte (à confirmer auprès des structures).
+        'fiscal_stamp' => (bool) env('CERTIFICATE_FISCAL_STAMP', true),
+        'default_city' => env('DOCTRACK_DEFAULT_CITY', 'Dakar'),
+    ],
 ];

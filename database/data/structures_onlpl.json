@@ -1,0 +1,1770 @@
+[
+{
+"id": "SN-POL-001",
+"corps": "police",
+"name": "Commissariat Central de DAKAR",
+"region": "DAKAR",
+"location": "Dakar Plateau",
+"phone": "77 529 00 23"
+},
+{
+"id": "SN-POL-002",
+"corps": "police",
+"name": "Commissariat Central de GUEDIAWAYE",
+"region": "DAKAR",
+"location": "Guédiawaye",
+"phone": "77 529 00 26"
+},
+{
+"id": "SN-POL-003",
+"corps": "police",
+"name": "Commissariat d’Arrondissement du PLATEAU",
+"region": "DAKAR",
+"location": "Dakar Plateau",
+"phone": "77 529 00 79"
+},
+{
+"id": "SN-POL-004",
+"corps": "police",
+"name": "Commissariat d’Arrondissement de REBEUSS",
+"region": "DAKAR",
+"location": "Quartier de Rebeuss",
+"phone": "77 529 00 77"
+},
+{
+"id": "SN-POL-005",
+"corps": "police",
+"name": "Commissariat d’Arrondissement de BEL AIR",
+"region": "DAKAR",
+"location": "Zone de Bel Air",
+"phone": "77 529 00 78"
+},
+{
+"id": "SN-POL-006",
+"corps": "police",
+"name": "Commissariat d’Arrondissement de MEDINA",
+"region": "DAKAR",
+"location": "Quartier de Médina Rue",
+"phone": "77 529 00 76"
+},
+{
+"id": "SN-POL-007",
+"corps": "police",
+"name": "Commissariat d’Arrondissement du POINT E",
+"region": "DAKAR",
+"location": "Quartier de Point E",
+"phone": "77 529 00 75"
+},
+{
+"id": "SN-POL-008",
+"corps": "police",
+"name": "Commissariat d’arrondissement de DIEUPPEUL",
+"region": "DAKAR",
+"location": null,
+"phone": "77 529 00 74"
+},
+{
+"id": "SN-POL-009",
+"corps": "police",
+"name": "Commissariat d’Arrondissement des PARCELLES ASSAINIES",
+"region": "DAKAR",
+"location": "Quartier des Parcelles Assainies U",
+"phone": "77 529 00 73"
+},
+{
+"id": "SN-POL-010",
+"corps": "police",
+"name": "Commissariat d’Arrondissement de PIKINE",
+"region": "DAKAR",
+"location": "Quartier de Pikine",
+"phone": "77 529 00 71"
+},
+{
+"id": "SN-POL-011",
+"corps": "police",
+"name": "Commissariat d’Arrondissement de THIAROYE",
+"region": "DAKAR",
+"location": null,
+"phone": "77 529 72"
+},
+{
+"id": "SN-POL-012",
+"corps": "police",
+"name": "commissariat d’Arrondissement de GUINAW RAILS",
+"region": "DAKAR",
+"location": "Quartier de Guinaw Rails",
+"phone": "77 529 15 75"
+},
+{
+"id": "SN-POL-013",
+"corps": "police",
+"name": "Commissariat d’Arrondissement des HLM",
+"region": "DAKAR",
+"location": "Quartier des HLM",
+"phone": "77 529 01 45"
+},
+{
+"id": "SN-POL-014",
+"corps": "police",
+"name": "Commissariat d’Arrondissement de MALIKA",
+"region": "DAKAR",
+"location": "Quartier de Malika",
+"phone": "77 529 01 16"
+},
+{
+"id": "SN-POL-015",
+"corps": "police",
+"name": "Commissariat d’Arrondissement de GOLF SUD",
+"region": "DAKAR",
+"location": null,
+"phone": "77 529 00 99"
+},
+{
+"id": "SN-POL-016",
+"corps": "police",
+"name": "Commissariat d’Arrondissement de GRAND YOFF",
+"region": "DAKAR",
+"location": "Quartier de Grand Yoff",
+"phone": "77 529 01 47"
+},
+{
+"id": "SN-POL-017",
+"corps": "police",
+"name": "Commissariat d’Arrondissement de JAAXAAY",
+"region": "DAKAR",
+"location": "Quartier de Jaaxaay",
+"phone": "77 529 02 43"
+},
+{
+"id": "SN-POL-018",
+"corps": "police",
+"name": "Commissariat d’arrondissement de GOUYE MOURIDE",
+"region": "DAKAR",
+"location": null,
+"phone": "77 332 42 03"
+},
+{
+"id": "SN-POL-019",
+"corps": "police",
+"name": "Commissariat d’Arrondissement de YEUMBEUL",
+"region": "DAKAR",
+"location": "Quartier de Yeumbeul",
+"phone": "77 529 01 50"
+},
+{
+"id": "SN-POL-020",
+"corps": "police",
+"name": "Commissariat Spécial de l’AEROPORT",
+"region": "DAKAR",
+"location": "Zone de l’Aéroport",
+"phone": "77 529 00 37"
+},
+{
+"id": "SN-POL-021",
+"corps": "police",
+"name": "Commissariat spécial du PORT",
+"region": "DAKAR",
+"location": "Zone du Port de Dakar",
+"phone": "77 529 00 38"
+},
+{
+"id": "SN-POL-022",
+"corps": "police",
+"name": "Poste de Police de GOREE",
+"region": "DAKAR",
+"location": "Commune de Gorée",
+"phone": "77 529 01 48"
+},
+{
+"id": "SN-POL-023",
+"corps": "police",
+"name": "Poste de Police de GRAND YOFF",
+"region": "DAKAR",
+"location": "Quartier de Grand Yoff",
+"phone": "77 529 00 46"
+},
+{
+"id": "SN-POL-024",
+"corps": "police",
+"name": "Poste de Police du COUD",
+"region": "DAKAR",
+"location": null,
+"phone": "77 529 01 51"
+},
+{
+"id": "SN-POL-025",
+"corps": "police",
+"name": "Poste de Police de WAKHINANE NIMZATT",
+"region": "DAKAR",
+"location": null,
+"phone": "77 529 15 24"
+},
+{
+"id": "SN-POL-026",
+"corps": "police",
+"name": "Poste de Police de DIAMAGUENE SICAP MBAO",
+"region": "DAKAR",
+"location": "Quartier de Diamaguene ..",
+"phone": "77 529 01 49"
+},
+{
+"id": "SN-POL-027",
+"corps": "police",
+"name": "Poste de Police de BARGNY",
+"region": "DAKAR",
+"location": "Commune de Bargny",
+"phone": "77 529 02 33"
+},
+{
+"id": "SN-POL-028",
+"corps": "police",
+"name": "Commissariat Ubain de TIVAOUNE",
+"region": "THIES",
+"location": null,
+"phone": "77 529 00 67"
+},
+{
+"id": "SN-POL-029",
+"corps": "police",
+"name": "Commissariat Ubain de SALY",
+"region": "THIES",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-POL-030",
+"corps": "police",
+"name": "Commissariat du 1ER ARRONDISSEMENT",
+"region": "THIES",
+"location": null,
+"phone": "77 529 00 80"
+},
+{
+"id": "SN-POL-031",
+"corps": "police",
+"name": "Poste de Police de DIAMAGUENE MBOUR 2",
+"region": "THIES",
+"location": null,
+"phone": "77 529 01 60"
+},
+{
+"id": "SN-POL-032",
+"corps": "police",
+"name": "Poste de Police NGUINT",
+"region": "THIES",
+"location": null,
+"phone": "77 529 02 46"
+},
+{
+"id": "SN-POL-033",
+"corps": "police",
+"name": "Poste de Police MEDINA FALL",
+"region": "THIES",
+"location": null,
+"phone": "77 529 02 45"
+},
+{
+"id": "SN-POL-034",
+"corps": "police",
+"name": "Poste de Police des PARCELLES ASSAINIES",
+"region": "THIES",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-POL-035",
+"corps": "police",
+"name": "Commissariat Ubain de MATAM",
+"region": "MATAM",
+"location": null,
+"phone": "77 529 01 21"
+},
+{
+"id": "SN-POL-036",
+"corps": "police",
+"name": "Commissariat Ubain de KEDOUGOU",
+"region": "KEDOUGOU",
+"location": null,
+"phone": "78 138 09 43"
+},
+{
+"id": "SN-POL-037",
+"corps": "police",
+"name": "Commissariat Urbain de SEDHIOU",
+"region": "SEDHIOU",
+"location": null,
+"phone": "77 529 15 67"
+},
+{
+"id": "SN-POL-038",
+"corps": "police",
+"name": "Commissariat Urbain de KAFFRINE",
+"region": "KAFFRINE",
+"location": null,
+"phone": "77 529 00 69"
+},
+{
+"id": "SN-POL-039",
+"corps": "police",
+"name": "Commissariat Central de SAINT-LOUIS",
+"region": "SAINT-LOUIS",
+"location": null,
+"phone": "77 529 00 30"
+},
+{
+"id": "SN-POL-040",
+"corps": "police",
+"name": "Commissariat Urbain de RICHARD TOLL",
+"region": "SAINT-LOUIS",
+"location": null,
+"phone": "78 638 09 63"
+},
+{
+"id": "SN-POL-041",
+"corps": "police",
+"name": "Commissariat d’Arrondissement de l’ILE",
+"region": "SAINT-LOUIS",
+"location": null,
+"phone": "77 529 00 82"
+},
+{
+"id": "SN-POL-042",
+"corps": "police",
+"name": "Commissariat Spécial de ROSSO",
+"region": "SAINT-LOUIS",
+"location": null,
+"phone": "77 529 00 57"
+},
+{
+"id": "SN-POL-043",
+"corps": "police",
+"name": "Commissariat Urbain de DIOURBEL",
+"region": "DIOURBEL",
+"location": null,
+"phone": "77 529 00 31"
+},
+{
+"id": "SN-POL-044",
+"corps": "police",
+"name": "Commissariat Urbain de BAMBEY",
+"region": "DIOURBEL",
+"location": null,
+"phone": "77 529 15 20"
+},
+{
+"id": "SN-POL-045",
+"corps": "police",
+"name": "Commissariat Urbain de MBACKE",
+"region": "DIOURBEL",
+"location": null,
+"phone": "77 529 00 68"
+},
+{
+"id": "SN-POL-046",
+"corps": "police",
+"name": "Commissariat spécial de TOUBA",
+"region": "DIOURBEL",
+"location": null,
+"phone": "77 529 01 04"
+},
+{
+"id": "SN-POL-047",
+"corps": "police",
+"name": "Commissariat d’arrondissement de NDAMATOU",
+"region": "DIOURBEL",
+"location": null,
+"phone": "77 644 32 68"
+},
+{
+"id": "SN-POL-048",
+"corps": "police",
+"name": "Poste de Police de GOUYE MBIND",
+"region": "DIOURBEL",
+"location": null,
+"phone": "77 529 01 89"
+},
+{
+"id": "SN-POL-049",
+"corps": "police",
+"name": "Commissariat Central de KAOLACK",
+"region": "KAOLACK",
+"location": null,
+"phone": "77 529 00 29"
+},
+{
+"id": "SN-POL-050",
+"corps": "police",
+"name": "Commissariat d’arrondissement de NDORONG",
+"region": "KAOLACK",
+"location": null,
+"phone": "77 529 00 81"
+},
+{
+"id": "SN-POL-051",
+"corps": "police",
+"name": "Commissariat Urbain de LOUGA",
+"region": "LOUGA",
+"location": null,
+"phone": "77 529 00 32"
+},
+{
+"id": "SN-POL-052",
+"corps": "police",
+"name": "Commissariat Urbain de KEBEMER",
+"region": "LOUGA",
+"location": null,
+"phone": "77 529 15 22"
+},
+{
+"id": "SN-POL-053",
+"corps": "police",
+"name": "Commissariat Urbain de TAMBACOUNDA",
+"region": "TAMBACOUNDA",
+"location": null,
+"phone": "77 529 00 35"
+},
+{
+"id": "SN-POL-054",
+"corps": "police",
+"name": "Commissariat Urbain de FATICK",
+"region": "FATICK",
+"location": null,
+"phone": "77 529 00 33"
+},
+{
+"id": "SN-POL-055",
+"corps": "police",
+"name": "Commissariat Urbain de ZIGUINCHOR",
+"region": "ZIGUINCHOR",
+"location": null,
+"phone": "77 529 00 36"
+},
+{
+"id": "SN-POL-056",
+"corps": "police",
+"name": "Poste de Police de YAMATOGNE",
+"region": "ZIGUINCHOR",
+"location": null,
+"phone": "77 529 01 38"
+},
+{
+"id": "SN-POL-057",
+"corps": "police",
+"name": "Commissariat Urbain de KOLDA",
+"region": "KOLDA",
+"location": null,
+"phone": "77 529 00 34"
+},
+{
+"id": "SN-GEN-058",
+"corps": "gendarmerie",
+"name": "Brigade HYDROCARBURE",
+"region": "DAKAR",
+"location": "Zone portuaire",
+"phone": "33 832 16 04"
+},
+{
+"id": "SN-GEN-059",
+"corps": "gendarmerie",
+"name": "Section ENVIRONNEMENT",
+"region": "DAKAR",
+"location": null,
+"phone": "33 823 75 14"
+},
+{
+"id": "SN-GEN-060",
+"corps": "gendarmerie",
+"name": "Brigade ARSENAL",
+"region": "DAKAR",
+"location": "Zone portuaire",
+"phone": "33 823 64 52"
+},
+{
+"id": "SN-GEN-061",
+"corps": "gendarmerie",
+"name": "Brigade PORT DE PECHE",
+"region": "DAKAR",
+"location": "Zone portuaire",
+"phone": "33 823 64 48"
+},
+{
+"id": "SN-GEN-062",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de DAKAR VILLE",
+"region": "DAKAR",
+"location": "Dakar",
+"phone": "33 822 98 17"
+},
+{
+"id": "SN-GEN-063",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de OUAKAM",
+"region": "DAKAR",
+"location": "Quartier de Ouakam",
+"phone": "33 820 24 60"
+},
+{
+"id": "SN-GEN-064",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de la FOIRE",
+"region": "DAKAR",
+"location": "Foire",
+"phone": "33 827 54 65"
+},
+{
+"id": "SN-GEN-065",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de HANN",
+"region": "DAKAR",
+"location": "Quartier de Hann",
+"phone": "33 832 12 62"
+},
+{
+"id": "SN-GEN-066",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de THIAROYE",
+"region": "DAKAR",
+"location": null,
+"phone": "33 834 02 13"
+},
+{
+"id": "SN-GEN-067",
+"corps": "gendarmerie",
+"name": "Poste de HANN MARISTES",
+"region": "DAKAR",
+"location": "Quartier de Hann Maristes",
+"phone": null
+},
+{
+"id": "SN-GEN-068",
+"corps": "gendarmerie",
+"name": "Poste de NGOR",
+"region": "DAKAR",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-069",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de DIAMNIADIO",
+"region": "DAKAR",
+"location": "Diamniadio",
+"phone": "33 836 11 12"
+},
+{
+"id": "SN-GEN-070",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de SANGALKAM",
+"region": "DAKAR",
+"location": "Sangalkam",
+"phone": "33 836 01 15"
+},
+{
+"id": "SN-GEN-071",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de YENNE",
+"region": "DAKAR",
+"location": "Yenne",
+"phone": "33 836 71 45"
+},
+{
+"id": "SN-GEN-072",
+"corps": "gendarmerie",
+"name": "Brigade Térritoriale de KEUR MASSAR",
+"region": "DAKAR",
+"location": "Keur Massar",
+"phone": "33 878 63 77"
+},
+{
+"id": "SN-GEN-073",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de NIAGUA",
+"region": "DAKAR",
+"location": null,
+"phone": "33 836 36 83"
+},
+{
+"id": "SN-GEN-074",
+"corps": "gendarmerie",
+"name": "Poste de TIVAOUNE PEULH",
+"region": "DAKAR",
+"location": "Tivaoune Peulh",
+"phone": null
+},
+{
+"id": "SN-GEN-075",
+"corps": "gendarmerie",
+"name": "Brigade de la ZFI",
+"region": "DAKAR",
+"location": null,
+"phone": "33 853 05 80"
+},
+{
+"id": "SN-GEN-076",
+"corps": "gendarmerie",
+"name": "Poste de SEBIKOTANE",
+"region": "DAKAR",
+"location": "Sébikotane",
+"phone": null
+},
+{
+"id": "SN-GEN-077",
+"corps": "gendarmerie",
+"name": "Brigade AERODROME",
+"region": "DAKAR",
+"location": null,
+"phone": "33 820 02 96"
+},
+{
+"id": "SN-GEN-078",
+"corps": "gendarmerie",
+"name": "Compagnie GTER",
+"region": "DAKAR",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-079",
+"corps": "gendarmerie",
+"name": "Compagnie de RUFISQUE",
+"region": "DAKAR",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-080",
+"corps": "gendarmerie",
+"name": "Groupement du TER",
+"region": "DAKAR",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-081",
+"corps": "gendarmerie",
+"name": "Brigade FRET",
+"region": "DAKAR",
+"location": null,
+"phone": "33 820 03 14"
+},
+{
+"id": "SN-GEN-082",
+"corps": "gendarmerie",
+"name": "Poste plateforme BAD",
+"region": "DAKAR",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-083",
+"corps": "gendarmerie",
+"name": "Compagnie CTA",
+"region": "DAKAR",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-084",
+"corps": "gendarmerie",
+"name": "Compagnie MARITIME",
+"region": "DAKAR",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-085",
+"corps": "gendarmerie",
+"name": "AIBD",
+"region": "DAKAR",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-086",
+"corps": "gendarmerie",
+"name": "Brigade PREVOTALE",
+"region": "DAKAR",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-087",
+"corps": "gendarmerie",
+"name": "Brigade BATTERIE",
+"region": "DAKAR",
+"location": null,
+"phone": "33 820 03 07"
+},
+{
+"id": "SN-GEN-088",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de THIES",
+"region": "THIES",
+"location": null,
+"phone": "33 951 10 36"
+},
+{
+"id": "SN-GEN-089",
+"corps": "gendarmerie",
+"name": "Brigade Recherches de THIES",
+"region": "THIES",
+"location": null,
+"phone": "33 951 95 47"
+},
+{
+"id": "SN-GEN-090",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de POUT",
+"region": "THIES",
+"location": null,
+"phone": "33 953 41 19"
+},
+{
+"id": "SN-GEN-091",
+"corps": "gendarmerie",
+"name": "Brigade Territorial de TIVAOUNE",
+"region": "THIES",
+"location": null,
+"phone": "33 955 15 52"
+},
+{
+"id": "SN-GEN-092",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de MBORO",
+"region": "THIES",
+"location": null,
+"phone": "33 955 77 34"
+},
+{
+"id": "SN-GEN-093",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de KHOMBOLE",
+"region": "THIES",
+"location": null,
+"phone": "33 953 16 35"
+},
+{
+"id": "SN-GEN-094",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de KAYAR",
+"region": "THIES",
+"location": null,
+"phone": "33 953 50 19"
+},
+{
+"id": "SN-GEN-095",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de MEKHE",
+"region": "THIES",
+"location": null,
+"phone": "33 955 50 16"
+},
+{
+"id": "SN-GEN-096",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de MBOUR",
+"region": "THIES",
+"location": null,
+"phone": "33 957 10 41"
+},
+{
+"id": "SN-GEN-097",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de SALY",
+"region": "THIES",
+"location": null,
+"phone": "33 957 78 81"
+},
+{
+"id": "SN-GEN-098",
+"corps": "gendarmerie",
+"name": "Poste de THIADIAYE",
+"region": "THIES",
+"location": null,
+"phone": "33 957 83 75"
+},
+{
+"id": "SN-GEN-099",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de POPENGUINE",
+"region": "THIES",
+"location": null,
+"phone": "33 957 71 04"
+},
+{
+"id": "SN-GEN-100",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de JOAL",
+"region": "THIES",
+"location": null,
+"phone": "33 957 61 05"
+},
+{
+"id": "SN-GEN-101",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de SOMONE",
+"region": "THIES",
+"location": null,
+"phone": "33 958 54 54"
+},
+{
+"id": "SN-GEN-102",
+"corps": "gendarmerie",
+"name": "Compagnie de THIES",
+"region": "THIES",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-103",
+"corps": "gendarmerie",
+"name": "Brigade Route de THIES",
+"region": "THIES",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-104",
+"corps": "gendarmerie",
+"name": "Poste de NOTTO",
+"region": "THIES",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-105",
+"corps": "gendarmerie",
+"name": "Poste de DIOGO",
+"region": "THIES",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-106",
+"corps": "gendarmerie",
+"name": "Poste de NGOUDIANE",
+"region": "THIES",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-107",
+"corps": "gendarmerie",
+"name": "Poste de PEKESSE",
+"region": "THIES",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-108",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de NGUEKOKH",
+"region": "THIES",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-109",
+"corps": "gendarmerie",
+"name": "Poste de Gendarmerie NDIAGANIAO",
+"region": "THIES",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-110",
+"corps": "gendarmerie",
+"name": "Poste de Gendarmerie SANDIARA",
+"region": "THIES",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-111",
+"corps": "gendarmerie",
+"name": "Compagnie de MATAM",
+"region": "MATAM",
+"location": null,
+"phone": "33 966 62 75"
+},
+{
+"id": "SN-GEN-112",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de MATAM",
+"region": "MATAM",
+"location": null,
+"phone": "33 966 62 21"
+},
+{
+"id": "SN-GEN-113",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de WAOUNDE",
+"region": "MATAM",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-114",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de AGNAM",
+"region": "MATAM",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-115",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de OUROSSOGUI",
+"region": "MATAM",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-116",
+"corps": "gendarmerie",
+"name": "Poste de NDIOUM",
+"region": "MATAM",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-117",
+"corps": "gendarmerie",
+"name": "Poste de KANEL",
+"region": "MATAM",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-118",
+"corps": "gendarmerie",
+"name": "Poste de SEMME",
+"region": "MATAM",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-119",
+"corps": "gendarmerie",
+"name": "Poste de NDIDORY",
+"region": "MATAM",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-120",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de KEDOUGOU",
+"region": "KEDOUGOU",
+"location": null,
+"phone": "33 985 10 11"
+},
+{
+"id": "SN-GEN-121",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de SALEMATA",
+"region": "KEDOUGOU",
+"location": null,
+"phone": "33 985 50 05"
+},
+{
+"id": "SN-GEN-122",
+"corps": "gendarmerie",
+"name": "Poste de SABADOLA",
+"region": "KEDOUGOU",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-123",
+"corps": "gendarmerie",
+"name": "Compagnie de KEDOUGOU",
+"region": "KEDOUGOU",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-124",
+"corps": "gendarmerie",
+"name": "Poste de NENEFESCHA",
+"region": "KEDOUGOU",
+"location": null,
+"phone": "33 985 40 99"
+},
+{
+"id": "SN-GEN-125",
+"corps": "gendarmerie",
+"name": "Poste de SARAYA",
+"region": "KEDOUGOU",
+"location": null,
+"phone": "33 985 18 51"
+},
+{
+"id": "SN-GEN-126",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de SEDHIOU",
+"region": "SEDHIOU",
+"location": null,
+"phone": "33 995 13 01"
+},
+{
+"id": "SN-GEN-127",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de KAFFRINE",
+"region": "KAFFRINE",
+"location": null,
+"phone": "33 946 10 09"
+},
+{
+"id": "SN-GEN-128",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de KOUNGHEUL",
+"region": "KAFFRINE",
+"location": null,
+"phone": "33 946 71 13"
+},
+{
+"id": "SN-GEN-129",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de MBIRKILANE",
+"region": "KAFFRINE",
+"location": null,
+"phone": "33 946 61 06"
+},
+{
+"id": "SN-GEN-130",
+"corps": "gendarmerie",
+"name": "Poste RIBOT ESCALE",
+"region": "KAFFRINE",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-131",
+"corps": "gendarmerie",
+"name": "Poste de MALEM HODAR",
+"region": "KAFFRINE",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-132",
+"corps": "gendarmerie",
+"name": "Compagnie de KAFFRINE",
+"region": "KAFFRINE",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-133",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de SAINT-LOUIS",
+"region": "SAINT-LOUIS",
+"location": null,
+"phone": "33 961 35 26"
+},
+{
+"id": "SN-GEN-134",
+"corps": "gendarmerie",
+"name": "Brigade Recherche de SAINT-LOUIS",
+"region": "SAINT-LOUIS",
+"location": null,
+"phone": "33 961 55 54"
+},
+{
+"id": "SN-GEN-135",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de DIAMA",
+"region": "SAINT-LOUIS",
+"location": null,
+"phone": "33 961 12 61"
+},
+{
+"id": "SN-GEN-136",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de DAGANA",
+"region": "SAINT-LOUIS",
+"location": null,
+"phone": "33 963 11 14"
+},
+{
+"id": "SN-GEN-137",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de PODOR",
+"region": "SAINT-LOUIS",
+"location": null,
+"phone": "33 965 11 13"
+},
+{
+"id": "SN-GEN-138",
+"corps": "gendarmerie",
+"name": "Poste de ROSS BETHIO",
+"region": "SAINT-LOUIS",
+"location": null,
+"phone": "33 963 81 36"
+},
+{
+"id": "SN-GEN-139",
+"corps": "gendarmerie",
+"name": "Poste de ROSSO",
+"region": "SAINT-LOUIS",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-140",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de PETE",
+"region": "SAINT-LOUIS",
+"location": null,
+"phone": "33 965 84 98"
+},
+{
+"id": "SN-GEN-141",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de RICHARD TOLL",
+"region": "SAINT-LOUIS",
+"location": null,
+"phone": "33 963 32 10"
+},
+{
+"id": "SN-GEN-142",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de DIOURBEL",
+"region": "DIOURBEL",
+"location": null,
+"phone": "33 971 10 64"
+},
+{
+"id": "SN-GEN-143",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de BAMBEY",
+"region": "DIOURBEL",
+"location": null,
+"phone": "33 973 60 02"
+},
+{
+"id": "SN-GEN-144",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de MBACKE",
+"region": "DIOURBEL",
+"location": null,
+"phone": "33 976 14 13"
+},
+{
+"id": "SN-GEN-145",
+"corps": "gendarmerie",
+"name": "Brigade spéciale de TOUBA",
+"region": "DIOURBEL",
+"location": null,
+"phone": "33 976 14 78"
+},
+{
+"id": "SN-GEN-146",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de TAIF",
+"region": "DIOURBEL",
+"location": null,
+"phone": "33 977 57 21"
+},
+{
+"id": "SN-GEN-147",
+"corps": "gendarmerie",
+"name": "Poste de BABAGARAGE",
+"region": "DIOURBEL",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-148",
+"corps": "gendarmerie",
+"name": "Brigade de Recherches de TOUBA",
+"region": "DIOURBEL",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-149",
+"corps": "gendarmerie",
+"name": "Poste de KAEL",
+"region": "DIOURBEL",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-150",
+"corps": "gendarmerie",
+"name": "Poste de TOUBA BELEL",
+"region": "DIOURBEL",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-151",
+"corps": "gendarmerie",
+"name": "Poste de NDINDY",
+"region": "DIOURBEL",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-152",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de NDOULO",
+"region": "DIOURBEL",
+"location": null,
+"phone": "33 972 60 01"
+},
+{
+"id": "SN-GEN-153",
+"corps": "gendarmerie",
+"name": "Compagnie de DIOURBEL",
+"region": "DIOURBEL",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-154",
+"corps": "gendarmerie",
+"name": "Commandant Compagnie de KAOLACK",
+"region": "KAOLACK",
+"location": null,
+"phone": "33 941 10 56"
+},
+{
+"id": "SN-GEN-155",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de GUINGUINEO",
+"region": "KAOLACK",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-156",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de KAOLACK",
+"region": "KAOLACK",
+"location": null,
+"phone": "33 941 38 09"
+},
+{
+"id": "SN-GEN-157",
+"corps": "gendarmerie",
+"name": "Brigade Routiere de KAOLACK",
+"region": "KAOLACK",
+"location": null,
+"phone": "33 941 46 34"
+},
+{
+"id": "SN-GEN-158",
+"corps": "gendarmerie",
+"name": "Poste de FASS BARIGOT",
+"region": "KAOLACK",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-159",
+"corps": "gendarmerie",
+"name": "Brigade de Recherches de KAOLACK",
+"region": "KAOLACK",
+"location": null,
+"phone": "33 941 68 72"
+},
+{
+"id": "SN-GEN-160",
+"corps": "gendarmerie",
+"name": "Poste de KEUR AYIB",
+"region": "KAOLACK",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-161",
+"corps": "gendarmerie",
+"name": "Poste de GANDIAYE",
+"region": "KAOLACK",
+"location": null,
+"phone": "33 943 12 58"
+},
+{
+"id": "SN-GEN-162",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de NIORO",
+"region": "KAOLACK",
+"location": null,
+"phone": "33 944 31 21"
+},
+{
+"id": "SN-GEN-163",
+"corps": "gendarmerie",
+"name": "Brigade Mixte de LOUGA",
+"region": "LOUGA",
+"location": null,
+"phone": "33 967 10 60 / 77 819 88 41"
+},
+{
+"id": "SN-GEN-164",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de KEBEMER",
+"region": "LOUGA",
+"location": null,
+"phone": "33 969 10 12"
+},
+{
+"id": "SN-GEN-165",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de DAROU MOUSTY",
+"region": "LOUGA",
+"location": null,
+"phone": "33 969 80 13"
+},
+{
+"id": "SN-GEN-166",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de DODJI",
+"region": "LOUGA",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-167",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de RANCH DOLLY",
+"region": "LOUGA",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-168",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de DAHRA",
+"region": "LOUGA",
+"location": null,
+"phone": "33 968 61 13"
+},
+{
+"id": "SN-GEN-169",
+"corps": "gendarmerie",
+"name": "Poste de KOKI",
+"region": "LOUGA",
+"location": null,
+"phone": "33 967 10 00"
+},
+{
+"id": "SN-GEN-170",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de LINGUERE",
+"region": "LOUGA",
+"location": null,
+"phone": "33 968 10 06"
+},
+{
+"id": "SN-GEN-171",
+"corps": "gendarmerie",
+"name": "Poste de POTOU",
+"region": "LOUGA",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-172",
+"corps": "gendarmerie",
+"name": "Poste de SAGATA",
+"region": "LOUGA",
+"location": null,
+"phone": "33 960 95 98"
+},
+{
+"id": "SN-GEN-173",
+"corps": "gendarmerie",
+"name": "Poste de NGUENE SARR",
+"region": "LOUGA",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-174",
+"corps": "gendarmerie",
+"name": "Poste de DAROU MARNANE",
+"region": "LOUGA",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-175",
+"corps": "gendarmerie",
+"name": "Poste de KEUR MOMAR SARR",
+"region": "LOUGA",
+"location": null,
+"phone": "33 967 50 60"
+},
+{
+"id": "SN-GEN-176",
+"corps": "gendarmerie",
+"name": "Poste de RANEROU",
+"region": "LOUGA",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-177",
+"corps": "gendarmerie",
+"name": "Poste de YANG-YANG",
+"region": "LOUGA",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-178",
+"corps": "gendarmerie",
+"name": "Brigade de Recherches de TAMBA",
+"region": "LOUGA",
+"location": null,
+"phone": "33 981 58 88"
+},
+{
+"id": "SN-GEN-179",
+"corps": "gendarmerie",
+"name": "Brigade mixte de TAMBA",
+"region": "LOUGA",
+"location": null,
+"phone": "33 981 10 07"
+},
+{
+"id": "SN-GEN-180",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de KOUPENTOUM",
+"region": "LOUGA",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-181",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de DIALOCOTO",
+"region": "LOUGA",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-182",
+"corps": "gendarmerie",
+"name": "Poste de GOULOUMBOU",
+"region": "LOUGA",
+"location": null,
+"phone": "33 982 34 66"
+},
+{
+"id": "SN-GEN-183",
+"corps": "gendarmerie",
+"name": "Poste de MAKACOULIBANTANG",
+"region": "LOUGA",
+"location": null,
+"phone": "33 982 40 99"
+},
+{
+"id": "SN-GEN-184",
+"corps": "gendarmerie",
+"name": "Compagnie de TAMBA COUNDA",
+"region": "LOUGA",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-185",
+"corps": "gendarmerie",
+"name": "Compagnie de BAKEL",
+"region": "LOUGA",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-186",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de BAKEL",
+"region": "LOUGA",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-187",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de KENIEBA",
+"region": "LOUGA",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-188",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de GOUDIRY",
+"region": "LOUGA",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-189",
+"corps": "gendarmerie",
+"name": "Brigade de KIDIRA",
+"region": "LOUGA",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-190",
+"corps": "gendarmerie",
+"name": "Poste de AROUNDOU",
+"region": "LOUGA",
+"location": null,
+"phone": "33 983 20 00"
+},
+{
+"id": "SN-GEN-191",
+"corps": "gendarmerie",
+"name": "Poste de DIANKHEMAKHA",
+"region": "LOUGA",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-192",
+"corps": "gendarmerie",
+"name": "Poste de DIAWARA",
+"region": "LOUGA",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-193",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de FATICK",
+"region": "FATICK",
+"location": null,
+"phone": "33 949 14 32"
+},
+{
+"id": "SN-GEN-194",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de FOUNDIOUNGNE",
+"region": "FATICK",
+"location": null,
+"phone": "33 948 11 04"
+},
+{
+"id": "SN-GEN-195",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de GOSSAS",
+"region": "FATICK",
+"location": null,
+"phone": "33 947 11 20"
+},
+{
+"id": "SN-GEN-196",
+"corps": "gendarmerie",
+"name": "Brigade de SOKONE",
+"region": "FATICK",
+"location": null,
+"phone": "33 948 31 13"
+},
+{
+"id": "SN-GEN-197",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de FIMELA",
+"region": "FATICK",
+"location": null,
+"phone": "33 949 93 93"
+},
+{
+"id": "SN-GEN-198",
+"corps": "gendarmerie",
+"name": "Poste de KARANG",
+"region": "FATICK",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-199",
+"corps": "gendarmerie",
+"name": "Poste de COLOBANE",
+"region": "FATICK",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-200",
+"corps": "gendarmerie",
+"name": "Compagnie de FATICK",
+"region": "FATICK",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-201",
+"corps": "gendarmerie",
+"name": "Poste de RIBOT ESCALE",
+"region": "KAFFRINE",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-202",
+"corps": "gendarmerie",
+"name": "Brigade Mixte de ZIGUINCHOR",
+"region": "ZIGUINCHOR",
+"location": null,
+"phone": "33 991 10 16"
+},
+{
+"id": "SN-GEN-203",
+"corps": "gendarmerie",
+"name": "Compagnie de ZIGUINCHOR",
+"region": "ZIGUINCHOR",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-204",
+"corps": "gendarmerie",
+"name": "Brigade de Recherches de ZIGUINCHOR",
+"region": "ZIGUINCHOR",
+"location": null,
+"phone": "33 991 35 23"
+},
+{
+"id": "SN-GEN-205",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale d’OUSSOUYE",
+"region": "ZIGUINCHOR",
+"location": null,
+"phone": "33 993 11 10"
+},
+{
+"id": "SN-GEN-206",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de CAP SKIRING",
+"region": "ZIGUINCHOR",
+"location": null,
+"phone": "33 993 51 66"
+},
+{
+"id": "SN-GEN-207",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de BIGNONA",
+"region": "ZIGUINCHOR",
+"location": null,
+"phone": "33 994 11 04"
+},
+{
+"id": "SN-GEN-208",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale d’AFFINIAM",
+"region": "ZIGUINCHOR",
+"location": null,
+"phone": "33 992 71 56"
+},
+{
+"id": "SN-GEN-209",
+"corps": "gendarmerie",
+"name": "BRIGADE Territoriale de DIOULOULOU",
+"region": "ZIGUINCHOR",
+"location": null,
+"phone": "33 994 51 02"
+},
+{
+"id": "SN-GEN-210",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de THIONK- ESSYL",
+"region": "ZIGUINCHOR",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-211",
+"corps": "gendarmerie",
+"name": "Poste de TOUBA TRANQUILLE",
+"region": "ZIGUINCHOR",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-212",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de KOLDA",
+"region": "KOLDA",
+"location": null,
+"phone": "33 996 11 15"
+},
+{
+"id": "SN-GEN-213",
+"corps": "gendarmerie",
+"name": "Commandant Compagnie KOLDA",
+"region": "KOLDA",
+"location": null,
+"phone": "33 996 10 98"
+},
+{
+"id": "SN-GEN-214",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de BOUNKILING",
+"region": "KOLDA",
+"location": null,
+"phone": "33 995 31 41"
+},
+{
+"id": "SN-GEN-215",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de SAMINE",
+"region": "KOLDA",
+"location": null,
+"phone": "33 995 42 81"
+},
+{
+"id": "SN-GEN-216",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de VELINGARA",
+"region": "KOLDA",
+"location": null,
+"phone": "33 997 11 03"
+},
+{
+"id": "SN-GEN-217",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de MEDINA GOUNASS",
+"region": "KOLDA",
+"location": null,
+"phone": "33 997 62 93"
+},
+{
+"id": "SN-GEN-218",
+"corps": "gendarmerie",
+"name": "Brigade Territoriale de DIAOBE",
+"region": "KOLDA",
+"location": null,
+"phone": "33 997 33 12"
+},
+{
+"id": "SN-GEN-219",
+"corps": "gendarmerie",
+"name": "Poste de PAKOUR",
+"region": "KOLDA",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-220",
+"corps": "gendarmerie",
+"name": "Poste de MEDINA YORO FOULAH",
+"region": "KOLDA",
+"location": null,
+"phone": null
+},
+{
+"id": "SN-GEN-221",
+"corps": "gendarmerie",
+"name": "Poste de TANAF",
+"region": "KOLDA",
+"location": null,
+"phone": null
+}
+]

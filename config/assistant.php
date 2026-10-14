@@ -36,7 +36,8 @@ return [
     'languages' => ['fr', 'wo'],
     'default_language' => 'fr',
 
-    // Fichiers audio pré-générés : storage/app/{audio_dir}/{langue}/{clé}.mp3
+    // Voix des phrases fixes : storage/app/{audio_dir}/{langue}/{clé}.mp3 + manifest.json
+    // (générées par Adia_TTS : php artisan doctrack:assistant-voices — voir ai/README.md, étape 4).
     'audio_dir' => 'assistant/audio',
 
     /*

@@ -2,111 +2,181 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<title>{{ $r->title }} — {{ $r->period_label }}</title>
+<title>Rapport d'activités — {{ $r->period_label }}</title>
 <style>
-    @page { margin: 30px 34px 56px 34px; }
+    @page { margin: 40px 44px 58px 44px; }
     * { font-family: 'DejaVu Sans', sans-serif; }
-    body { font-size: 9.6px; color: #1f2430; line-height: 1.4; }
+    body { font-size: 9.8px; color: #1a1a1a; line-height: 1.5; }
     table { width: 100%; border-collapse: collapse; }
-    h1 { font-size: 20px; margin: 0 0 4px 0; }
-    h2 { font-size: 12.5px; margin: 18px 0 6px 0; padding-bottom: 3px; border-bottom: 2px solid #1f2430; text-transform: uppercase; letter-spacing: .5px; }
-    h3 { font-size: 10.5px; margin: 10px 0 4px 0; }
-    .muted { color: #5b6272; }
+    p { margin: 0 0 7px 0; text-align: justify; }
+    .muted { color: #555; }
     .small { font-size: 8.4px; }
-    .cover { border: 2px solid #1f2430; padding: 16px 18px; margin-bottom: 12px; }
-    .badge { display: inline-block; padding: 3px 9px; border-radius: 10px; font-weight: bold; font-size: 10px; }
-    .b-bon { background: #e6f4ea; color: #1b7f3b; }
-    .b-surveiller { background: #fff4d6; color: #8a5a00; }
-    .b-critique { background: #fce8e6; color: #b3261e; }
-    .kpi td { width: 25%; border: 1px solid #c9cdd6; padding: 7px 8px; vertical-align: top; }
-    .kpi .v { font-size: 16px; font-weight: bold; }
-    .kpi .l { color: #5b6272; font-size: 8.4px; }
-    .up { color: #1b7f3b; } .down { color: #b3261e; }
-    .grid th { background: #eef0f4; text-align: left; padding: 5px 6px; font-size: 8.6px; border: 1px solid #c9cdd6; }
-    .grid td { padding: 4px 6px; border: 1px solid #dde0e6; font-size: 8.8px; }
+
+    /* Page de garde */
+    .cover-title { margin: 70px 0 0 0; border-top: 3px double #1a1a1a; border-bottom: 3px double #1a1a1a; padding: 22px 10px; text-align: center; }
+    .cover-title .t1 { font-size: 24px; font-weight: bold; letter-spacing: 3px; }
+    .cover-title .t2 { font-size: 13px; font-weight: bold; margin-top: 8px; text-transform: uppercase; }
+    .cover-title .t3 { font-size: 10.5px; margin-top: 6px; }
+    .cover-meta { margin: 34px auto 0 auto; width: 74%; }
+    .cover-meta td { padding: 5px 8px; border: 1px solid #999; font-size: 9.8px; }
+    .cover-meta td.k { width: 42%; background: #f1f1f1; font-weight: bold; }
+    .level { font-weight: bold; }
+    .lv-bon { color: #1b7f3b; } .lv-surveiller { color: #8a5a00; } .lv-critique { color: #b3261e; }
+    .cover-foot { position: absolute; bottom: 10px; left: 0; right: 0; text-align: center; font-size: 8.6px; color: #555; }
+
+    /* Titres (parties, chapitres, sections) */
+    .part { font-size: 12.5px; font-weight: bold; text-align: center; text-transform: uppercase; letter-spacing: 1px; margin: 4px 0 14px 0;
+        padding: 7px 0; border-top: 1.5px solid #1a1a1a; border-bottom: 1.5px solid #1a1a1a; }
+    h2 { font-size: 11px; font-weight: bold; text-transform: uppercase; margin: 16px 0 7px 0; }
+    h3 { font-size: 10px; font-weight: bold; margin: 11px 0 5px 0; }
+
+    /* Tableaux numérotés avec titre au-dessus et source en dessous */
+    .cap { font-size: 9.3px; font-weight: bold; margin: 10px 0 4px 0; }
+    .grid th { background: #e9e9e9; text-align: left; padding: 5px 6px; font-size: 8.5px; border: 1px solid #555; }
+    .grid td { padding: 4px 6px; border: 1px solid #888; font-size: 8.8px; }
     .grid td.n, .grid th.n { text-align: right; }
-    .bar { background: #1f2430; height: 8px; }
-    .barbg { background: #eef0f4; height: 8px; }
-    .alert { padding: 5px 8px; margin: 3px 0; border-left: 3px solid; }
-    .al-critique { border-color: #b3261e; background: #fdf1f0; }
-    .al-important { border-color: #c77700; background: #fff8e8; }
-    .al-information { border-color: #5b6272; background: #f4f5f7; }
-    .ok { border-left: 3px solid #1b7f3b; background: #f1f8f3; padding: 5px 8px; margin: 3px 0; }
-    .reco { border-left: 3px solid #1f2430; background: #f6f7f9; padding: 5px 8px; margin: 3px 0; }
+    .grid tr.total td { font-weight: bold; background: #f4f4f4; }
+    .src { font-size: 7.8px; color: #555; font-style: italic; margin: 2px 0 8px 0; }
+
+    .toc td { padding: 3px 0; font-size: 9.8px; }
+    .toc td.p { text-align: right; width: 30px; }
+    .bullet { margin: 0 0 4px 12px; }
+    .up { color: #1b7f3b; } .down { color: #b3261e; }
+
+    .sign { margin-top: 26px; }
+    .sign td { vertical-align: top; }
     .page-break { page-break-before: always; }
-    .footer { position: fixed; bottom: -38px; left: 0; right: 0; font-size: 8px; color: #5b6272; border-top: 1px solid #c9cdd6; padding-top: 4px; }
+
+    /* En-tête et pied de page courants (pages intérieures) */
+    .footer { position: fixed; bottom: -40px; left: 0; right: 0; font-size: 7.8px; color: #555; border-top: 1px solid #bbb; padding-top: 4px; }
+    .pagenum:before { content: counter(page); }
 </style>
 </head>
 <body>
 @php
     $o = $d['overview'];
+    $scope = $d['meta']['scope']['name'];
     $fmt = fn ($v, $suffix = '') => $v === null ? '—' : (is_float($v) ? number_format($v, 1, ',', ' ') : number_format((int) $v, 0, ',', ' ')) . $suffix;
     $delta = function ($k) use ($d) {
         $c = $d['comparison'][$k]['change_pct'] ?? null;
         if ($c === null) return '<span class="muted">—</span>';
         return '<span class="' . ($c >= 0 ? 'up' : 'down') . '">' . ($c >= 0 ? '+' : '') . number_format($c, 1, ',', ' ') . ' %</span>';
     };
-    $levelClass = ['bon' => 'b-bon', 'à surveiller' => 'b-surveiller', 'critique' => 'b-critique'][$a['level']] ?? 'b-surveiller';
-    $maxSeries = max(1, collect($d['evolution']['series'])->flatten(1)->max('value') ?? 1);
+    $from = \Illuminate\Support\Carbon::parse($d['meta']['period']['from']);
+    $to   = \Illuminate\Support\Carbon::parse($d['meta']['period']['to']);
+    $generated = \Illuminate\Support\Carbon::parse($d['meta']['generated_at'])->timezone('Africa/Dakar');
+    $levelClass = ['bon' => 'lv-bon', 'à surveiller' => 'lv-surveiller', 'critique' => 'lv-critique'][$a['level']] ?? 'lv-surveiller';
+    $source = 'Source : plateforme DocTrack, données au ' . $generated->format('d/m/Y');
+    $official = $lh['official'] ?? false;
+    $recos = ! empty($n['recommendations']) ? collect($n['recommendations'])->map(fn ($x) => '[' . $x['priority'] . '] ' . $x['text'])->all() : ($a['recommendations'] ?? []);
+    $tableNo = 0;
+    $cap = function (string $title) use (&$tableNo) { $tableNo++; return 'Tableau n° ' . $tableNo . ' : ' . $title; };
 @endphp
 
-<div class="footer">DocTrack — {{ $r->reference }} — {{ $d['meta']['scope']['name'] }} — {{ $r->period_label }} — généré le {{ \Illuminate\Support\Carbon::parse($d['meta']['generated_at'])->timezone('Africa/Dakar')->format('d/m/Y à H:i') }}{{ $r->automatic ? ' (automatique)' : '' }}</div>
+{{-- ═════════════ Page de garde ═════════════ --}}
+{{-- Pied de page (numéro de page) : déclaré ici pour figurer sur toutes les pages. --}}
+<div class="footer">
+    <table><tr>
+        <td>Rapport d'activités — {{ $r->period_label }} — {{ $scope }} — réf. {{ $r->reference }}</td>
+        <td style="text-align: right; width: 60px;">Page <span class="pagenum"></span></td>
+    </tr></table>
+</div>
+@include('pdf.entete', [
+    'lh'       => $lh,
+    'etat'     => $official,
+    'numero'   => 'N° ' . $r->reference,
+    'lieuDate' => $lh['city'] . ', le ' . \App\Support\Letterhead::longDate($generated),
+])
 
-<div class="cover">
-    <div class="small muted">RÉPUBLIQUE DU SÉNÉGAL — Plateforme nationale DocTrack</div>
-    <h1>Rapport d'activité</h1>
-    <div style="font-size: 13px; font-weight: bold;">{{ $d['meta']['scope']['name'] }} — {{ $r->period_label }}</div>
-    <div class="muted" style="margin-top: 4px;">Référence {{ $r->reference }} · Période du {{ \Illuminate\Support\Carbon::parse($d['meta']['period']['from'])->format('d/m/Y') }} au {{ \Illuminate\Support\Carbon::parse($d['meta']['period']['to'])->format('d/m/Y') }} · Comparaison avec la période précédente de même durée</div>
-    <div style="margin-top: 8px;">Niveau global : <span class="badge {{ $levelClass }}">{{ ucfirst($a['level']) }} — {{ $a['score'] }}/100</span>
-        @if ($d['meta']['billing_mode'] !== 'live') <span class="small muted">· Facturation en phase pilote (gratuit)</span> @endif</div>
+<div class="cover-title">
+    <div class="t1">RAPPORT D'ACTIVITÉS</div>
+    <div class="t2">{{ $r->period_label }}</div>
+    <div class="t3">{{ $scope }}</div>
 </div>
 
-<h2>1. Synthèse</h2>
+<table class="cover-meta">
+    <tr><td class="k">Période couverte</td><td>du {{ $from->format('d/m/Y') }} au {{ $to->format('d/m/Y') }}</td></tr>
+    <tr><td class="k">Périmètre</td><td>{{ $scope }} (structures rattachées comprises)</td></tr>
+    <tr><td class="k">Référence</td><td>{{ $r->reference }}</td></tr>
+    <tr><td class="k">Appréciation d'ensemble</td><td class="level {{ $levelClass }}">{{ ucfirst($a['level']) }} — indice {{ $a['score'] }}/100</td></tr>
+    <tr><td class="k">Établi le</td><td>{{ \App\Support\Letterhead::longDate($generated) }}{{ $r->automatic ? ' (génération automatique)' : '' }}</td></tr>
+    @if (! empty($n) && $reviewer)
+        <tr><td class="k">Synthèse validée par</td><td>{{ $reviewer->FirstName }} {{ $reviewer->LastName }}, le {{ $r->narrative_reviewed_at?->timezone('Africa/Dakar')->format('d/m/Y') }}</td></tr>
+    @endif
+</table>
+
+<div class="cover-foot">
+    {{ $official ? 'Document de service — diffusion restreinte' : 'Plateforme nationale DocTrack — diffusion restreinte aux institutions partenaires' }}<br>
+    Aucune donnée personnelle ne figure dans ce rapport.
+</div>
+
+{{-- ═════════════ Pages intérieures ═════════════ --}}
+<div class="page-break"></div>
+
+
+<div class="part">Sommaire</div>
+<table class="toc">
+    <tr><td>Sigles et abréviations</td></tr>
+    <tr><td>Introduction</td></tr>
+    <tr><td><strong>Première partie : bilan des activités</strong></td></tr>
+    <tr><td>&nbsp;&nbsp;&nbsp;I. Chiffres clés de la période</td></tr>
+    <tr><td>&nbsp;&nbsp;&nbsp;II. Évolution de l'activité</td></tr>
+    <tr><td>&nbsp;&nbsp;&nbsp;III. Délais de traitement par structure</td></tr>
+    <tr><td>&nbsp;&nbsp;&nbsp;IV. Documents trouvés, correspondances et restitutions</td></tr>
+    <tr><td>&nbsp;&nbsp;&nbsp;V. Répartition par type de document et par région</td></tr>
+    <tr><td><strong>Deuxième partie : analyse, difficultés et recommandations</strong></td></tr>
+    <tr><td><strong>Troisième partie : situation financière et notifications</strong></td></tr>
+    <tr><td>Conclusion</td></tr>
+    <tr><td>Annexe : méthodologie{{ ! empty($n['summary_en']) ? ' et résumé en anglais' : '' }}</td></tr>
+</table>
+
+<h2 style="margin-top: 20px;">Sigles et abréviations</h2>
+<table class="grid">
+    <tr><td style="width: 18%;"><strong>CP</strong></td><td>Certificat de perte</td></tr>
+    <tr><td><strong>DT</strong></td><td>Document trouvé (référence DocTrack)</td></tr>
+    <tr><td><strong>IA</strong></td><td>Intelligence artificielle</td></tr>
+    <tr><td><strong>QR</strong></td><td>Code « Quick Response » apposé sur un document</td></tr>
+    <tr><td><strong>RS</strong></td><td>Décharge de restitution</td></tr>
+    <tr><td><strong>SMS</strong></td><td>Message court envoyé par téléphone</td></tr>
+</table>
+
+<h2>Introduction</h2>
+<p>
+    Le présent rapport rend compte de l'activité de la plateforme DocTrack pour le périmètre « {{ $scope }} »
+    au cours de la période du {{ $from->format('d/m/Y') }} au {{ $to->format('d/m/Y') }}. Il présente successivement
+    le bilan chiffré des déclarations de perte, des documents trouvés, des correspondances et des restitutions ;
+    l'analyse des résultats, des difficultés et les recommandations ; enfin la situation financière et les notifications.
+    Les variations sont calculées par rapport à la période précédente de même durée.
+</p>
 @if (! empty($n))
     <p>{{ $n['summary_fr'] }}</p>
-    @foreach ($n['highlights'] ?? [] as $h)<div class="reco">{{ $h }}</div>@endforeach
-    <p class="small muted">Synthèse rédigée avec l'aide de l'IA à partir des seuls chiffres agrégés de ce rapport ; chaque chiffre a été vérifié automatiquement ; texte validé avant publication.</p>
 @else
     <p>{{ $a['summary'] }}</p>
 @endif
 
-<table class="kpi">
-    <tr>
-        <td><div class="v">{{ $fmt($o['declarations']['counter']) }}</div><div class="l">Déclarations au guichet</div>{!! $delta('counter_declarations') !!}</td>
-        <td><div class="v">{{ $fmt($o['found_documents']['entered_custody']) }}</div><div class="l">Documents trouvés entrés sous garde</div></td>
-        <td><div class="v">{{ $fmt($o['matches']['created']) }}</div><div class="l">Correspondances détectées</div>{!! $delta('matches_created') !!}</td>
-        <td><div class="v">{{ $fmt($o['restitutions']['completed']) }}</div><div class="l">Restitutions officielles</div>{!! $delta('restitutions') !!}</td>
-    </tr>
-    <tr>
-        <td><div class="v">{{ $fmt($o['collections']['assigned']) }}</div><div class="l">Collectes auprès de trouveurs</div>{!! $delta('collections_assigned') !!}</td>
-        <td><div class="v">{{ $fmt($o['collections']['median_first_contact_hours'], ' h') }}</div><div class="l">1er appel au trouveur (médiane)</div></td>
-        <td><div class="v">{{ $fmt($o['collections']['contacted_within_sla_pct'], ' %') }}</div><div class="l">Trouveurs appelés sous {{ $d['meta']['sla']['first_contact_hours'] }} h</div></td>
-        <td><div class="v">{{ $fmt($o['found_documents']['restitution_rate_pct'], ' %') }}</div><div class="l">Taux de restitution des entrées</div></td>
-    </tr>
-</table>
+{{-- ── PREMIÈRE PARTIE ── --}}
+<div class="page-break"></div>
+<div class="part">Première partie : bilan des activités</div>
 
-<h2>2. Analyse et recommandations</h2>
-@forelse ($a['alerts'] as $al)
-    <div class="alert al-{{ $al['severity'] }}"><strong>{{ ucfirst($al['severity']) }}</strong> — {{ $al['message'] }}</div>
-@empty
-    <div class="ok">Aucune alerte sur la période.</div>
-@endforelse
-@foreach ($a['positives'] as $p)<div class="ok">{{ $p }}</div>@endforeach
-@if (! empty($n['recommendations']))
-    <h3>Recommandations</h3>
-    @foreach ($n['recommendations'] as $i => $reco)<div class="reco">{{ $i + 1 }}. <strong>[{{ $reco['priority'] }}]</strong> {{ $reco['text'] }}</div>@endforeach
-@elseif ($a['recommendations'])
-    <h3>Recommandations</h3>
-    @foreach ($a['recommendations'] as $i => $reco)<div class="reco">{{ $i + 1 }}. {{ $reco }}</div>@endforeach
-@endif
-@if (! empty($n['structures']))
-    <h3>Commentaires par structure</h3>
-    @foreach ($n['structures'] as $st)<div class="reco"><strong>{{ $st['name'] }}</strong> — {{ $st['comment'] }}</div>@endforeach
-@endif
-
-<h2>3. Évolution</h2>
+<h2>I. Chiffres clés de la période</h2>
+<div class="cap">{{ $cap('Principaux indicateurs') }}</div>
 <table class="grid">
-    <tr><th>Période</th><th>Déclarations</th><th>Dépôts</th><th>Collectes</th><th>Restitutions</th><th style="width: 34%;">Déclarations (barre)</th></tr>
+    <tr><th>Indicateur</th><th class="n">Valeur</th><th class="n">Variation</th></tr>
+    <tr><td>Déclarations de perte reçues au guichet</td><td class="n">{{ $fmt($o['declarations']['counter']) }}</td><td class="n">{!! $delta('counter_declarations') !!}</td></tr>
+    <tr><td>Documents trouvés entrés sous garde</td><td class="n">{{ $fmt($o['found_documents']['entered_custody']) }}</td><td class="n">—</td></tr>
+    <tr><td>Correspondances détectées</td><td class="n">{{ $fmt($o['matches']['created']) }}</td><td class="n">{!! $delta('matches_created') !!}</td></tr>
+    <tr><td>Restitutions officielles</td><td class="n">{{ $fmt($o['restitutions']['completed']) }}</td><td class="n">{!! $delta('restitutions') !!}</td></tr>
+    <tr><td>Collectes auprès de trouveurs</td><td class="n">{{ $fmt($o['collections']['assigned']) }}</td><td class="n">{!! $delta('collections_assigned') !!}</td></tr>
+    <tr><td>Délai médian du premier appel au trouveur</td><td class="n">{{ $fmt($o['collections']['median_first_contact_hours'], ' h') }}</td><td class="n">—</td></tr>
+    <tr><td>Trouveurs appelés dans le délai de {{ $d['meta']['sla']['first_contact_hours'] }} h</td><td class="n">{{ $fmt($o['collections']['contacted_within_sla_pct'], ' %') }}</td><td class="n">—</td></tr>
+    <tr><td>Taux de restitution des documents entrés sous garde</td><td class="n">{{ $fmt($o['found_documents']['restitution_rate_pct'], ' %') }}</td><td class="n">—</td></tr>
+</table>
+<div class="src">{{ $source }}</div>
+
+<h2>II. Évolution de l'activité</h2>
+<div class="cap">{{ $cap('Évolution par sous-période') }}</div>
+<table class="grid">
+    <tr><th>Sous-période</th><th class="n">Déclarations</th><th class="n">Dépôts</th><th class="n">Collectes</th><th class="n">Restitutions</th></tr>
     @foreach ($d['evolution']['series']['counter_declarations'] as $i => $p)
         <tr>
             <td>{{ $p['period'] }}</td>
@@ -114,14 +184,14 @@
             <td class="n">{{ $d['evolution']['series']['deposits'][$i]['value'] ?? 0 }}</td>
             <td class="n">{{ $d['evolution']['series']['collections_assigned'][$i]['value'] ?? 0 }}</td>
             <td class="n">{{ $d['evolution']['series']['restitutions'][$i]['value'] ?? 0 }}</td>
-            <td>@if ($p['value'] > 0)<table><tr><td style="padding:0; border:0; width: {{ max(2, round($p['value'] / $maxSeries * 100)) }}%;"><div class="bar"></div></td><td style="padding:0; border:0;"><div class="barbg"></div></td></tr></table>@else<div class="barbg"></div>@endif</td>
         </tr>
     @endforeach
 </table>
+<div class="src">{{ $source }}</div>
 
-<div class="page-break"></div>
-<h2>4. Délais de réaction des structures</h2>
-<p class="muted small">Délai attendu : premier appel au trouveur sous {{ $d['meta']['sla']['first_contact_hours'] }} h, alerte hiérarchique à {{ $d['meta']['sla']['escalate_hours'] }} h. Les structures en retard apparaissent en premier.</p>
+<h2>III. Délais de traitement par structure</h2>
+<p>Délai attendu : premier appel au trouveur sous {{ $d['meta']['sla']['first_contact_hours'] }} heures, alerte de la hiérarchie à {{ $d['meta']['sla']['escalate_hours'] }} heures. Les structures présentant des retards figurent en premier.</p>
+<div class="cap">{{ $cap('Délais et activité par structure') }}</div>
 <table class="grid">
     <tr><th>Structure</th><th class="n">Collectes</th><th class="n">1er appel (h)</th><th class="n">Dans le délai</th><th class="n">En retard</th><th class="n">Récupérés</th><th class="n">Sous garde</th><th class="n">À vérifier</th><th class="n">Déclar.</th><th class="n">Restit.</th></tr>
     @forelse ($d['structures'] as $s)
@@ -141,78 +211,148 @@
         <tr><td colspan="10" class="muted">Aucune structure dans ce périmètre.</td></tr>
     @endforelse
 </table>
+<div class="src">{{ $source }}</div>
 
 @if ($d['overdue_collections'])
-    <h3>Collectes en attente d'un premier appel</h3>
+    <div class="cap">{{ $cap('Collectes en attente d\'un premier appel') }}</div>
     <table class="grid">
-        <tr><th>Structure</th><th>Référence</th><th>Document</th><th>Lieu</th><th class="n">Attente</th><th>Priorité</th></tr>
+        <tr><th>Structure</th><th>Référence</th><th>Document</th><th>Lieu</th><th class="n">Attente</th><th>Observations</th></tr>
         @foreach ($d['overdue_collections'] as $c)
             <tr><td>{{ $c['structure']['name'] ?? '' }}</td><td>{{ $c['reference'] }}</td><td>{{ $c['document_type'] }}</td><td>{{ $c['place'] }}</td>
-                <td class="n">{{ $c['hours_waiting'] }} h</td><td>{{ $c['priority'] ? 'Propriétaire identifié' : '' }}{{ $c['escalated'] ? ' · alerté' : '' }}</td></tr>
+                <td class="n">{{ $c['hours_waiting'] }} h</td><td>{{ $c['priority'] ? 'Propriétaire identifié' : '' }}{{ $c['escalated'] ? ' · hiérarchie alertée' : '' }}</td></tr>
         @endforeach
     </table>
+    <div class="src">{{ $source }}</div>
 @endif
 
-<h2>5. Documents trouvés, correspondances et restitutions</h2>
+<h2>IV. Documents trouvés, correspondances et restitutions</h2>
+<div class="cap">{{ $cap('Documents trouvés, correspondances et restitutions') }}</div>
 <table class="grid">
-    <tr><th>Indicateur</th><th class="n">Valeur</th><th>Indicateur</th><th class="n">Valeur</th></tr>
-    <tr><td>Déposés au guichet</td><td class="n">{{ $o['found_documents']['deposited_at_counter'] }}</td><td>Correspondances auto-confirmées (numéro)</td><td class="n">{{ $o['matches']['auto_confirmed'] }}</td></tr>
-    <tr><td>Récupérés chez des trouveurs</td><td class="n">{{ $o['found_documents']['collected_from_finders'] }}</td><td>Confirmées par un agent</td><td class="n">{{ $o['matches']['confirmed_by_agents'] }}</td></tr>
-    <tr><td>Sous garde aujourd'hui</td><td class="n">{{ $o['found_documents']['in_custody_now'] }}</td><td>Rejetées</td><td class="n">{{ $o['matches']['rejected'] }}</td></tr>
-    <tr><td>&nbsp;&nbsp;dont moins de 30 jours</td><td class="n">{{ $o['found_documents']['custody_age']['under_30_days'] }}</td><td>À vérifier aujourd'hui</td><td class="n">{{ $o['matches']['pending_review_now'] }}</td></tr>
+    <tr><th>Documents trouvés</th><th class="n">Nombre</th><th>Correspondances et restitutions</th><th class="n">Nombre</th></tr>
+    <tr><td>Déposés au guichet</td><td class="n">{{ $o['found_documents']['deposited_at_counter'] }}</td><td>Correspondances confirmées automatiquement (numéro)</td><td class="n">{{ $o['matches']['auto_confirmed'] }}</td></tr>
+    <tr><td>Récupérés chez des trouveurs</td><td class="n">{{ $o['found_documents']['collected_from_finders'] }}</td><td>Correspondances confirmées par un agent</td><td class="n">{{ $o['matches']['confirmed_by_agents'] }}</td></tr>
+    <tr><td>Sous garde à ce jour</td><td class="n">{{ $o['found_documents']['in_custody_now'] }}</td><td>Correspondances rejetées</td><td class="n">{{ $o['matches']['rejected'] }}</td></tr>
+    <tr><td>&nbsp;&nbsp;dont moins de 30 jours</td><td class="n">{{ $o['found_documents']['custody_age']['under_30_days'] }}</td><td>Correspondances à vérifier à ce jour</td><td class="n">{{ $o['matches']['pending_review_now'] }}</td></tr>
     <tr><td>&nbsp;&nbsp;dont 30 à 90 jours</td><td class="n">{{ $o['found_documents']['custody_age']['30_to_90_days'] }}</td><td>Délai médian de vérification</td><td class="n">{{ $fmt($o['matches']['median_review_hours'], ' h') }}</td></tr>
     <tr><td>&nbsp;&nbsp;dont plus de 90 jours</td><td class="n">{{ $o['found_documents']['custody_age']['over_90_days'] }}</td><td>Restitutions par procuration</td><td class="n">{{ $o['restitutions']['by_proxy'] }}</td></tr>
-    <tr><td>Restitutions annulées</td><td class="n">{{ $o['restitutions']['voided'] }}</td><td>Sans déclaration préalable</td><td class="n">{{ $o['restitutions']['without_prior_declaration'] }}</td></tr>
-    <tr><td>Durée médiane sous garde</td><td class="n">{{ $fmt($o['restitutions']['median_days_in_custody'], ' j') }}</td><td>Dérogations sur le nom</td><td class="n">{{ $o['restitutions']['name_derogations'] }}</td></tr>
+    <tr><td>Restitutions annulées</td><td class="n">{{ $o['restitutions']['voided'] }}</td><td>Restitutions sans déclaration préalable</td><td class="n">{{ $o['restitutions']['without_prior_declaration'] }}</td></tr>
+    <tr><td>Durée médiane sous garde</td><td class="n">{{ $fmt($o['restitutions']['median_days_in_custody'], ' j') }}</td><td>Dérogations accordées sur le nom</td><td class="n">{{ $o['restitutions']['name_derogations'] }}</td></tr>
 </table>
+<div class="src">{{ $source }}</div>
 
 @if ($d['direct_restitutions'])
     <h3>Remises directes entre citoyens (double accord)</h3>
-    <p>{{ $d['direct_restitutions']['requests'] }} demande(s) — taux d'acceptation par les trouveurs : {{ $fmt($d['direct_restitutions']['acceptance_pct'], ' %') }}.
-       @foreach ($d['direct_restitutions']['by_status'] as $st => $n) {{ $st }} : {{ $n }}@if (! $loop->last), @endif @endforeach</p>
+    <p>{{ $d['direct_restitutions']['requests'] }} demande(s) enregistrée(s) ; taux d'acceptation par les trouveurs : {{ $fmt($d['direct_restitutions']['acceptance_pct'], ' %') }}.
+       @foreach ($d['direct_restitutions']['by_status'] as $st => $nb) {{ $st }} : {{ $nb }}@if (! $loop->last), @endif @endforeach</p>
 @endif
 @if ($d['qr'])
-    <h3>QR codes par document</h3>
-    <p>{{ $d['qr']['tags_created'] }} QR créé(s) sur la période ({{ $d['qr']['tags_active_total'] }} actifs au total) — {{ $d['qr']['scans'] }} scan(s) par des trouveurs, dont {{ $d['qr']['scans_with_collection'] }} avec accord de collecte.</p>
+    <h3>QR codes apposés sur les documents</h3>
+    <p>{{ $d['qr']['tags_created'] }} QR code(s) créé(s) sur la période ({{ $d['qr']['tags_active_total'] }} actifs au total) ; {{ $d['qr']['scans'] }} scan(s) par des trouveurs, dont {{ $d['qr']['scans_with_collection'] }} avec accord de collecte.</p>
 @endif
 
-<div class="page-break"></div>
-<h2>6. Répartition par type de document</h2>
+<h2>V. Répartition par type de document et par région</h2>
+<div class="cap">{{ $cap('Répartition par type de document') }}</div>
 <table class="grid">
-    <tr><th>Type</th><th class="n">Déclarés</th><th class="n">Trouvés</th><th class="n">Restitués</th></tr>
+    <tr><th>Type de document</th><th class="n">Déclarés perdus</th><th class="n">Trouvés</th><th class="n">Restitués</th></tr>
     @forelse ($d['by_document_type'] as $t)
         <tr><td>{{ $t['type'] }}</td><td class="n">{{ $t['declared'] }}</td><td class="n">{{ $t['found'] }}</td><td class="n">{{ $t['restituted'] }}</td></tr>
     @empty <tr><td colspan="4" class="muted">Aucune donnée.</td></tr> @endforelse
 </table>
+<div class="src">{{ $source }}</div>
 
-<h2>7. Répartition par région</h2>
+<div class="cap">{{ $cap('Répartition par région') }}</div>
 <table class="grid">
     <tr><th>Région</th><th class="n">Déclarations</th><th class="n">Documents trouvés</th><th class="n">Restitutions</th></tr>
     @forelse ($d['by_region'] as $g)
         <tr><td>{{ $g['region'] }}</td><td class="n">{{ $g['declarations'] }}</td><td class="n">{{ $g['found'] }}</td><td class="n">{{ $g['restitutions'] }}</td></tr>
     @empty <tr><td colspan="4" class="muted">Aucune donnée.</td></tr> @endforelse
 </table>
+<div class="src">{{ $source }}</div>
 
-<h2>8. Finances</h2>
+{{-- ── DEUXIÈME PARTIE ── --}}
+<div class="page-break"></div>
+<div class="part">Deuxième partie : analyse, difficultés et recommandations</div>
+
+<h2>I. Acquis et points forts</h2>
+@forelse ($a['positives'] as $p)
+    <div class="bullet">– {{ $p }}</div>
+@empty
+    <p class="muted">Aucun point fort particulier relevé sur la période.</p>
+@endforelse
+@foreach ($n['highlights'] ?? [] as $h)<div class="bullet">– {{ $h }}</div>@endforeach
+
+<h2>II. Difficultés et points de vigilance</h2>
+@forelse ($a['alerts'] as $al)
+    <div class="bullet">– <strong>{{ ucfirst($al['severity']) }} :</strong> {{ $al['message'] }}</div>
+@empty
+    <p>Aucune difficulté majeure n'a été relevée au cours de la période.</p>
+@endforelse
+
+<h2>III. Recommandations</h2>
+@forelse ($recos as $i => $reco)
+    <div class="bullet">{{ $i + 1 }}. {{ $reco }}</div>
+@empty
+    <p class="muted">Aucune recommandation particulière.</p>
+@endforelse
+
+@if (! empty($n['structures']))
+    <h2>IV. Observations par structure</h2>
+    @foreach ($n['structures'] as $st)<div class="bullet">– <strong>{{ $st['name'] }} :</strong> {{ $st['comment'] }}</div>@endforeach
+@endif
+
+{{-- ── TROISIÈME PARTIE ── --}}
+<div class="part" style="margin-top: 22px;">Troisième partie : situation financière et notifications</div>
+
 @php $bt = $d['billing']['totals']; @endphp
-<p>Mode de facturation : <strong>{{ $d['billing']['mode'] === 'live' ? 'tarifs appliqués' : 'phase pilote (gratuit, valeur théorique tracée)' }}</strong>.</p>
+<h2>I. Situation financière</h2>
+<p>Mode de facturation : <strong>{{ $d['billing']['mode'] === 'live' ? 'tarifs appliqués' : 'phase pilote (services gratuits, valeur théorique tracée)' }}</strong>. Montants exprimés en francs CFA.</p>
+<div class="cap">{{ $cap('Recettes et répartition par service (FCFA)') }}</div>
 <table class="grid">
-    <tr><th>Service</th><th class="n">Démarches</th><th class="n">Perçu</th><th class="n">Part autorités</th><th class="n">Part DocTrack</th><th class="n">Exonérations</th><th class="n">Valeur théorique pilote</th></tr>
+    <tr><th>Service</th><th class="n">Démarches</th><th class="n">Perçu</th><th class="n">Part autorités</th><th class="n">Part DocTrack</th><th class="n">Exonérations</th><th class="n">Valeur pilote</th></tr>
     @foreach ($d['billing']['by_service'] as $s)
         <tr><td>{{ $s['name'] }}</td><td class="n">{{ $s['count'] }}</td><td class="n">{{ $fmt($s['collected']) }}</td><td class="n">{{ $fmt($s['authority_share']) }}</td><td class="n">{{ $fmt($s['platform_share']) }}</td><td class="n">{{ $s['exempted_count'] }}</td><td class="n">{{ $fmt($s['pilot_theoretical_value']) }}</td></tr>
     @endforeach
-    <tr><th>Total (FCFA)</th><th class="n">{{ $bt['count'] }}</th><th class="n">{{ $fmt($bt['collected']) }}</th><th class="n">{{ $fmt($bt['authority_share']) }}</th><th class="n">{{ $fmt($bt['platform_share']) }}</th><th class="n">{{ $bt['exempted_count'] }}</th><th class="n">{{ $fmt($bt['pilot_theoretical_value']) }}</th></tr>
+    <tr class="total"><td>Total</td><td class="n">{{ $bt['count'] }}</td><td class="n">{{ $fmt($bt['collected']) }}</td><td class="n">{{ $fmt($bt['authority_share']) }}</td><td class="n">{{ $fmt($bt['platform_share']) }}</td><td class="n">{{ $bt['exempted_count'] }}</td><td class="n">{{ $fmt($bt['pilot_theoretical_value']) }}</td></tr>
+</table>
+<div class="src">{{ $source }}</div>
+
+<h2>II. Notifications aux usagers</h2>
+<p>SMS envoyés : {{ $o['sms']['sent'] }} ; en échec : {{ $o['sms']['failed'] }} ; non envoyés faute de numéro : {{ $o['sms']['skipped'] }}.</p>
+
+{{-- ── CONCLUSION ── --}}
+<h2 style="margin-top: 20px;">Conclusion</h2>
+<p>
+    Au terme de la période du {{ $from->format('d/m/Y') }} au {{ $to->format('d/m/Y') }}, l'activité du périmètre « {{ $scope }} »
+    est jugée <strong>{{ ['bon' => 'satisfaisante', 'à surveiller' => 'à surveiller', 'critique' => 'critique'][$a['level']] ?? $a['level'] }}</strong> (indice {{ $a['score'] }}/100) :
+    {{ $fmt($o['declarations']['counter']) }} déclaration(s) de perte au guichet, {{ $fmt($o['matches']['created']) }} correspondance(s)
+    et {{ $fmt($o['restitutions']['completed']) }} restitution(s) officielle(s).
+    @if (count($recos))
+        Les efforts devront porter en priorité sur : {{ \Illuminate\Support\Str::lcfirst(preg_replace('/^\[[^\]]+\]\s*/', '', $recos[0])) }}
+    @endif
+</p>
+
+<table class="sign">
+    <tr>
+        <td style="width: 50%;"></td>
+        <td style="width: 50%; text-align: center;">
+            Fait à {{ $lh['city'] }}, le {{ \App\Support\Letterhead::longDate($generated) }}<br><br>
+            <strong>{{ $official ? $lh['signatory'] : 'Pour la plateforme DocTrack' }}</strong>
+            @if (! empty($n) && $reviewer)<br><span class="small muted">Synthèse validée par {{ $reviewer->FirstName }} {{ $reviewer->LastName }}</span>@endif
+        </td>
+    </tr>
 </table>
 
-<h2>9. Notifications</h2>
-<p>SMS envoyés : {{ $o['sms']['sent'] }} — en échec : {{ $o['sms']['failed'] }} — non envoyés faute de numéro : {{ $o['sms']['skipped'] }}.</p>
-
-@if (! empty($n['summary_en']))
-<h2>Executive summary (English)</h2>
-<p>{{ $n['summary_en'] }}</p>
+{{-- ── ANNEXE ── --}}
+<div class="page-break"></div>
+<div class="part">Annexe : méthodologie</div>
+<p class="small">Chiffres calculés automatiquement à partir des données enregistrées dans DocTrack pour le périmètre « {{ $scope }} » (l'organisation et toutes ses structures rattachées). Les médianes sont exprimées en heures ou en jours. La comparaison porte sur la période précédente de même durée ({{ \Illuminate\Support\Carbon::parse($d['meta']['previous']['from'])->format('d/m/Y') }} – {{ \Illuminate\Support\Carbon::parse($d['meta']['previous']['to'])->format('d/m/Y') }}). Les indicateurs « à ce jour » reflètent la situation au moment de l'établissement du rapport. L'appréciation d'ensemble applique des règles explicites (seuils publiés). Aucune donnée personnelle n'apparaît dans ce rapport.@if (! empty($n)) L'introduction, les points forts, les recommandations et les observations par structure ont été rédigés avec l'aide d'un modèle de langage ({{ $n['model'] ?? '' }}) qui n'a reçu que des chiffres agrégés (effectifs inférieurs à {{ config('ai.reports.min_count', 3) }} masqués) ; tout chiffre absent des données entraîne le rejet du texte ; le texte a été relu et validé{{ ! empty($n['edited_by_reviewer']) ? ' (et corrigé)' : '' }} avant diffusion.@endif</p>
+@if ($d['meta']['billing_mode'] !== 'live')
+    <p class="small">Facturation en phase pilote : aucun montant n'est perçu ; la valeur théorique des démarches est tracée pour préparer la tarification.</p>
 @endif
 
-<h2>Méthodologie</h2>
-<p class="small muted">Chiffres calculés automatiquement à partir des données enregistrées dans DocTrack pour le périmètre « {{ $d['meta']['scope']['name'] }} » (l'organisation et toutes ses structures rattachées). Les médianes sont exprimées en heures ou en jours. La comparaison porte sur la période précédente de même durée ({{ \Illuminate\Support\Carbon::parse($d['meta']['previous']['from'])->format('d/m/Y') }} – {{ \Illuminate\Support\Carbon::parse($d['meta']['previous']['to'])->format('d/m/Y') }}). Les indicateurs « aujourd'hui » reflètent la situation au moment de la génération. L'analyse applique des règles explicites (seuils publiés) : aucune donnée personnelle n'apparaît dans ce rapport.@if (! empty($n)) La synthèse, les commentaires et les recommandations ont été rédigés par un modèle de langage ({{ $n['model'] ?? '' }}) qui n'a reçu que des chiffres agrégés (effectifs inférieurs à {{ config('ai.reports.min_count', 3) }} masqués) ; tout chiffre absent des données entraîne le rejet du texte ; le texte a été relu et validé{{ ! empty($n['edited_by_reviewer']) ? ' (et corrigé)' : '' }} avant publication.@endif</p>
+@if (! empty($n['summary_en']))
+    <h2>Executive summary (English)</h2>
+    <p>{{ $n['summary_en'] }}</p>
+@endif
 </body>
 </html>

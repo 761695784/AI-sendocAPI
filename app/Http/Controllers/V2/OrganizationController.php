@@ -43,6 +43,15 @@ class OrganizationController extends Controller
         if ($parent = $request->query('parent')) {
             $query->whereHas('parent', fn ($q) => $q->where('uuid', $parent));
         }
+        // Toute la descendance d'une institution (ex. Police nationale ou Gendarmerie nationale).
+        if ($institution = $request->query('institution')) {
+            $root = Organization::where('uuid', $institution)->first();
+            $root ? $query->subtreeOf($root) : $query->whereRaw('1 = 0');
+        }
+        // Une région et ses départements (code de la région, ex. SN-DK).
+        if ($region = $request->query('region')) {
+            $query->whereHas('territory', fn ($q) => $q->where('code', $region)->orWhereHas('parent', fn ($p) => $p->where('code', $region)));
+        }
         if ($territory = $request->query('territory')) {
             $query->whereHas('territory', fn ($q) => $q->where('code', $territory));
         }

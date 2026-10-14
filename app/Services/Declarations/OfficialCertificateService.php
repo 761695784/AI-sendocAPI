@@ -61,6 +61,7 @@ class OfficialCertificateService
             'agent'       => $certificat->issuer,
             'matricule'   => $matricule,
             'qrDataUri'   => 'data:image/svg+xml;base64,' . base64_encode($qrSvg),
+            'lh'          => \App\Support\Letterhead::for($structure),
         ])->setPaper('A4', 'portrait');
 
         $path = 'certificats/officiels/' . $certificat->certificat_number . '.pdf';

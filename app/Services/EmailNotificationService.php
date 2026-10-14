@@ -23,7 +23,7 @@ class EmailNotificationService
         try {
             // Envoi de l'email
             Mail::to($declarant->email)
-                ->send(new DocumentPublishedNotification($document, $phone, $documentUrl));
+                ->send(new DocumentPublishedNotification($document, $phone, $documentUrl, $declarant->FirstName ?? null));
 
             // Log de l'email en base
             EmailLog::create([

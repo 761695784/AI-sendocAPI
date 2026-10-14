@@ -9,6 +9,8 @@
 |
 |  - stt : voix → texte. « none » ou « hf_space » (notre service Python
 |          doctrack-voice hébergé gratuitement sur Hugging Face).
+|  - tts : texte → voix wolof. « none » ou « hf_space » (service Python
+|          doctrack-tts, modèle Adia_TTS, sur Hugging Face).
 |  - ocr : lecture des pièces photographiées. « none » ou « hf_space »
 |          (service Python doctrack-ocr, RapidOCR, sur Hugging Face).
 |  - llm : aide à comprendre les phrases libres que les règles ne
@@ -39,6 +41,30 @@ return [
 
         'max_upload_kb' => 5120,
         'mimes'         => ['webm', 'ogg', 'oga', 'opus', 'mp3', 'mpga', 'wav', 'm4a', 'mp4', 'aac', 'weba'],
+    ],
+
+    /*
+    | Texte → voix (réponses parlées de l'assistant en wolof) : « none » ou
+    | « hf_space » (service Python doctrack-tts : Adia_TTS de CONCREE, Apache 2.0,
+    | réseau entraîné sur 40 h de voix wolof). Trop lent pour parler en direct sur
+    | un processeur gratuit : les phrases fixes sont préparées une fois
+    | (php artisan doctrack:assistant-voices) puis servies comme des fichiers.
+    | Le français n'est pas lu par ce modèle.
+    */
+    'tts' => [
+        'provider' => env('AI_TTS_PROVIDER', 'none'),
+
+        'hf_space' => [
+            // Ex. https://majeli-doctrack-tts.hf.space
+            'url'     => env('AI_TTS_URL'),
+            'token'   => env('AI_TTS_TOKEN'),
+            // Réveil du Space + 30 s à 2 min de calcul par phrase sur processeur gratuit.
+            'timeout' => (int) env('AI_TTS_TIMEOUT', 300),
+        ],
+
+        'languages' => ['wo'],
+        // Limite du service (le texte est découpé en segments de 200 caractères côté Python).
+        'max_chars' => 600,
     ],
 
     // Lecture des pièces (OCR) : « none » ou « hf_space » (service doctrack-ocr, RapidOCR).

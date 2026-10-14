@@ -63,7 +63,7 @@ Schedule::command('doctrack:monthly-reports')->monthlyOn(1, '06:15');
 
 // ── Assistant conversationnel ──
 
-// Liste des phrases à enregistrer à l'avance (voix wolof générée sur Colab).
+// Liste des phrases à enregistrer à l'avance (autre méthode : voix générée sur Colab, plus rapide avec une carte graphique).
 Artisan::command('doctrack:assistant-phrases {--lang=wo} {--missing : seulement celles sans fichier audio}', function () {
     $phrases = app(\App\Services\Assistant\Phrasebook::class);
     $lang    = $this->option('lang');
@@ -79,6 +79,79 @@ Artisan::command('doctrack:assistant-phrases {--lang=wo} {--missing : seulement 
     $this->info($rows->count() . " phrase(s) → storage/app/{$path}");
     $this->line('Déposez ensuite les fichiers {clé}.mp3 dans storage/app/' . trim(config('assistant.audio_dir'), '/') . "/{$lang}/");
 })->purpose('Exporte les phrases de l\'assistant pour générer leur audio');
+
+// Voix de l'assistant : fait lire les phrases fixes par le service de synthèse (Adia_TTS, wolof) et enregistre les MP3.
+Artisan::command('doctrack:assistant-voices
+    {--lang=wo : langue}
+    {--key=* : seulement ces phrases (clé de config/assistant.php)}
+    {--force : régénérer aussi les audios déjà à jour}
+    {--adopt : créer la fiche des MP3 déposés à la main (ZIP Colab), sans rien générer}
+    {--status : afficher seulement l\'état}', function () {
+    $voices = app(\App\Services\Assistant\VoiceLibrary::class);
+    $lang   = $this->option('lang');
+    if (! in_array($lang, config('assistant.languages', []), true)) {
+        $this->error("Langue inconnue : {$lang}");
+
+        return 1;
+    }
+
+    if ($this->option('adopt')) {
+        $this->info($voices->adopt($lang) . ' fichier(s) déposé(s) à la main enregistré(s).');
+    }
+
+    $rows = collect($voices->status($lang));
+    if ($this->option('status') || $this->option('adopt')) {
+        $s = $voices->summary($lang);
+        $this->table(['Phrase', 'État', 'Modèle', 'Durée (s)'], $rows->map(fn ($r) => [$r['key'], $r['state'], $r['model'] ?? '—', $r['duration'] ?? '—'])->all());
+        $this->info("{$s['ready']} à jour · {$s['stale']} à refaire · {$s['missing']} sans audio · {$s['manual']} sans fiche — sur {$s['total']} phrases.");
+
+        return 0;
+    }
+
+    if (! $voices->canGenerate($lang)) {
+        $this->error($lang === 'wo'
+            ? 'Synthèse vocale non configurée : AI_TTS_PROVIDER=hf_space et AI_TTS_URL dans le .env (voir ai/README.md).'
+            : 'Le modèle de synthèse (Adia_TTS) ne lit que le wolof.');
+
+        return 1;
+    }
+
+    $keys = $this->option('key');
+    $todo = $rows
+        ->when($keys, fn ($c) => $c->whereIn('key', $keys))
+        ->when(! $this->option('force') && ! $keys, fn ($c) => $c->whereIn('state', [
+            \App\Services\Assistant\VoiceLibrary::MISSING, \App\Services\Assistant\VoiceLibrary::STALE,
+        ]))
+        ->values();
+    if ($todo->isEmpty()) {
+        $this->info('Rien à générer : toutes les phrases ont un audio à jour (--force pour tout refaire).');
+
+        return 0;
+    }
+
+    $this->info($todo->count() . ' phrase(s) à faire lire. Sur un service gratuit : 30 s à 2 min par phrase, la première réveille le service.');
+    $failed = 0;
+    foreach ($todo as $i => $row) {
+        $this->output->write(sprintf('%2d/%d  %-28s ', $i + 1, $todo->count(), $row['key']));
+        try {
+            $meta = $voices->generate($lang, $row['key']);
+            $this->line(sprintf('✔ %s s d\'audio en %s s', $meta['duration'] ?? '?', $meta['elapsed'] ?? '?'));
+        } catch (\App\Services\Ai\AiUnavailableException $e) {
+            $failed++;
+            $this->line('✘ ' . $e->getMessage());
+            // Service endormi ou en panne : inutile d'insister sur toutes les phrases.
+            if ($failed >= 3) {
+                $this->error('Trois échecs : arrêt. Ouvrez l\'adresse du service dans un navigateur, attendez "loaded": true, puis relancez la commande (elle reprend où elle s\'est arrêtée).');
+
+                return 1;
+            }
+        }
+    }
+    $s = $voices->summary($lang);
+    $this->info("Terminé : {$s['ready']} phrase(s) avec audio à jour sur {$s['total']}." . ($failed ? " {$failed} échec(s) : relancez la commande." : ''));
+
+    return $failed ? 1 : 0;
+})->purpose('Génère la voix (wolof) des phrases fixes de l\'assistant avec le service de synthèse');
 
 // Purge des conversations anciennes (confidentialité).
 Artisan::command('doctrack:assistant-prune', function () {
@@ -96,3 +169,101 @@ Artisan::command('doctrack:ocr-purge', function () {
 })->purpose('Supprime les scans OCR non publiés et leurs images');
 
 Schedule::command('doctrack:ocr-purge')->hourly();
+
+// ── Vérification des emails : configuration SMTP et aperçu de chaque email envoyé aux citoyens ──
+// php artisan doctrack:mail-test vous@exemple.sn          → un email de test (le serveur d'envoi fonctionne-t-il ?)
+// php artisan doctrack:mail-test vous@exemple.sn --all    → en plus, un exemple de chaque email (données fictives)
+Artisan::command('doctrack:mail-test {email} {--all : Envoyer aussi un exemple de chaque email de DocTrack}', function () {
+    $email  = (string) $this->argument('email');
+    $mailer = config('mail.default');
+    $smtp   = config("mail.mailers.{$mailer}", []);
+
+    $this->info('Configuration des emails');
+    $this->table(['Réglage', 'Valeur'], [
+        ['MAIL_MAILER', $mailer],
+        ['MAIL_HOST', $smtp['host'] ?? '—'],
+        ['MAIL_PORT', (string) ($smtp['port'] ?? '—')],
+        ['Chiffrement', $smtp['scheme'] ?? $smtp['encryption'] ?? '—'],
+        ['Expéditeur', config('mail.from.address') . ' (' . config('mail.from.name') . ')'],
+        ['Lien des boutons', config('doctrack.frontend_url')],
+    ]);
+    if (in_array($mailer, ['log', 'array'], true)) {
+        $this->warn("MAIL_MAILER={$mailer} : les emails ne partent pas, ils sont seulement écrits dans storage/logs/laravel.log.");
+    }
+
+    // Destinataire fictif (non enregistré en base) : les emails sont envoyés tout de suite, sans file d'attente.
+    $to = new \App\Models\User();
+    $to->forceFill(['FirstName' => 'Awa', 'LastName' => 'Test', 'email' => $email]);
+
+    $send = function (string $label, callable $fn) {
+        try {
+            $fn();
+            $this->line("  <info>✔</info> {$label}");
+
+            return true;
+        } catch (\Throwable $e) {
+            $this->line("  <error>✘</error> {$label} — " . $e->getMessage());
+
+            return false;
+        }
+    };
+
+    $this->newLine();
+    $ok = $send('Email de test', fn () => $to->notifyNow(new \App\Services\Notifications\TemplatedMailNotification(
+        'DocTrack — email de test',
+        ['Si vous lisez ce message, l\'envoi des emails de DocTrack fonctionne.', 'Envoyé le ' . now()->format('d/m/Y à H:i') . '.'],
+    )));
+
+    if (! $ok) {
+        $this->error('L\'envoi a échoué : vérifiez MAIL_HOST, MAIL_PORT, MAIL_USERNAME, MAIL_PASSWORD et MAIL_ENCRYPTION dans .env, puis php artisan config:clear.');
+
+        return 1;
+    }
+    if (! $this->option('all')) {
+        $this->info("Email de test envoyé à {$email}. Ajoutez --all pour recevoir un exemple de chaque email.");
+
+        return 0;
+    }
+
+    // ── Exemples avec des données fictives (rien n'est enregistré) ──
+    $type = (new \App\Models\DocumentType())->forceFill(['TypeName' => "Carte nationale d'identité"]);
+    $structure = (new \App\Models\Organization())->forceFill(['name' => "Commissariat d'arrondissement de Dieuppeul", 'address' => 'Dieuppeul, Dakar', 'phone' => '+221775290074']);
+    $doc = fn (?\App\Models\Organization $custody) => (new \App\Models\Document())
+        ->forceFill(['uuid' => (string) \Illuminate\Support\Str::uuid(), 'reference' => 'DT-2026-000123', 'OwnerFirstName' => 'Awa', 'OwnerLastName' => 'Ndiaye'])
+        ->setRelation('documentType', $type)
+        ->setRelation('custodyOrganization', $custody);
+    $declaration = (new \App\Models\DeclarationDePerte())->forceFill(['reference' => 'DP-2026-000045']);
+    $match = fn ($document) => (new \App\Models\DocumentMatch())->forceFill(['uuid' => (string) \Illuminate\Support\Str::uuid()])
+        ->setRelation('document', $document)->setRelation('declaration', $declaration);
+    $finder = (new \App\Models\User())->forceFill(['FirstName' => 'Moussa', 'LastName' => 'Diop']);
+    $request = (new \App\Models\RestitutionRequest())->forceFill(['uuid' => (string) \Illuminate\Support\Str::uuid()])
+        ->setRelation('document', $doc(null))->setRelation('finder', $finder)->setRelation('requester', $to);
+    $templated = function (string $key, array $params) use ($to) {
+        $notifier = app(\App\Services\Notifications\Notifier::class);
+        $tpl = $notifier->template('mail', $key);
+        $to->notifyNow(new \App\Services\Notifications\TemplatedMailNotification(
+            $notifier->render($tpl['subject'], $params),
+            array_map(fn ($l) => $notifier->render($l, $params), $tpl['lines']),
+        ));
+    };
+    $params = ['document_type' => "Carte nationale d'identité", 'owner_name' => 'A. Ndiaye', 'reference' => 'DT-2026-000123',
+        'place' => 'Marché Sandaga, Dakar', 'distance' => '1,2 km', 'label' => 'Carte d\'identité', 'next' => 'Le commissariat vous appellera.'];
+
+    $results = [
+        $send('Correspondance confirmée — document chez un citoyen', fn () => $to->notifyNow(new \App\Notifications\MatchConfirmedNotification($match($doc(null))))),
+        $send('Correspondance confirmée — document dans une structure', fn () => $to->notifyNow(new \App\Notifications\MatchConfirmedNotification($match($doc($structure))))),
+        $send('Publication pouvant correspondre à une déclaration', fn () => \Illuminate\Support\Facades\Mail::to($email)
+            ->send(new \App\Mail\DocumentPublishedNotification($doc(null), '+221770000002', '', 'Awa'))),
+        $send('Restitution : contact du trouveur (au propriétaire)', fn () => $to->notifyNow(new \App\Notifications\RestitutionUpdateNotification($request, \App\Notifications\RestitutionUpdateNotification::CONTACT_FOR_OWNER, '+221 77 000 00 02'))),
+        $send('Restitution : contact du propriétaire (au trouveur)', fn () => $to->notifyNow(new \App\Notifications\RestitutionUpdateNotification($request, \App\Notifications\RestitutionUpdateNotification::CONTACT_FOR_FINDER, '+221 77 000 00 01'))),
+        $send('Restitution : refus ou délai dépassé', fn () => $to->notifyNow(new \App\Notifications\RestitutionUpdateNotification($request, \App\Notifications\RestitutionUpdateNotification::DECLINED, 'La structure la plus proche prend le relais.'))),
+        $send('Document signalé par QR code', fn () => $templated('tag.found', $params)),
+        $send('Retrait attribué à une structure', fn () => $templated('collection.assigned', $params)),
+    ];
+
+    $this->newLine();
+    $this->info(count(array_filter($results)) . ' / ' . count($results) . " exemples envoyés à {$email}.");
+    $this->line('La demande de restitution au trouveur s\'essaie dans le vrai parcours (elle est enregistrée dans le journal des emails).');
+
+    return 0;
+})->purpose('Vérifie l\'envoi des emails (SMTP) et envoie un exemple de chaque email DocTrack');

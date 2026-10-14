@@ -16,6 +16,8 @@ class OrganizationTypeSeeder extends Seeder
             ['code' => 'commissariat',            'name' => 'Commissariat',            'level' => OrganizationType::LEVEL_STRUCTURE],
             ['code' => 'brigade',                 'name' => 'Brigade de gendarmerie',  'level' => OrganizationType::LEVEL_STRUCTURE],
             ['code' => 'poste',                   'name' => 'Poste de police',         'level' => OrganizationType::LEVEL_STRUCTURE],
+            ['code' => 'poste_gendarmerie',       'name' => 'Poste de gendarmerie',    'level' => OrganizationType::LEVEL_STRUCTURE],
+            ['code' => 'compagnie',               'name' => 'Compagnie de gendarmerie', 'level' => OrganizationType::LEVEL_STRUCTURE],
         ];
 
         foreach ($types as $type) {

@@ -121,6 +121,69 @@ class DocumentReader
             }
         }
 
+        return $this->namesByLayout($lines, $labelLines, $found);
+    }
+
+    /**
+     * Carte CEDEAO : les petits libellés (« Prénoms », « Nom ») sont souvent illisibles sur une photo,
+     * alors que les valeurs en capitales sont bien lues. La disposition est fixe :
+     * numéro de la carte, puis prénoms, puis nom, alignés à gauche. On s'en sert pour compléter.
+     */
+    private function namesByLayout(array $lines, array $labelLines, array $found): array
+    {
+        if (isset($found['first_name'], $found['last_name'])) {
+            return $found;
+        }
+
+        $used = array_flip(array_filter([$found['first_name_line'] ?? null, $found['last_name_line'] ?? null, $found['doc_number_line'] ?? null], 'is_int'));
+        // Ligne « nom » la plus proche au-dessus (-1) ou au-dessous (+1) de la ligne $from, alignée à gauche.
+        $neighbour = function (int $from, int $direction, float $maxGap) use ($lines, $labelLines, &$used): ?int {
+            [$x, $y, $h] = self::geometry($lines[$from]['box']);
+            $best = null;
+            $bestDy = PHP_FLOAT_MAX;
+            foreach ($lines as $j => $line) {
+                if ($j === $from || isset($labelLines[$j]) || isset($used[$j])) {
+                    continue;
+                }
+                [$x2, $y2] = self::geometry($line['box']);
+                $dy = ($y2 - $y) * $direction;
+                $text = trim($line['text']);
+                if ($dy > $h * 0.6 && $dy < $h * $maxGap && abs($x2 - $x) < $h * 2.5 && $dy < $bestDy
+                    && $text === mb_strtoupper($text) && $this->normalize('last_name', $text) !== null) {
+                    $best = $j;
+                    $bestDy = $dy;
+                }
+            }
+
+            return $best;
+        };
+        $take = function (string $field, ?int $j) use ($lines, &$found, &$used): ?int {
+            if ($j === null) {
+                return null;
+            }
+            $found[$field] = ['value' => $this->normalize($field, $lines[$j]['text']), 'confidence' => round($lines[$j]['confidence'] * 0.8, 2), 'source' => 'layout'];
+            $found[$field . '_line'] = $j;
+            $used[$j] = true;
+
+            return $j;
+        };
+
+        $first = $found['first_name_line'] ?? null;
+        $last  = $found['last_name_line'] ?? null;
+        $number = $found['doc_number_line'] ?? null;
+        $isCard = is_int($number) && strlen(preg_replace('/\D/', '', $lines[$number]['text'])) === 17;
+
+        if (isset($found['last_name']) && is_int($last)) {
+            $take('first_name', $neighbour($last, -1, 4.5));
+        } elseif (isset($found['first_name']) && is_int($first)) {
+            $take('last_name', $neighbour($first, 1, 4.5));
+        } elseif ($isCard) {
+            $j = $take('first_name', $neighbour($number, 1, 5.0));
+            if ($j !== null) {
+                $take('last_name', $neighbour($j, 1, 4.5));
+            }
+        }
+
         return $found;
     }
 

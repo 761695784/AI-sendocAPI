@@ -11,7 +11,7 @@ API Laravel ─ /api/v2/assistant/*        ← assistant guidé (règles + mots-
    │   │                                   récapitule et demande « oui » avant d'agir
    │   ├─ voix → texte : Hugging Face Space « doctrack-voice » (Omnilingual ASR, Meta)
    │   ├─ secours pour phrases libres : modèle de langage gratuit (facultatif)
-   │   └─ voix wolof des réponses : MP3 générés à l'avance sur Colab (xTTS-v2-wolof)
+   │   └─ voix wolof des réponses : phrases lues une fois par Adia_TTS (CONCREE), puis servies en MP3
    ▼
 Services DocTrack existants (déclaration, structure la plus proche, suivi…)
 ```
@@ -19,10 +19,11 @@ Services DocTrack existants (déclaration, structure la plus proche, suivi…)
 | Dossier | Contenu | Où ça tourne |
 |---|---|---|
 | `doctrack-voice/` | Service de transcription (FastAPI + Omnilingual ASR) | Hugging Face Space gratuit (CPU) |
+| `doctrack-tts/` | Texte → voix wolof (FastAPI + **Adia_TTS** de CONCREE, Apache 2.0) | Hugging Face Space gratuit (CPU) |
 | `doctrack-ocr/` | Lecture des pièces photographiées (FastAPI + RapidOCR / PaddleOCR) | Hugging Face Space gratuit (CPU) |
 | `doctrack-ocr/specimens/make_specimens.py` | Génère des pièces **fictives** (CNI CEDEAO recto/verso, passeport, photos de travers) pour tester | Colab ou tout PC avec Python |
 | `notebooks/01_banc_essai_transcription.ipynb` | Compare les modèles sur vos vocaux (WER, CER, mots-clés) | Google Colab (GPU gratuit) |
-| `notebooks/02_generer_voix_wolof.ipynb` | Génère les MP3 wolof des phrases de l'assistant | Google Colab (GPU gratuit) |
+| `notebooks/02_generer_voix_wolof.ipynb` | Même voix Adia_TTS, en lot et plus vite (pour essayer plusieurs voix) | Google Colab (GPU gratuit) |
 | `corpus/transcriptions_modele.csv` | Modèle du fichier de « bonnes réponses » du banc d'essai | — |
 
 ---
@@ -72,14 +73,68 @@ AI_STT_TOKEN=<la même phrase secrète>
 
 Le Space gratuit s'endort après une période d'inactivité : l'ouvrir quelques minutes avant une démo.
 
-## Étape 4 — Voix wolof des réponses (Colab)
+## Étape 4 — Voix wolof des réponses (Adia_TTS)
 
-1. `php artisan doctrack:assistant-phrases --lang=wo` → `storage/app/assistant/phrases_wo.json`.
-2. Ouvrir `notebooks/02_generer_voix_wolof.ipynb` dans Colab (GPU T4), exécuter, envoyer le JSON.
-3. Décompresser `audio_wo.zip` dans `storage/app/assistant/audio/wo/`.
+**Adia_TTS** (CONCREE, Sénégal) est un réseau de neurones entraîné sur **40 heures de voix wolof** : il *génère* un signal audio
+nouveau à partir d'un texte — ce ne sont pas des enregistrements collés bout à bout. Licence **Apache 2.0** (usage commercial permis ;
+l'ancien xTTS-v2-wolof était non commercial).
 
-⚠️ **Textes wolof** de `config/assistant.php` : brouillon à faire relire par des locuteurs natifs **avant** de générer l'audio.
-⚠️ **Licence** xTTS-v2 : non commerciale (démo et pilote gratuit uniquement).
+Principe retenu : l'assistant dit toujours les mêmes phrases. On les fait lire **une fois**, DocTrack garde les MP3 et les sert
+comme de simples fichiers → réponse parlée **instantanée et gratuite**, même si le service de synthèse est éteint.
+
+```
+config/assistant.php (37 phrases wolof fixes)
+      │  php artisan doctrack:assistant-voices        (ou bouton « Générer » de l'écran admin)
+      ▼
+Space « doctrack-tts » ── Adia_TTS lit la phrase ──► MP3
+      ▼
+storage/app/assistant/audio/wo/{clé}.mp3 + manifest.json (texte lu, modèle, date)
+      ▼
+Réponse de l'assistant : texte + audio_url   →   lecture dans le navigateur
+```
+
+### A. Avec le service en ligne (recommandé)
+
+1. Hugging Face → **New Space** `doctrack-tts` → SDK **Docker** → **CPU basic** → envoyer les fichiers de `doctrack-tts/`
+   (`README.md`, `Dockerfile`, `app.py`, `requirements.txt`). Secret `DOCTRACK_API_KEY` = une longue phrase secrète.
+   Construction : 15 à 25 min (le modèle pèse ≈ 3,5 Go). `https://<compte>-doctrack-tts.hf.space/` → `"loaded": true` = prêt.
+2. `.env` de l'API :
+
+```
+AI_TTS_PROVIDER=hf_space
+AI_TTS_URL=https://<compte>-doctrack-tts.hf.space
+AI_TTS_TOKEN=<la même phrase secrète>
+```
+
+3. `php artisan config:clear`, puis :
+
+```
+php artisan doctrack:assistant-voices --status    # état de chaque phrase
+php artisan doctrack:assistant-voices             # fait lire tout ce qui manque (30 s à 2 min par phrase sur CPU gratuit)
+php artisan doctrack:assistant-voices --key=welcome --key=menu   # seulement ces phrases
+php artisan doctrack:assistant-voices --force     # tout refaire (autre voix : changer VOICE_SEED dans le Space)
+```
+
+La commande reprend où elle s'est arrêtée ; un service endormi ou en erreur n'enregistre jamais de mauvais fichier.
+
+4. Écouter : **Administration → Voix de l'assistant** (super admin) — lecture phrase par phrase, « Générer », « Refaire », « Retirer ».
+
+### B. Avec Colab (carte graphique gratuite, tout en 3 minutes)
+
+`php artisan doctrack:assistant-phrases --lang=wo` → `notebooks/02_generer_voix_wolof.ipynb` → décompresser `audio_wo.zip`
+dans `storage/app/assistant/audio/wo/` → `php artisan doctrack:assistant-voices --adopt`.
+
+### Règles
+
+- **Texte corrigé = audio invalidé** : si une phrase de `config/assistant.php` change, son audio passe « à refaire » et n'est plus
+  proposé (jamais de voix qui dit autre chose que le texte affiché). Relancer la commande.
+- **Aucune donnée personnelle envoyée** : seules les phrases fixes sont lues. Les phrases contenant un nom ou une référence
+  (« confirm_loss »…) restent en texte.
+- **Wolof seulement** : le modèle ne lit pas le français (les réponses françaises restent en texte).
+- Limites du modèle : 200 caractères par génération, et il s'arrête parfois avant la fin d'une longue phrase (le service découpe en segments de 110 caractères et refait ceux qui sont coupés), sigles et longs numéros mal lus
+  (le service écrit les nombres en lettres et prononce « Dok Trak »).
+- ⚠️ **Textes wolof** de `config/assistant.php` : brouillon à faire relire par des locuteurs natifs **avant** de générer.
+- Contrôle du service sans le modèle : `python doctrack-tts/test_local.py doctrack-tts`.
 
 ## Facultatif — modèle de langage de secours
 
