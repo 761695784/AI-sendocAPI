@@ -181,6 +181,8 @@ components:
         birth_date: { type: string, format: date, nullable: true }
         phone: { type: string, description: "Masqué sauf pour les agents habilités", example: "•••••4567" }
         has_account: { type: boolean }
+        account_status: { type: string, enum: [none, pending, active], description: "pending = compte créé au guichet, mot de passe pas encore choisi" }
+        email_masked: { type: string, nullable: true, example: "aw•••@example.sn" }
     DeclarationItem:
       type: object
       properties:
@@ -932,10 +934,24 @@ paths:
       responses: { '200': { description: OK, content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/Citizen' } } } } } } } }
     post:
       tags: [Guichet — déclarations]
-      summary: Enregistrer une victime sans compte DocTrack
+      summary: Enregistrer une victime (avec un email, son compte DocTrack est créé)
+      description: |
+        Sans compte existant (même téléphone et même nom) et avec un email, le compte citoyen est créé :
+        la personne reçoit un lien (valable 7 jours) pour choisir son mot de passe ; ses déclarations
+        apparaissent dans son espace. Sans email, la fiche sera rattachée à son compte s'il s'inscrit
+        plus tard avec le même téléphone, nom et prénom.
       parameters: [ { $ref: '#/components/parameters/XOrganization' } ]
       requestBody: { content: { application/json: { schema: { type: object, required: [first_name, last_name, phone], properties: { first_name: { type: string }, last_name: { type: string }, birth_date: { type: string, format: date }, phone: { type: string }, email: { type: string } } } } } }
-      responses: { '201': { description: Créée }, '409': { description: Profil déjà existant (renvoyé) } }
+      responses: { '201': { description: Créée }, '409': { description: Profil déjà existant (renvoyé) }, '422': { description: Email déjà utilisé par une autre personne } }
+  /api/v2/citizens/{citizen}/account:
+    post:
+      tags: [Guichet — déclarations]
+      summary: Créer le compte DocTrack d'une personne déjà enregistrée, ou renvoyer son lien d'activation
+      parameters:
+        - { name: citizen, in: path, required: true, schema: { type: string, format: uuid } }
+        - { $ref: '#/components/parameters/XOrganization' }
+      requestBody: { content: { application/json: { schema: { type: object, properties: { email: { type: string, description: 'Obligatoire si la personne n''a pas encore de compte' } } } } } }
+      responses: { '200': { description: Fiche avec account_status (pending / active) }, '409': { description: Compte déjà actif }, '422': { description: Email invalide ou déjà utilisé } }
   /api/v2/declarations:
     get:
       tags: [Guichet — déclarations]

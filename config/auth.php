@@ -101,6 +101,13 @@ return [
             'expire' => 5,
             'throttle' => 60,
         ],
+        // Lien d'activation d'un compte créé au guichet : 7 jours pour choisir son mot de passe.
+        'activations' => [
+            'provider' => 'users',
+            'table' => env('AUTH_PASSWORD_RESET_TOKEN_TABLE', 'password_reset_tokens'),
+            'expire' => 10080,
+            'throttle' => 0,
+        ],
     ],
 
     /*

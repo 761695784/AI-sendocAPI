@@ -259,6 +259,7 @@ Artisan::command('doctrack:mail-test {email} {--all : Envoyer aussi un exemple d
         $send('Restitution : refus ou délai dépassé', fn () => $to->notifyNow(new \App\Notifications\RestitutionUpdateNotification($request, \App\Notifications\RestitutionUpdateNotification::DECLINED, 'La structure la plus proche prend le relais.'))),
         $send('Document signalé par QR code', fn () => $templated('tag.found', $params)),
         $send('Retrait attribué à une structure', fn () => $templated('collection.assigned', $params)),
+        $send('Compte créé au guichet — lien d\'activation', fn () => $to->notifyNow(new \App\Notifications\CitizenAccountActivationNotification('exemple-de-jeton', "Commissariat d'arrondissement de Dieuppeul"))),
     ];
 
     $this->newLine();

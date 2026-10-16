@@ -70,4 +70,27 @@ class CitizenProfileController extends Controller
 
         return response()->json((new CitizenProfileResource($profile))->resolve(), 201);
     }
+
+    /**
+     * Créer le compte DocTrack d'une personne déjà enregistrée (avec son email),
+     * ou renvoyer le lien d'activation si son compte n'est pas encore activé.
+     */
+    public function account(Request $request, CitizenProfile $citizen, \App\Services\Citizens\CitizenAccountService $accounts)
+    {
+        Gate::authorize('createCitizen', DeclarationDePerte::class);
+        $structure = ResolveActiveOrganization::current();
+
+        if ($citizen->user_id) {
+            $user = $citizen->user;
+            if ($user->email_verified_at) {
+                return response()->json(['success' => false, 'message' => 'Cette personne a déjà un compte actif.'], 409);
+            }
+            $accounts->sendActivation($user, $structure);
+        } else {
+            $data = $request->validate(['email' => 'required|email|max:100']);
+            $accounts->createForProfile($citizen, $data['email'], $request->user(), $structure);
+        }
+
+        return response()->json((new CitizenProfileResource($citizen->fresh()))->resolve());
+    }
 }

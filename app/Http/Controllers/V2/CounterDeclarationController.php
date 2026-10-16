@@ -74,6 +74,12 @@ class CounterDeclarationController extends Controller
             Gate::authorize('createCitizen', DeclarationDePerte::class);
             $citizen = $this->citizens->findDuplicate($data['citizen']['phone'], $data['citizen']['last_name'])
                 ?? $this->citizens->createAtCounter($data['citizen'], $agent, $structure);
+
+            // Personne déjà connue mais sans compte : l'email saisi crée son compte.
+            if (! $citizen->user_id && ! empty($data['citizen']['email'])) {
+                app(\App\Services\Citizens\CitizenAccountService::class)->createForProfile($citizen, $data['citizen']['email'], $agent, $structure);
+                $citizen->refresh();
+            }
         }
 
         $declaration = $this->declarations->register($agent, $structure, $citizen, $data);

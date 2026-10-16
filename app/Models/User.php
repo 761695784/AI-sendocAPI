@@ -114,6 +114,11 @@ class User extends Authenticatable  implements JWTSubject
         return $this->hasRole(self::ROLE_SUPER_ADMIN);
     }
 
+    public function isCitizen(): bool
+    {
+        return $this->account_type === self::TYPE_CITIZEN;
+    }
+
     public function isActive(): bool
     {
         return $this->status === self::STATUS_ACTIVE;

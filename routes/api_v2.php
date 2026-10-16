@@ -87,6 +87,7 @@ Route::middleware(['auth:api', 'active', 'organization', 'throttle:120,1'])->gro
     // Guichet : victimes et déclarations
     Route::get('citizens', [CitizenProfileController::class, 'search']);
     Route::post('citizens', [CitizenProfileController::class, 'store']);
+    Route::post('citizens/{citizen}/account', [CitizenProfileController::class, 'account'])->middleware('throttle:10,1');
     Route::get('declarations', [CounterDeclarationController::class, 'index']);
     Route::post('declarations', [CounterDeclarationController::class, 'store']);
     Route::get('declarations/{declaration}', [CounterDeclarationController::class, 'show']);

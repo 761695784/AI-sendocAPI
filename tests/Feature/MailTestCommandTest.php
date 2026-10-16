@@ -14,7 +14,7 @@ class MailTestCommandTest extends TestCase
         Mail::fake();
 
         $this->artisan('doctrack:mail-test', ['email' => 'test@example.sn', '--all' => true])
-            ->expectsOutputToContain('8 / 8 exemples envoyés')
+            ->expectsOutputToContain('9 / 9 exemples envoyés')
             ->assertExitCode(0);
 
         Mail::assertSent(\App\Mail\DocumentPublishedNotification::class);

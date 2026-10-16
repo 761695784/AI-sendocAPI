@@ -606,15 +606,21 @@ class AuthController extends Controller
             'password' => 'required|string|min:8|confirmed',
         ]);
 
-        // Réinitialisation du mot de passe
-        $status = Password::reset(
-            $request->only('email', 'password', 'password_confirmation', 'token'),
-            function ($user, $password) {
-                $user->forceFill([
-                    'password' => Hash::make($password),
-                ])->save();
-            }
-        );
+        // Réinitialisation du mot de passe. Le même écran sert à l'activation d'un compte créé au guichet
+        // (lien valable 7 jours, broker « activations ») : choisir son mot de passe prouve aussi l'email.
+        $credentials = $request->only('email', 'password', 'password_confirmation', 'token');
+        $apply = function ($user, $password) {
+            $user->forceFill([
+                'password'          => Hash::make($password),
+                'email_verified_at' => $user->email_verified_at ?? now(),
+            ])->save();
+            app(\App\Services\Citizens\CitizenAccountService::class)->attachOrphanProfiles($user);
+        };
+
+        $status = Password::reset($credentials, $apply);
+        if ($status === Password::INVALID_TOKEN) {
+            $status = Password::broker(\App\Services\Citizens\CitizenAccountService::ACTIVATION_BROKER)->reset($credentials, $apply);
+        }
 
         return $status === Password::PASSWORD_RESET
             ? response()->json(['success' => true, 'message' => __($status)], 200)

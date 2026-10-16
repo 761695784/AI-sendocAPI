@@ -5,17 +5,25 @@ namespace App\Services\Declarations;
 use App\Models\CitizenProfile;
 use App\Models\Organization;
 use App\Models\User;
+use App\Services\Citizens\CitizenAccountService;
 use App\Services\SmsService;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class CitizenProfileService
 {
     /**
      * Crée le profil d'une victime au guichet.
-     * Si un compte citoyen existe avec le même téléphone ET le même nom,
-     * le profil y est rattaché : la personne verra la déclaration dans son espace.
+     * - Si un compte citoyen existe avec le même téléphone ET le même nom, le profil y est rattaché.
+     * - Sinon, avec un email, son compte DocTrack est créé et un lien d'activation lui est envoyé.
+     * Dans les deux cas, la personne voit ses déclarations dans son espace.
      */
     public function createAtCounter(array $data, User $agent, ?Organization $organization): CitizenProfile
+    {
+        return DB::transaction(fn () => $this->doCreateAtCounter($data, $agent, $organization));
+    }
+
+    private function doCreateAtCounter(array $data, User $agent, ?Organization $organization): CitizenProfile
     {
         $profile = new CitizenProfile([
             'first_name'                 => trim($data['first_name']),
@@ -32,6 +40,11 @@ class CitizenProfileService
         }
 
         $profile->save();
+
+        if (! $profile->user_id && ! empty($data['email'])) {
+            app(CitizenAccountService::class)->createForProfile($profile, $data['email'], $agent, $organization);
+            $profile->refresh();
+        }
 
         return $profile;
     }

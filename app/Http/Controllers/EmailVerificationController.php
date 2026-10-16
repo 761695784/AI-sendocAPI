@@ -31,6 +31,9 @@ class EmailVerificationController extends Controller
         $user->email_verification_code = null;
         $user->save();
 
+        // Déclarations faites au guichet avant l'inscription : rattachées au nouveau compte.
+        app(\App\Services\Citizens\CitizenAccountService::class)->attachOrphanProfiles($user);
+
         // ✅ Générer le token JWT
         $token = JWTAuth::fromUser($user);
 
