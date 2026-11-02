@@ -14,7 +14,10 @@ use Spatie\Activitylog\Traits\LogsActivity;
 /**
  * Déclaration de perte.
  *
- * - channel "online"  : faite par le citoyen lui-même (V1) → récépissé DocTrack
+ * - channel "online"  : faite par le citoyen lui-même (V1) → récépissé DocTrack,
+ *   rattachée à aucune structure. Elle peut ensuite être certifiée au guichet
+ *   de n'importe quelle structure habilitée (certified_at) : elle est alors
+ *   rattachée à la structure et reçoit un certificat officiel, le récépissé restant valable.
  * - channel "counter" : enregistrée au guichet par un agent → certificat officiel
  *
  * Les colonnes V1 (Title, FirstNameInDoc, LastNameInDoc, DocIdentification,
@@ -38,12 +41,14 @@ class DeclarationDePerte extends Model
 
     protected $guarded = [];
 
-    protected $hidden = ['doc_number_hash', 'doc_number_encrypted'];
+    protected $hidden = ['doc_number_hash', 'doc_number_encrypted', 'certification_id_hash'];
 
     protected $casts = [
         'lost_at'              => 'date',
         'birth_date_in_doc'    => 'date',
         'closed_at'            => 'datetime',
+        'certified_at'         => 'datetime',
+        'certification_birth_date' => 'date',
         'doc_number_encrypted' => 'encrypted',
     ];
 
@@ -75,17 +80,17 @@ class DeclarationDePerte extends Model
             }
         });
 
-        // Soft delete → soft delete du certificat ; restauration → restauration.
+        // Soft delete → soft delete des certificats (récépissé et certificat officiel) ; restauration → restauration.
         static::deleting(function ($declaration) {
             if (! $declaration->isForceDeleting()) {
-                $declaration->certificat?->delete();
+                $declaration->certificats()->get()->each->delete();
             }
             app(\App\Services\Matching\MatchReviewService::class)
                 ->supersedeForDeclaration($declaration, auth('api')->user(), 'Déclaration supprimée');
         });
 
         static::restoring(function ($declaration) {
-            $declaration->certificat()->withTrashed()->restore();
+            $declaration->certificats()->withTrashed()->restore();
         });
 
         static::restored(fn ($declaration) => \App\Jobs\MatchDeclarationJob::dispatch($declaration->id));
@@ -99,6 +104,30 @@ class DeclarationDePerte extends Model
     public function isCounter(): bool
     {
         return $this->channel === self::CHANNEL_COUNTER;
+    }
+
+    /** Déclaration en ligne certifiée au guichet d'une structure. */
+    public function isCertified(): bool
+    {
+        return $this->certified_at !== null;
+    }
+
+    /**
+     * Déclaration portée par une structure (enregistrée au guichet ou certifiée) :
+     * elle a un certificat officiel et ne se supprime plus depuis l'espace citoyen.
+     */
+    public function isInstitutional(): bool
+    {
+        return $this->isCounter() || $this->isCertified();
+    }
+
+    /** Une déclaration en ligne non encore certifiée, toujours active. */
+    public function canBeCertified(): bool
+    {
+        return $this->channel === self::CHANNEL_ONLINE
+            && ! $this->isCertified()
+            && ! $this->trashed()
+            && in_array($this->status, [self::STATUS_REGISTERED, self::STATUS_MATCHED, self::STATUS_RESTITUTION_IN_PROGRESS], true);
     }
 
     public function isCancellable(): bool
@@ -194,8 +223,37 @@ class DeclarationDePerte extends Model
         StatusTransition::record($this, $from, $status, $reason, $user);
     }
 
+    /**
+     * Le document le plus probant de la déclaration : le certificat officiel s'il
+     * existe, sinon le récépissé (le certificat est toujours émis après le récépissé).
+     */
     public function certificat()
     {
-        return $this->hasOne(CertificatDePerte::class, 'declaration_de_perte_id')->withTrashed();
+        return $this->hasOne(CertificatDePerte::class, 'declaration_de_perte_id')->withTrashed()->orderByDesc('id');
+    }
+
+    /** Tous les documents émis : récépissé (en ligne) et certificat officiel. */
+    public function certificats()
+    {
+        return $this->hasMany(CertificatDePerte::class, 'declaration_de_perte_id')->withTrashed();
+    }
+
+    /** Récépissé DocTrack (déclaration en ligne). */
+    public function receipt()
+    {
+        return $this->hasOne(CertificatDePerte::class, 'declaration_de_perte_id')
+            ->withTrashed()->where('kind', CertificatDePerte::KIND_RECEIPT)->orderByDesc('id');
+    }
+
+    /** Certificat de perte émis par une structure habilitée. */
+    public function officialCertificate()
+    {
+        return $this->hasOne(CertificatDePerte::class, 'declaration_de_perte_id')
+            ->withTrashed()->where('kind', CertificatDePerte::KIND_OFFICIAL)->orderByDesc('id');
+    }
+
+    public function certifiedBy()
+    {
+        return $this->belongsTo(User::class, 'certified_by_user_id');
     }
 }

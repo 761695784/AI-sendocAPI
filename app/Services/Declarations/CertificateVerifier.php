@@ -23,7 +23,10 @@ class CertificateVerifier
         }
 
         return CertificatDePerte::withTrashed()
-            ->with(['declarationDePerte.items.documentType', 'declarationDePerte.documentType', 'issuingOrganization.parent'])
+            ->with([
+                'declarationDePerte.items.documentType', 'declarationDePerte.documentType', 'issuingOrganization.parent',
+                'declarationDePerte.officialCertificate.issuingOrganization.parent',
+            ])
             ->where('verification_code', $code)
             ->first();
     }
@@ -41,6 +44,16 @@ class CertificateVerifier
         $types = $declaration?->items->isNotEmpty()
             ? $declaration->items->map(fn ($i) => $i->documentType?->TypeName)->filter()->unique()->values()->all()
             : array_values(array_filter([$declaration?->documentType?->TypeName]));
+
+        // Récépissé d'une déclaration en ligne certifiée ensuite au guichet.
+        $official  = ! $certificat->isOfficial() ? $declaration?->officialCertificate : null;
+        $certified = $official && ! $official->isRevoked() && ! $official->trashed() && $official->issuingOrganization
+            ? [
+                'date'        => $official->created_at?->toDateString(),
+                'structure'   => $official->issuingOrganization->name,
+                'institution' => $official->issuingOrganization->institution()?->name,
+            ]
+            : null;
 
         $initials = $declaration
             ? mb_strtoupper(mb_substr((string) $declaration->FirstNameInDoc, 0, 1)) . '. ' . mb_strtoupper(mb_substr((string) $declaration->LastNameInDoc, 0, 1)) . '.'
@@ -63,6 +76,7 @@ class CertificateVerifier
             'holder_initials'   => $initials,
             'revoked_at'        => $revoked ? ($certificat->revoked_at ?? $certificat->deleted_at)?->toDateString() : null,
             'revocation_reason' => $revoked ? ($certificat->revocation_reason ?? 'Déclaration supprimée') : null,
+            'certified'         => $certified,
         ];
     }
 }

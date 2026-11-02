@@ -17,6 +17,7 @@ use App\Http\Controllers\V2\NotificationDeliveryController;
 use App\Http\Controllers\V2\MatchController;
 use App\Http\Controllers\V2\MeController;
 use App\Http\Controllers\V2\MembershipController;
+use App\Http\Controllers\V2\OnlineDeclarationController;
 use App\Http\Controllers\V2\OrganizationController;
 use App\Http\Controllers\V2\OrganizationTypeController;
 use App\Http\Controllers\V2\RestitutionController;
@@ -93,6 +94,10 @@ Route::middleware(['auth:api', 'active', 'organization', 'throttle:120,1'])->gro
     Route::get('declarations/{declaration}', [CounterDeclarationController::class, 'show']);
     Route::post('declarations/{declaration}/cancel', [CounterDeclarationController::class, 'cancel']);
     Route::get('declarations/{declaration}/certificate', [CounterDeclarationController::class, 'certificate']);
+
+    // Guichet : certifier une déclaration faite en ligne (référence ou QR du récépissé)
+    Route::get('online-declarations/lookup', [OnlineDeclarationController::class, 'lookup'])->middleware('throttle:30,1');
+    Route::post('online-declarations/{declaration}/certify', [OnlineDeclarationController::class, 'certify'])->middleware('throttle:20,1');
 
     // Documents trouvés en garde
     Route::get('found-documents', [FoundDocumentController::class, 'index']);

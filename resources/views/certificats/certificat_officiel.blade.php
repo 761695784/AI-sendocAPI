@@ -39,6 +39,11 @@
 <body>
 @php
     $citizen   = $declaration->citizenProfile;
+    // Déclaration en ligne certifiée au guichet : la personne présente est celle dont l'agent a vérifié l'identité.
+    $certifiedOnline = $declaration->certified_at && $declaration->channel === 'online';
+    $personLast  = $certifiedOnline && $declaration->certification_last_name ? $declaration->certification_last_name : $citizen?->last_name;
+    $personFirst = $certifiedOnline && $declaration->certification_first_name ? $declaration->certification_first_name : $citizen?->first_name;
+    $personBirth = $certifiedOnline && $declaration->certification_birth_date ? $declaration->certification_birth_date : $citizen?->birth_date;
     $agentName = $agent ? trim($agent->FirstName . ' ' . $agent->LastName) : null;
     $issued    = $certificat->created_at->timezone('Africa/Dakar');
     $place     = $lh['city'];
@@ -70,10 +75,16 @@
     en service au <strong>{{ $structure->name }}</strong>,
 </p>
 <p class="para">
-    certifions que M. / Mme <span class="field">{{ mb_strtoupper($citizen?->last_name ?? '') }} {{ $citizen?->first_name }}</span>,
-    né(e) le {!! $citizen?->birth_date ? '<span class="field">' . $citizen->birth_date->format('d/m/Y') . '</span>' : $dotted(null, 90) !!},
+    certifions que M. / Mme <span class="field">{{ mb_strtoupper($personLast ?? '') }} {{ $personFirst }}</span>,
+    né(e) le {!! $personBirth ? '<span class="field">' . $personBirth->format('d/m/Y') . '</span>' : $dotted(null, 90) !!},
     s'est présenté(e) ce jour à notre service et a déclaré avoir perdu le(s) document(s) désigné(s) ci-après :
 </p>
+@if ($certifiedOnline)
+<p class="para" style="font-size: 9.5px;">
+    Déclaration initialement enregistrée en ligne sur DocTrack le {{ $declaration->created_at->timezone('Africa/Dakar')->format('d/m/Y') }}
+    (référence {{ $declaration->reference }}), identité du déclarant vérifiée au guichet.
+</p>
+@endif
 
 <table class="items">
     <thead>

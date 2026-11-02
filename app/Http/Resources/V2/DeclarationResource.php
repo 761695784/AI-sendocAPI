@@ -33,6 +33,25 @@ class DeclarationResource extends JsonResource
                 'uuid' => $this->recordedBy->uuid,
                 'name' => trim($this->recordedBy->FirstName . ' ' . $this->recordedBy->LastName),
             ] : null),
+            // Déclaration faite en ligne puis certifiée au guichet.
+            'certified'     => $this->certified_at ? [
+                'at'          => $this->certified_at,
+                'by'          => $this->whenLoaded('certifiedBy', fn () => $this->certifiedBy ? [
+                    'uuid' => $this->certifiedBy->uuid,
+                    'name' => trim($this->certifiedBy->FirstName . ' ' . $this->certifiedBy->LastName),
+                ] : null),
+                'person'      => $this->when($this->full, fn () => [
+                    'first_name' => $this->certification_first_name,
+                    'last_name'  => $this->certification_last_name,
+                    'birth_date' => $this->certification_birth_date?->toDateString(),
+                    'id_type'    => $this->certification_id_type,
+                    'id_last4'   => $this->certification_id_last4,
+                ]),
+            ] : null,
+            'receipt'       => $this->whenLoaded('receipt', fn () => $this->receipt ? [
+                'number'      => $this->receipt->certificat_number,
+                'created_at'  => $this->receipt->created_at,
+            ] : null),
             'items'         => $this->whenLoaded('items', fn () => $this->items->map(fn ($item) => [
                 'uuid'          => $item->uuid,
                 'document_type' => ['id' => $item->document_type_id, 'name' => $item->documentType?->TypeName],

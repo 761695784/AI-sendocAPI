@@ -161,6 +161,8 @@ class DeclarationDePerteController extends Controller
         $declarations = DeclarationDePerte::where('user_id', $user->id)
             ->with([
                 'user', 'documentType', 'certificat',
+                // Récépissé (en ligne) et certificat de perte délivré par une structure.
+                'receipt', 'officialCertificate.issuingOrganization',
                 'matches' => fn ($q) => $q->where('status', DocumentMatch::STATUS_CONFIRMED)
                     ->with(['document.documentType', 'document.custodyOrganization', 'document.restitutionRequests']),
             ])
@@ -229,12 +231,14 @@ class DeclarationDePerteController extends Controller
         // Récupérer la declaration par son uuid
         $declaration = DeclarationDePerte::where('uuid', $uuid)->firstOrFail();
 
-        // Une déclaration enregistrée au guichet d'une structure ne se supprime pas
+        // Une déclaration enregistrée ou certifiée au guichet d'une structure ne se supprime pas
         // depuis l'espace citoyen (elle porte un certificat officiel).
-        if ($declaration->isCounter() && ! $user->isSuperAdmin()) {
+        if ($declaration->isInstitutional() && ! $user->isSuperAdmin()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Cette déclaration a été enregistrée par une structure : seule celle-ci peut l\'annuler.',
+                'message' => $declaration->isCertified()
+                    ? 'Cette déclaration a été certifiée par une structure : elle ne peut plus être supprimée depuis votre espace.'
+                    : 'Cette déclaration a été enregistrée par une structure : seule celle-ci peut l\'annuler.',
             ], 403);
         }
 

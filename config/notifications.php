@@ -16,6 +16,7 @@ return [
         // Guichet : déclaration de perte
         'counter_declaration.registered' => 'DocTrack : déclaration :reference enregistrée par :structure. Certificat vérifiable : :verify_url . Vous serez prévenu si votre pièce est retrouvée.',
         'counter_declaration.cancelled'  => 'DocTrack : votre déclaration :reference a été annulée par :structure. Motif : :reason',
+        'online_declaration.certified'   => 'DocTrack : votre déclaration en ligne :reference a été certifiée par :structure. Certificat de perte vérifiable : :verify_url',
 
         // Guichet : document déposé par un trouveur
         'found_document.deposited'       => 'DocTrack : merci d\'avoir déposé ce document à :structure (réf. :reference). Votre geste aide son propriétaire.',

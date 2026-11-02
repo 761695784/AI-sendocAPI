@@ -56,6 +56,12 @@
                 <dt>Document(s)</dt><dd>{{ implode(', ', $s['document_types']) }}</dd>
                 <dt>Titulaire</dt><dd>{{ $s['holder_initials'] }}</dd>
             </dl>
+            @if (! empty($s['certified']))
+                <p style="margin-top: 14px;"><span class="badge ok">Certifiée au guichet</span></p>
+                <p>Cette déclaration a été vérifiée et un certificat de perte a été délivré le
+                    {{ \Carbon\Carbon::parse($s['certified']['date'])->format('d/m/Y') }} par {{ $s['certified']['structure'] }}
+                    @if ($s['certified']['institution'])({{ $s['certified']['institution'] }})@endif.</p>
+            @endif
         @endif
     </div>
     <p class="foot">Vérification DocTrack — seules les informations nécessaires à l'authentification sont affichées.</p>

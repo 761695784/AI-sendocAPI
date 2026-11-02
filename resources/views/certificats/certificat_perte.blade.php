@@ -61,7 +61,7 @@
 </table>
 
 <p class="para" style="margin-top: 12px;">
-    Dès qu'un document correspondant est publié ou déposé dans une structure, le déclarant est prévenu par email et par SMS.
+    Dès qu'un document correspondant est publié ou déposé dans une structure, le déclarant est prévenu.
 </p>
 
 <div class="warn">
@@ -69,11 +69,23 @@
     Les informations ont été saisies par le déclarant et n'ont pas été vérifiées par une autorité.
     Pour obtenir le certificat de perte (demandé pour un duplicata ou un renouvellement) :
     <ol class="steps">
-        <li>présentez-vous au commissariat de police ou à la brigade de gendarmerie de votre lieu de résidence ou du lieu de la perte ;</li>
-        <li>munissez-vous de ce récépissé et, si possible, d'une copie ou d'une pièce justifiant de votre identité ;</li>
-        <li>l'agent retrouvera votre déclaration dans DocTrack et vous délivrera le certificat de perte.</li>
+        <li>présentez-vous en personne dans un commissariat de police ou une brigade de gendarmerie partenaire de DocTrack ;</li>
+        <li>munissez-vous de ce récépissé (ou de sa référence) et d'une pièce justifiant de votre identité (passeport, permis, extrait de naissance…) ;</li>
+        <li>l'agent retrouve votre déclaration dans DocTrack grâce à la référence ou au QR code ci-dessous, vérifie votre identité et vous délivre le certificat de perte.</li>
     </ol>
 </div>
+
+@if (! empty($qrDataUri))
+<table style="margin-top: 12px; border-collapse: collapse;">
+    <tr>
+        <td style="width: 74px; vertical-align: middle;"><img src="{{ $qrDataUri }}" style="width: 66px; height: 66px;"></td>
+        <td style="padding-left: 8px; font-size: 9px; color: #333; vertical-align: middle;">
+            À présenter au guichet. Code de vérification : <strong>{{ $certificat->formattedVerificationCode() }}</strong><br>
+            Vérifiable sur {{ $certificat->verificationUrl() }}
+        </td>
+    </tr>
+</table>
+@endif
 
 <div class="done">Fait à {{ config('doctrack.letterhead.default_city', 'Dakar') }}, le {{ \App\Support\Letterhead::longDate($certificat->created_at) }}<br>
     <span style="font-size: 9px; color: #555;">Document généré automatiquement, sans signature.</span></div>

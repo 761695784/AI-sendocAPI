@@ -36,8 +36,9 @@ class CounterDeclarationController extends Controller
         $user = $request->user();
 
         $query = DeclarationDePerte::query()
-            ->with(['items.documentType', 'citizenProfile', 'organization', 'recordedBy', 'certificat'])
-            ->where('channel', DeclarationDePerte::CHANNEL_COUNTER);
+            ->with(['items.documentType', 'citizenProfile', 'organization', 'recordedBy', 'certifiedBy', 'certificat'])
+            // Déclarations de la structure : enregistrées au guichet ou faites en ligne puis certifiées au guichet.
+            ->where(fn ($q) => $q->where('channel', DeclarationDePerte::CHANNEL_COUNTER)->orWhereNotNull('certified_at'));
 
         if (! $user->isSuperAdmin()) {
             $allowed = $this->access->visibleOrganizations($user)->get()
@@ -99,7 +100,7 @@ class CounterDeclarationController extends Controller
             ->log('Consultation d\'une déclaration');
 
         return response()->json((new DeclarationResource(
-            $declaration->load(['items.documentType', 'citizenProfile', 'organization', 'recordedBy', 'certificat', 'territory'])
+            $declaration->load(['items.documentType', 'citizenProfile', 'organization', 'recordedBy', 'certifiedBy', 'certificat', 'receipt', 'territory'])
         ))->resolve($request));
     }
 

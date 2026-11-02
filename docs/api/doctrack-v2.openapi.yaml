@@ -1019,6 +1019,55 @@ paths:
     parameters: [ { $ref: '#/components/parameters/Uuid' } ]
     get: { tags: [Guichet — déclarations], summary: "Certificat officiel (PDF)", responses: { '200': { description: PDF, content: { application/pdf: {} } }, '404': { $ref: '#/components/responses/NotFound' } } }
 
+  /api/v2/online-declarations/lookup:
+    get:
+      tags: [Guichet — déclarations]
+      summary: Retrouver une déclaration faite en ligne (référence ou QR du récépissé)
+      description: >-
+        Le citoyen présente sa référence DT-… ou le QR code de son récépissé. Toute structure habilitée peut rechercher.
+        Résumé minimal (type de pièce, initiales, date) : aucune donnée nominative complète avant la vérification d'identité.
+      parameters:
+        - { $ref: '#/components/parameters/XOrganization' }
+        - { name: q, in: query, required: true, description: "Référence DT-…, code de vérification ou lien du QR code", schema: { type: string } }
+      responses: { '200': { description: OK }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+
+  /api/v2/online-declarations/{uuid}/certify:
+    parameters: [ { $ref: '#/components/parameters/Uuid' } ]
+    post:
+      tags: [Guichet — déclarations]
+      summary: Certifier une déclaration en ligne et délivrer le certificat de perte
+      description: >-
+        L'agent vérifie l'identité de la personne présente (pièce, photo, nom comparé à la déclaration ; dérogation motivée
+        réservée aux responsables). La déclaration est rattachée à la structure, un certificat officiel CP-… est émis
+        (même tarification que la déclaration au guichet ; gratuit en phase pilote) et le récépissé reste valable.
+      parameters: [ { $ref: '#/components/parameters/XOrganization' } ]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [person, checks]
+              properties:
+                person:
+                  type: object
+                  required: [first_name, last_name, id_type, id_number]
+                  properties:
+                    first_name: { type: string }
+                    last_name: { type: string }
+                    birth_date: { type: string, format: date }
+                    id_type: { type: string, enum: [cni, passeport, permis, carte_consulaire, carte_militaire, extrait_naissance, autre] }
+                    id_number: { type: string, description: "Jamais conservé en clair (4 derniers caractères + empreinte)" }
+                checks:
+                  type: object
+                  properties: { identity_photo_matches: { type: boolean } }
+                name_override_reason: { type: string }
+                lost_at: { type: string, format: date }
+                lost_place: { type: string }
+                territory_code: { type: string }
+                circumstances: { type: string }
+                doc_number: { type: string }
+      responses: { '201': { description: Déclaration certifiée }, '403': { $ref: '#/components/responses/Forbidden' }, '409': { description: Déjà certifiée }, '422': { $ref: '#/components/responses/ValidationError' } }
+
   # ════════════════════════ DOCUMENTS TROUVÉS ════════════════════════
   /api/v2/found-documents:
     get:

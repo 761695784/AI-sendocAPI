@@ -118,7 +118,7 @@ class CounterDeclarationService
                 'closure_reason' => $reason,
             ]);
 
-            $declaration->certificat?->update([
+            $declaration->certificats()->whereNull('revoked_at')->update([
                 'revoked_at'        => now(),
                 'revocation_reason' => 'Déclaration annulée : ' . $reason,
             ]);
