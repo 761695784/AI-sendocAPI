@@ -86,8 +86,8 @@ Route::middleware(['auth:api', 'active', 'organization', 'throttle:120,1'])->gro
     Route::post('memberships/{membership}/end', [MembershipController::class, 'end']);
 
     // Guichet : victimes et déclarations
-    Route::get('citizens', [CitizenProfileController::class, 'search']);
-    Route::post('citizens', [CitizenProfileController::class, 'store']);
+    Route::get('citizens', [CitizenProfileController::class, 'search'])->middleware('throttle:counter-search');
+    Route::post('citizens', [CitizenProfileController::class, 'store'])->middleware('throttle:30,1');
     Route::post('citizens/{citizen}/account', [CitizenProfileController::class, 'account'])->middleware('throttle:10,1');
     Route::get('declarations', [CounterDeclarationController::class, 'index']);
     Route::post('declarations', [CounterDeclarationController::class, 'store']);
@@ -96,7 +96,7 @@ Route::middleware(['auth:api', 'active', 'organization', 'throttle:120,1'])->gro
     Route::get('declarations/{declaration}/certificate', [CounterDeclarationController::class, 'certificate']);
 
     // Guichet : certifier une déclaration faite en ligne (référence ou QR du récépissé)
-    Route::get('online-declarations/lookup', [OnlineDeclarationController::class, 'lookup'])->middleware('throttle:30,1');
+    Route::get('online-declarations/lookup', [OnlineDeclarationController::class, 'lookup'])->middleware('throttle:counter-search');
     Route::post('online-declarations/{declaration}/certify', [OnlineDeclarationController::class, 'certify'])->middleware('throttle:20,1');
 
     // Documents trouvés en garde

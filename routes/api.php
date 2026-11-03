@@ -21,12 +21,12 @@ use Illuminate\Support\Facades\Route;
 // ROUTES PUBLIQUES SENSIBLES — throttle strict (anti brute-force)
 // ══════════════════════════════════════════════════════════════════
 Route::middleware('throttle:10,1')->group(function () {
-    Route::post('register', [AuthController::class, 'register']);
-    Route::post('login', [AuthController::class, 'login']);
-    Route::post('forgot-password', [AuthController::class, 'forgotPassword']);
+    Route::post('register', [AuthController::class, 'register'])->middleware('throttle:register');
+    Route::post('login', [AuthController::class, 'login']); // + verrouillage après 5 échecs (AuthController)
+    Route::post('forgot-password', [AuthController::class, 'forgotPassword'])->middleware('throttle:password');
     // @deprecated — l'email passe dans l'URL. Conservé le temps d'adapter le front.
     Route::get('forgot-password', [AuthController::class, 'forgotPassword']);
-    Route::post('reset-password', [AuthController::class, 'resetPassword']);
+    Route::post('reset-password', [AuthController::class, 'resetPassword'])->middleware('throttle:password');
     Route::post('/verify-email', [EmailVerificationController::class, 'verify']);
     Route::post('/found-qr', [QrCodeController::class, 'handleFoundQr']);
 });
@@ -77,12 +77,12 @@ Route::middleware(['auth:api', 'active', 'throttle:60,1'])->group(function () {
     Route::get('/certificats/{slug}/telecharger', [CertificatDePerteController::class, 'telecharger']);
 
     // ── Documents (actions authentifiées) ──
-    Route::post('documents', [DocumentController::class, 'store']);
+    Route::post('documents', [DocumentController::class, 'store'])->middleware('throttle:publications');
     Route::put('documents/{slug}', [DocumentController::class, 'update']);
     Route::delete('documents/{slug}', [DocumentController::class, 'destroy']);
     Route::post('documents/restore/{slug}', [DocumentController::class, 'restoreTrashedDocument']);
     Route::get('trashed', [DocumentController::class, 'trashedDocuments']);
-    Route::post('documents/{slug}/restitution', [DocumentController::class, 'requestRestitution']);
+    Route::post('documents/{slug}/restitution', [DocumentController::class, 'requestRestitution'])->middleware('throttle:restitution-requests');
     Route::get('documents/{slug}/collection', [DocumentController::class, 'collection']);
 
     // ── QR code par document (v2) ──
@@ -105,7 +105,7 @@ Route::middleware(['auth:api', 'active', 'throttle:60,1'])->group(function () {
     Route::get('my-publications', [DocumentController::class, 'OwnPub']);
 
     // ── Déclarations ──
-    Route::post('declarations', [DeclarationDePerteController::class, 'store']);
+    Route::post('declarations', [DeclarationDePerteController::class, 'store'])->middleware('throttle:declarations');
     Route::get('declarations', [DeclarationDePerteController::class, 'index']);
     Route::get('declarations/{slug}', [DeclarationDePerteController::class, 'show']);
     Route::delete('declarations/{slug}', [DeclarationDePerteController::class, 'destroy']);

@@ -9,16 +9,17 @@ use App\Http\Middleware\ResolveActiveOrganization;
 use App\Models\CitizenProfile;
 use App\Models\DeclarationDePerte;
 use App\Services\Declarations\CitizenProfileService;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Support\Str;
 
 /**
  * Recherche / création de la victime au guichet.
  *
- * Recherche volontairement étroite (anti-fouille) :
+ * Recherche volontairement étroite (anti-fouille), sur toute la plateforme :
  *  - par téléphone exact, ou
- *  - par nom + prénom + date de naissance exacts.
+ *  - par nom + prénom exacts (date de naissance facultative pour affiner).
+ * Les citoyens déjà inscrits (comptes) sont trouvés même sans déclaration antérieure.
  */
 class CitizenProfileController extends Controller
 {
@@ -32,18 +33,11 @@ class CitizenProfileController extends Controller
             'phone'      => 'required_without_all:last_name|nullable|string|max:20',
             'last_name'  => 'required_without:phone|nullable|string|max:100',
             'first_name' => 'required_with:last_name|nullable|string|max:100',
-            'birth_date' => 'required_with:last_name|nullable|date',
+            'birth_date' => 'nullable|date',
         ]);
 
-        if ($request->filled('phone')) {
-            $results = CitizenProfile::wherePhone($request->input('phone'))->limit(10)->get();
-        } else {
-            $results = CitizenProfile::whereDate('birth_date', $request->date('birth_date'))
-                ->whereRaw('LOWER(last_name) = ?', [Str::lower($request->input('last_name'))])
-                ->whereRaw('LOWER(first_name) = ?', [Str::lower($request->input('first_name'))])
-                ->limit(10)
-                ->get();
-        }
+        $results = new EloquentCollection($this->service->search($request->only(['phone', 'last_name', 'first_name', 'birth_date']))->all());
+        $results->loadMissing('user');
 
         activity()
             ->causedBy($request->user())

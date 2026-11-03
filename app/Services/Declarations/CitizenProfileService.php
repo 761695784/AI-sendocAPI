@@ -7,6 +7,7 @@ use App\Models\Organization;
 use App\Models\User;
 use App\Services\Citizens\CitizenAccountService;
 use App\Services\SmsService;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -47,6 +48,74 @@ class CitizenProfileService
         }
 
         return $profile;
+    }
+
+    /**
+     * Recherche d'une personne au guichet, sur TOUTE la plateforme (pas seulement les
+     * personnes déjà venues dans la structure) :
+     *  - fiches déjà connues (déclarations en ligne ou au guichet) ;
+     *  - comptes citoyens inscrits sur DocTrack sans fiche : leur fiche est créée à la volée,
+     *    rattachée à leur compte, pour pouvoir enregistrer la déclaration.
+     *
+     * Critères étroits (anti-fouille) : téléphone exact, ou nom + prénom exacts
+     * (date de naissance facultative : elle n'est pas demandée à l'inscription).
+     *
+     * @param array{phone?: ?string, last_name?: ?string, first_name?: ?string, birth_date?: ?string} $criteria
+     * @return Collection<int, CitizenProfile>
+     */
+    public function search(array $criteria, int $limit = 10): Collection
+    {
+        $profiles = collect();
+        $accounts = collect();
+
+        if (! empty($criteria['phone'])) {
+            $normalized = SmsService::normalizeSenegalPhone($criteria['phone']);
+            $profiles   = CitizenProfile::wherePhone($normalized ?? $criteria['phone'])->limit($limit)->get();
+
+            $digits = $normalized ?? preg_replace('/\D+/', '', (string) $criteria['phone']);
+            if (strlen($digits) >= 4) {
+                $accounts = $this->citizenAccounts()
+                    ->where('Phone', 'like', '%' . substr($digits, -4))
+                    ->limit(200)
+                    ->get()
+                    ->filter(fn (User $u) => (SmsService::normalizeSenegalPhone($u->Phone) ?? preg_replace('/\D+/', '', (string) $u->Phone)) === $digits);
+            }
+        } else {
+            $last  = Str::lower(trim((string) ($criteria['last_name'] ?? '')));
+            $first = Str::lower(trim((string) ($criteria['first_name'] ?? '')));
+            $birth = $criteria['birth_date'] ?? null;
+
+            $profiles = CitizenProfile::query()
+                ->whereRaw('LOWER(last_name) = ?', [$last])
+                ->whereRaw('LOWER(first_name) = ?', [$first])
+                // Date facultative : si elle est donnée, on écarte seulement les fiches qui en ont une autre.
+                ->when($birth, fn ($q) => $q->where(fn ($w) => $w->whereDate('birth_date', $birth)->orWhereNull('birth_date')))
+                ->limit($limit)
+                ->get();
+
+            $accounts = $this->citizenAccounts()
+                ->whereRaw('LOWER(LastName) = ?', [$last])
+                ->whereRaw('LOWER(FirstName) = ?', [$first])
+                ->limit($limit)
+                ->get();
+        }
+
+        // Comptes inscrits : leur fiche (existante ou créée à la volée, liée au compte).
+        $fromAccounts = $accounts->map(fn (User $u) => $u->citizenProfile ?? $this->forAccount($u));
+
+        return $profiles->concat($fromAccounts)
+            ->filter()
+            ->unique('id')
+            ->take($limit)
+            ->values();
+    }
+
+    /** Comptes de citoyens (les agents et administrateurs ne sont pas des victimes à rechercher). */
+    private function citizenAccounts()
+    {
+        return User::query()
+            ->with('citizenProfile')
+            ->where(fn ($q) => $q->whereNull('account_type')->orWhere('account_type', User::TYPE_CITIZEN));
     }
 
     /** Profils ayant ce téléphone et ce nom (anti-doublon). */
