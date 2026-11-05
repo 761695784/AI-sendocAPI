@@ -22,6 +22,10 @@ use Illuminate\Support\Str;
  *   (et à son département quand son nom le contient), avec son téléphone public.
  * - Hors production : un compte « responsable » par structure, et deux agents pour les
  *   structures pilotes (SEED_PILOT_STRUCTURES). Mot de passe commun : SEED_DEMO_PASSWORD.
+ * - En production, seulement si SEED_STRUCTURE_ACCOUNTS=true : les mêmes comptes, mais chacun
+ *   avec son propre mot de passe aléatoire (jamais de mot de passe commun en ligne). Les
+ *   identifiants sont écrits dans storage/app/seed/comptes_structures_production.csv (dossier
+ *   privé) : à télécharger, à transmettre à chaque structure, puis à supprimer du serveur.
  * - Relançable sans doublon. La liste des comptes (sans mot de passe) est écrite dans
  *   storage/app/seed/comptes_structures.csv.
  *
@@ -34,6 +38,8 @@ class PilotStructuresSeeder extends Seeder
 
     private ?string $passwordHash = null;
     private ?string $generatedPassword = null;
+    /** Production : un mot de passe différent par compte. */
+    private bool $uniquePasswords = false;
     /** @var array<int, array<int, string>> */
     private array $accounts = [];
 
@@ -57,7 +63,8 @@ class PilotStructuresSeeder extends Seeder
         $regions = Territory::where('level', Territory::LEVEL_REGION)->with('children')->get()
             ->keyBy(fn (Territory $t) => self::key($t->name));
         $pilots  = array_filter(array_map('trim', explode(',', (string) env('SEED_PILOT_STRUCTURES', 'SN-POL-001,SN-POL-008,SN-POL-055,SN-GEN-202'))));
-        $withAccounts = ! app()->environment('production');
+        $this->uniquePasswords = app()->environment('production');
+        $withAccounts = ! $this->uniquePasswords || filter_var(env('SEED_STRUCTURE_ACCOUNTS', false), FILTER_VALIDATE_BOOLEAN);
 
         $rows = json_decode(file_get_contents(database_path('data/structures_onlpl.json')), true, flags: JSON_THROW_ON_ERROR);
         $created = 0;
@@ -88,9 +95,14 @@ class PilotStructuresSeeder extends Seeder
         $this->command?->info(count($rows) . " structures ({$created} nouvelles).");
 
         if ($withAccounts) {
-            $csv = "email;role;structure;code;region\n" . implode("\n", array_map(fn ($a) => implode(';', $a), $this->accounts)) . "\n";
-            Storage::disk('local')->put('seed/comptes_structures.csv', "\u{FEFF}" . $csv);
-            $this->command?->info(count($this->accounts) . ' comptes : storage/app/seed/comptes_structures.csv');
+            $header = $this->uniquePasswords ? "email;role;structure;code;region;mot_de_passe\n" : "email;role;structure;code;region\n";
+            $file   = $this->uniquePasswords ? 'seed/comptes_structures_production.csv' : 'seed/comptes_structures.csv';
+            $csv = $header . implode("\n", array_map(fn ($a) => implode(';', $a), $this->accounts)) . "\n";
+            Storage::disk('local')->put($file, "\u{FEFF}" . $csv);
+            $this->command?->info(count($this->accounts) . " comptes : storage/app/{$file}");
+            if ($this->uniquePasswords) {
+                $this->command?->warn('Ce fichier contient les mots de passe des nouveaux comptes : téléchargez-le, puis supprimez-le du serveur.');
+            }
             if ($this->generatedPassword) {
                 $this->command?->warn("SEED_DEMO_PASSWORD est vide — mot de passe commun généré pour les nouveaux comptes : {$this->generatedPassword}");
             }
@@ -99,17 +111,24 @@ class PilotStructuresSeeder extends Seeder
 
     private function account(string $email, string $first, Organization $org, string $role, int $n): void
     {
-        $this->accounts[] = [$email, $role, $org->name, $org->code, $org->territory?->name ?? ''];
+        $line = [$email, $role, $org->name, $org->code, $org->territory?->name ?? ''];
 
         if (User::where('email', $email)->exists()) {
+            $this->accounts[] = $this->uniquePasswords ? [...$line, '(compte déjà existant)'] : $line;
             return;
         }
 
-        // Un seul hachage pour tous les comptes : bcrypt est lent, et le mot de passe est commun.
-        if ($this->passwordHash === null) {
+        if ($this->uniquePasswords) {
+            // Production : mot de passe propre à chaque compte.
+            $password = Str::password(14, symbols: false);
+            $this->passwordHash = Hash::make($password);
+            $line[] = $password;
+        } elseif ($this->passwordHash === null) {
+            // Hors production : un seul hachage (bcrypt est lent), mot de passe commun.
             $password = env('SEED_DEMO_PASSWORD') ?: ($this->generatedPassword = Str::password(16, symbols: false));
             $this->passwordHash = Hash::make($password);
         }
+        $this->accounts[] = $line;
 
         $user = new User([
             'FirstName'         => $first,
