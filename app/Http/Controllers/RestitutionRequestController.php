@@ -18,7 +18,7 @@ class RestitutionRequestController extends Controller
     {
         $user = $request->user();
 
-        $items = RestitutionRequest::with(['document.documentType', 'requester', 'finder'])
+        $items = RestitutionRequest::with(['document.documentType', 'requester', 'finder', 'organization'])
             ->where(fn ($q) => $q->where('requester_user_id', $user->id)->orWhere('finder_user_id', $user->id))
             ->latest('id')
             ->get()
@@ -31,7 +31,7 @@ class RestitutionRequestController extends Controller
     {
         $this->authorizeParty($request, $restitution);
 
-        return response()->json($this->present($restitution->load(['document.documentType', 'requester', 'finder']), $request->user()->id));
+        return response()->json($this->present($restitution->load(['document.documentType', 'requester', 'finder', 'organization']), $request->user()->id));
     }
 
     public function accept(Request $request, RestitutionRequest $restitution)
@@ -46,9 +46,11 @@ class RestitutionRequestController extends Controller
         ]);
     }
 
+    /** Le trouveur ne souhaite pas (ou plus) remettre lui-même le document : une structure prend le relais. */
     public function decline(Request $request, RestitutionRequest $restitution)
     {
-        $this->authorizeFinderResponse($request, $restitution);
+        abort_unless($restitution->finder_user_id === $request->user()->id, 403, 'Seul le trouveur peut répondre à cette demande.');
+        abort_unless(in_array($restitution->status, RestitutionRequest::ACTIVE_STATUSES, true), 409, 'Cette demande est déjà close.');
         $data = $request->validate(['reason' => 'nullable|string|max:255']);
 
         $restitution = $this->service->decline($restitution, $request->user(), $data['reason'] ?? null);
@@ -87,16 +89,19 @@ class RestitutionRequestController extends Controller
         abort_unless($r->isPending(), 409, 'Cette demande a déjà reçu une réponse.');
     }
 
-    /** Les numéros ne sont montrés qu'après l'accord du trouveur. */
+    /** Les numéros ne sont montrés qu'une fois les coordonnées échangées. Guichet : la structure à la place du trouveur. */
     private function present(RestitutionRequest $r, int $viewerId): array
     {
         $role   = $r->finder_user_id === $viewerId ? 'finder' : 'owner';
         $shared = $r->contact_shared_at !== null && in_array($r->status, [RestitutionRequest::STATUS_ACCEPTED, RestitutionRequest::STATUS_COMPLETED], true);
         $other  = $role === 'finder' ? $r->requester : $r->finder;
         $doc    = $r->document;
+        $org    = $r->channel === RestitutionRequest::CHANNEL_COUNTER ? $r->organization : null;
 
         return [
             'uuid'          => $r->uuid,
+            'channel'       => $r->channel ?? RestitutionRequest::CHANNEL_DIRECT,
+            'structure'     => $org ? $org->only(['uuid', 'name', 'address', 'phone']) : null,
             'my_role'       => $role,
             'status'        => $r->status,
             'expires_at'    => $r->expires_at,
@@ -107,8 +112,13 @@ class RestitutionRequestController extends Controller
                 'document_type' => $doc->documentType?->TypeName,
                 'owner_name'    => trim($doc->OwnerFirstName . ' ' . $doc->OwnerLastName),
             ] : null,
-            'other_party'   => [
+            'other_party'   => $org ? [
+                'first_name' => $org->name,
+                'phone'      => $org->phone,
+            ] : [
                 'first_name' => $other?->FirstName,
+                // Le trouveur voit le nom complet du demandeur pour le comparer au document.
+                'last_name'  => $role === 'finder' ? $other?->LastName : null,
                 'phone'      => $shared ? $other?->Phone : null,
             ],
             'created_at'    => $r->created_at,

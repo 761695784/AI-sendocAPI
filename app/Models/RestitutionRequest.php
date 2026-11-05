@@ -9,10 +9,14 @@ use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 
 /**
- * Demande de restitution directe (double accord).
+ * Demande de restitution par le propriétaire.
  *
- *   pending → accepted (numéros échangés) → completed (remise déclarée)
- *          ↘ declined / expired → la structure la plus proche prend le relais
+ *  - channel « direct » (document publié par un citoyen) :
+ *      accepted (numéros échangés dès la demande) → completed (le trouveur marque « récupéré »)
+ *      ↘ declined (le trouveur préfère passer par une structure)
+ *    Les anciennes demandes en double accord passent par pending → accepted.
+ *  - channel « counter » (document conservé par une structure) :
+ *      pending (structure prévenue) → completed (remise au guichet, décharge)
  */
 class RestitutionRequest extends Model
 {
@@ -25,9 +29,13 @@ class RestitutionRequest extends Model
     public const STATUS_COMPLETED = 'completed';
     public const STATUS_CANCELLED = 'cancelled';
 
+    public const CHANNEL_DIRECT  = 'direct';
+    public const CHANNEL_COUNTER = 'counter';
+
     public const ACTIVE_STATUSES = [self::STATUS_PENDING, self::STATUS_ACCEPTED];
 
     protected $fillable = [
+        'channel', 'organization_id', 'terms_accepted_at',
         'document_id', 'document_match_id', 'requester_user_id', 'finder_user_id', 'status',
         'expires_at', 'responded_at', 'contact_shared_at', 'decline_reason', 'completed_at',
     ];
@@ -37,6 +45,7 @@ class RestitutionRequest extends Model
         'responded_at'      => 'datetime',
         'contact_shared_at' => 'datetime',
         'completed_at'      => 'datetime',
+        'terms_accepted_at' => 'datetime',
     ];
 
     public function getActivitylogOptions(): LogOptions
@@ -72,6 +81,12 @@ class RestitutionRequest extends Model
     public function match()
     {
         return $this->belongsTo(DocumentMatch::class, 'document_match_id');
+    }
+
+    /** Structure qui conserve le document (demande de retrait au guichet). */
+    public function organization()
+    {
+        return $this->belongsTo(Organization::class);
     }
 
     public function requester()

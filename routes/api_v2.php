@@ -37,33 +37,33 @@ use Illuminate\Support\Facades\Route;
 
 // Vérification publique d'un certificat (sans connexion).
 Route::get('verify/{code}', [CertificateVerificationController::class, 'api'])
-    ->middleware('throttle:30,1')
+    ->middleware('throttle:30,1,v2-verify')
     ->where('code', '[A-Za-z0-9\-]{4,40}');
 
 // Scan public d'un QR de document (trouveur sans compte).
-Route::get('tags/{token}', [TagScanController::class, 'show'])->middleware('throttle:30,1')->where('token', '[A-Za-z0-9]{20,40}');
-Route::post('tags/{token}/found', [TagScanController::class, 'report'])->middleware('throttle:5,1')->where('token', '[A-Za-z0-9]{20,40}');
+Route::get('tags/{token}', [TagScanController::class, 'show'])->middleware('throttle:30,1,v2-tags')->where('token', '[A-Za-z0-9]{20,40}');
+Route::post('tags/{token}/found', [TagScanController::class, 'report'])->middleware('throttle:5,1,v2-tags-found')->where('token', '[A-Za-z0-9]{20,40}');
 
 // Assistant conversationnel (texte + voix, français + wolof) : ouvert aux
 // visiteurs pour l'information ; le jeton JWT, s'il est fourni, identifie le citoyen.
 Route::prefix('assistant')->group(function () {
-    Route::get('capabilities', [AssistantController::class, 'capabilities'])->middleware('throttle:60,1');
-    Route::post('messages', [AssistantController::class, 'message'])->middleware('throttle:30,1');
-    Route::post('voice', [AssistantController::class, 'voice'])->middleware('throttle:10,1');
-    Route::get('conversations/{conversation}', [AssistantController::class, 'show'])->middleware('throttle:60,1');
+    Route::get('capabilities', [AssistantController::class, 'capabilities'])->middleware('throttle:60,1,v2-capabilities');
+    Route::post('messages', [AssistantController::class, 'message'])->middleware('throttle:30,1,v2-messages');
+    Route::post('voice', [AssistantController::class, 'voice'])->middleware('throttle:10,1,v2-voice');
+    Route::get('conversations/{conversation}', [AssistantController::class, 'show'])->middleware('throttle:60,1,v2-conversations');
     Route::get('audio/{lang}/{key}', [AssistantController::class, 'audio'])
-        ->middleware('throttle:120,1')->where(['lang' => '[a-z]{2}', 'key' => '[a-z0-9_]{2,60}']);
+        ->middleware('throttle:120,1,v2-audio')->where(['lang' => '[a-z]{2}', 'key' => '[a-z0-9_]{2,60}']);
 });
 
 // Scan OCR d'une pièce trouvée (citoyen connecté) : lecture, champs proposés, photo publique masquée.
 Route::middleware(['auth:api', 'active'])->prefix('ocr')->group(function () {
-    Route::post('scan', [OcrController::class, 'scan'])->middleware('throttle:10,1');
-    Route::get('scans/{scan}', [OcrController::class, 'show'])->middleware('throttle:60,1');
+    Route::post('scan', [OcrController::class, 'scan'])->middleware('throttle:10,1,v2-scan');
+    Route::get('scans/{scan}', [OcrController::class, 'show'])->middleware('throttle:60,1,v2-scans');
 });
 Route::get('ocr/scans/{scan}/preview', [OcrController::class, 'preview'])
-    ->middleware(['signed', 'throttle:60,1'])->name('ocr.preview');
+    ->middleware(['signed', 'throttle:60,1,v2-ocr-scans-preview'])->name('ocr.preview');
 
-Route::middleware(['auth:api', 'active', 'organization', 'throttle:120,1'])->group(function () {
+Route::middleware(['auth:api', 'active', 'organization', 'throttle:120,1,v2-espace'])->group(function () {
 
     Route::get('me/organizations', [MeController::class, 'organizations']);
 
@@ -87,8 +87,8 @@ Route::middleware(['auth:api', 'active', 'organization', 'throttle:120,1'])->gro
 
     // Guichet : victimes et déclarations
     Route::get('citizens', [CitizenProfileController::class, 'search'])->middleware('throttle:counter-search');
-    Route::post('citizens', [CitizenProfileController::class, 'store'])->middleware('throttle:30,1');
-    Route::post('citizens/{citizen}/account', [CitizenProfileController::class, 'account'])->middleware('throttle:10,1');
+    Route::post('citizens', [CitizenProfileController::class, 'store'])->middleware('throttle:30,1,v2-citizens');
+    Route::post('citizens/{citizen}/account', [CitizenProfileController::class, 'account'])->middleware('throttle:10,1,v2-citizens-account');
     Route::get('declarations', [CounterDeclarationController::class, 'index']);
     Route::post('declarations', [CounterDeclarationController::class, 'store']);
     Route::get('declarations/{declaration}', [CounterDeclarationController::class, 'show']);
@@ -97,13 +97,14 @@ Route::middleware(['auth:api', 'active', 'organization', 'throttle:120,1'])->gro
 
     // Guichet : certifier une déclaration faite en ligne (référence ou QR du récépissé)
     Route::get('online-declarations/lookup', [OnlineDeclarationController::class, 'lookup'])->middleware('throttle:counter-search');
-    Route::post('online-declarations/{declaration}/certify', [OnlineDeclarationController::class, 'certify'])->middleware('throttle:20,1');
+    Route::post('online-declarations/{declaration}/certify', [OnlineDeclarationController::class, 'certify'])->middleware('throttle:20,1,v2-online-declarations-certify');
 
     // Documents trouvés en garde
     Route::get('found-documents', [FoundDocumentController::class, 'index']);
     Route::post('found-documents', [FoundDocumentController::class, 'store']);
     Route::get('found-documents/{document}', [FoundDocumentController::class, 'show']);
     Route::post('found-documents/{document}/take-custody', [FoundDocumentController::class, 'takeCustody']);
+    Route::delete('found-documents/{document}', [FoundDocumentController::class, 'destroy'])->middleware('throttle:30,1,v2-found-documents-destroy');
 
     // Restitution officielle au guichet
     Route::get('found-documents/{document}/restitution', [RestitutionController::class, 'prepare']);
@@ -162,14 +163,14 @@ Route::middleware(['auth:api', 'active', 'organization', 'throttle:120,1'])->gro
     Route::post('vigilance/alerts/{alert}/confirm', [VigilanceController::class, 'confirm']);
 
     Route::get('reports', [ActivityReportController::class, 'index']);
-    Route::post('reports', [ActivityReportController::class, 'store'])->middleware('throttle:10,1');
+    Route::post('reports', [ActivityReportController::class, 'store'])->middleware('throttle:10,1,v2-reports');
     Route::get('reports/{report}', [ActivityReportController::class, 'show']);
     Route::get('reports/{report}/pdf', [ActivityReportController::class, 'pdf']);
     Route::get('reports/{report}/xlsx', [ActivityReportController::class, 'xlsx']);
     Route::delete('reports/{report}', [ActivityReportController::class, 'destroy']);
     Route::post('reports/{report}/narrative/approve', [ActivityReportController::class, 'approveNarrative']);
     Route::post('reports/{report}/narrative/reject', [ActivityReportController::class, 'rejectNarrative']);
-    Route::post('reports/{report}/narrative/regenerate', [ActivityReportController::class, 'regenerateNarrative'])->middleware('throttle:10,1');
+    Route::post('reports/{report}/narrative/regenerate', [ActivityReportController::class, 'regenerateNarrative'])->middleware('throttle:10,1,v2-reports-narrative-regenerate');
 
     // Statistiques par périmètre (?organization=uuid&from=&to=)
     Route::get('stats/overview', [StatsController::class, 'overview']);
@@ -184,7 +185,7 @@ Route::middleware(['auth:api', 'active', 'organization', 'throttle:120,1'])->gro
         // Voix de l'assistant : phrases lues une fois par le modèle de synthèse (Adia_TTS, wolof) puis servies en MP3.
         Route::get('assistant/voices', [AssistantVoiceController::class, 'index']);
         Route::post('assistant/voices/{lang}/{key}', [AssistantVoiceController::class, 'generate'])
-            ->middleware('throttle:30,1')->where(['lang' => '[a-z]{2}', 'key' => '[a-z0-9_]{2,60}']);
+            ->middleware('throttle:30,1,v2-assistant-voices')->where(['lang' => '[a-z]{2}', 'key' => '[a-z0-9_]{2,60}']);
         Route::delete('assistant/voices/{lang}/{key}', [AssistantVoiceController::class, 'destroy'])
             ->where(['lang' => '[a-z]{2}', 'key' => '[a-z0-9_]{2,60}']);
         Route::match(['put', 'patch'], 'organization-types/{organizationType:code}', [OrganizationTypeController::class, 'update']);

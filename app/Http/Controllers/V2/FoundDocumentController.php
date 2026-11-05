@@ -10,6 +10,7 @@ use App\Models\Document;
 use App\Services\Access\OrganizationAccess;
 use App\Services\FoundDocuments\FoundDocumentService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
 /**
@@ -67,6 +68,43 @@ class FoundDocumentController extends Controller
         return response()->json((new FoundDocumentResource(
             $document->load(['documentType', 'custodyOrganization', 'depositedBy', 'finder', 'matches'])
         ))->resolve($request));
+    }
+
+    /**
+     * Suppression définitive (sans corbeille) d'un document enregistré au guichet.
+     * Refusée dès que le propriétaire est identifié ou que la restitution a commencé :
+     * la trace doit alors être conservée.
+     */
+    public function destroy(Request $request, Document $document)
+    {
+        Gate::authorize('destroyCustody', $document);
+
+        $locked = $document->lifecycle_status !== Document::LIFECYCLE_IN_CUSTODY
+            || $document->matches()->where('status', \App\Models\DocumentMatch::STATUS_CONFIRMED)->exists()
+            || \App\Models\Restitution::where('document_id', $document->id)->exists()
+            || $document->restitutionRequests()->exists();
+        if ($locked) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Ce document ne peut plus être supprimé : son propriétaire est identifié ou une restitution est en cours.',
+            ], 409);
+        }
+
+        $reference = $document->reference;
+        DB::transaction(function () use ($document) {
+            $document->transitions()->delete();
+            \App\Models\VigilanceAlert::where('subject_type', $document->getMorphClass())->where('subject_id', $document->id)->delete();
+            $document->forceDelete(); // médias, correspondances non confirmées et collectes supprimés avec lui
+        });
+
+        activity()->causedBy($request->user())
+            ->withProperties(['reference' => $reference, 'organization' => ResolveActiveOrganization::current()?->uuid])
+            ->log('Document trouvé supprimé définitivement');
+
+        \Illuminate\Support\Facades\Cache::forget('publications_by_department');
+        \Illuminate\Support\Facades\Cache::forget('publications_by_type');
+
+        return response()->json(['success' => true, 'message' => "Le document {$reference} a été supprimé définitivement."]);
     }
 
     /** Le trouveur remet à la structure un document qu'il avait publié en ligne. */

@@ -7,6 +7,7 @@ use App\Models\Document;
 use App\Models\DocumentMatch;
 use App\Models\RestitutionRequest;
 use App\Services\Declarations\OnlineDeclarationService;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 
@@ -42,7 +43,7 @@ class DeclarationDePerteController extends Controller
     // ══════════════════════════════════════════════════════════════
     // INDEX — Liste des déclarations
     // ══════════════════════════════════════════════════════════════
-    public function index()
+    public function index(Request $request)
     {
         $user = Auth::user();
 
@@ -56,10 +57,11 @@ class DeclarationDePerteController extends Controller
 
         // Si l'utilisateur est un administrateur, récupérer toutes les déclarations (y compris celles supprimées)
         if ($user->isSuperAdmin()) {
-            $declarations = DeclarationDePerte::withTrashed()
+            // Par défaut les déclarations en cours ; ?trashed=only (corbeille) ou ?trashed=with (tout).
+            $declarations = \App\Http\Controllers\DocumentController::applyTrashedFilter(DeclarationDePerte::query(), $request->query('trashed'))
                 ->with(['user', 'documentType'])
                 ->latest()
-                ->paginate(20);
+                ->paginate(max(1, min(100, (int) $request->query('per_page', 20))));
         } else {
             // Si l'utilisateur est un simple utilisateur, ne récupérer que ses propres déclarations (non supprimées)
             $declarations = DeclarationDePerte::with(['user', 'documentType'])
@@ -71,6 +73,11 @@ class DeclarationDePerteController extends Controller
         return response()->json([
             'success' => true,
             'data'    => $declarations->items(), // ← plus de double imbrication data.data
+            'meta'    => [
+                'current_page' => $declarations->currentPage(),
+                'last_page'    => $declarations->lastPage(),
+                'total'        => $declarations->total(),
+            ],
         ]);
     }
 

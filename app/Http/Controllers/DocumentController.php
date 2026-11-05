@@ -26,6 +26,16 @@ use Illuminate\Support\Str;
 class DocumentController extends Controller
 {
 
+    /** Filtre des éléments supprimés pour l'administration : without (défaut), only, with. */
+    public static function applyTrashedFilter($query, ?string $mode)
+    {
+        return match ($mode) {
+            'only'  => $query->onlyTrashed(),
+            'with'  => $query->withTrashed(),
+            default => $query,
+        };
+    }
+
     public static function frontendDocumentUrl(Document $document): string
     {
         return rtrim(config('doctrack.frontend_url'), '/') . '/document/' . $document->uuid;
@@ -40,19 +50,14 @@ class DocumentController extends Controller
         // Taille de page demandée par l'écran public (20 par défaut, 100 au plus).
         $perPage = max(1, min(100, (int) $request->query('per_page', 20)));
 
-        if ($user && $user->isSuperAdmin()) {
-            $documents = Document::withTrashed()
-                ->with(['user', 'documentType', 'media', 'custodyOrganization'])
-                ->latest()
-                ->paginate($perPage);
-        } else {
-            $documents = Document::whereNull('deleted_at')
-                // Les signalements par QR ne sont pas publiés : le propriétaire est prévenu directement.
-                ->where(fn ($q) => $q->whereNull('found_channel')->orWhere('found_channel', '!=', Document::CHANNEL_QR_SCAN))
-                ->with(['user', 'documentType', 'media', 'custodyOrganization'])
-                ->latest()
-                ->paginate($perPage);
-        }
+        // Liste publique : jamais les publications supprimées, même pour l'administrateur
+        // (il les retrouve dans l'administration, filtre « Supprimées »).
+        $documents = Document::query()
+            // Les signalements par QR ne sont pas publiés : le propriétaire est prévenu directement.
+            ->where(fn ($q) => $q->whereNull('found_channel')->orWhere('found_channel', '!=', Document::CHANNEL_QR_SCAN))
+            ->with(['user', 'documentType', 'media', 'custodyOrganization'])
+            ->latest()
+            ->paginate($perPage);
 
         return DocumentResource::collection($documents);
     }
@@ -66,10 +71,11 @@ class DocumentController extends Controller
             return response()->json(['success' => false, 'message' => 'Accès refusé.'], 403);
         }
 
-        $documents = Document::withTrashed()
+        // Par défaut, seulement les publications en ligne ; ?trashed=only pour la corbeille, ?trashed=with pour tout.
+        $documents = self::applyTrashedFilter(Document::query(), $request->query('trashed'))
             ->with(['user', 'documentType', 'media', 'custodyOrganization'])
             ->latest()
-            ->paginate(20);
+            ->paginate(max(1, min(100, (int) $request->query('per_page', 20))));
 
         return DocumentResource::collection($documents);
     }
@@ -172,7 +178,7 @@ class DocumentController extends Controller
         // Invalide le cache des stats après ajout
         Cache::forget('statistics_month_' . now()->format('Y_m'));
         Cache::forget('publications_by_type');
-        Cache::forget('publications_by_location');
+        Cache::forget('publications_by_department');
 
         return response()->json([
             'success'  => true,
@@ -187,7 +193,7 @@ class DocumentController extends Controller
     /**
      * Gérer la demande de restitution.
      */
-    public function requestRestitution($uuid, \App\Services\Restitution\DirectRestitutionService $restitutions)
+    public function requestRestitution(Request $request, $uuid, \App\Services\Restitution\DirectRestitutionService $restitutions)
     {
         $document = Document::where('uuid', $uuid)->firstOrFail();
         $fromUser = Auth::user();
@@ -206,53 +212,93 @@ class DocumentController extends Controller
             ], 409);
         }
 
-        // Le trouveur ne l'a plus : il est dans une structure, restitution au guichet.
-        if ($document->found_channel === Document::CHANNEL_COUNTER || $document->isInCustody()) {
-            return response()->json([
-                'success'   => false,
-                'message'   => 'Ce document est conservé par ' . ($document->custodyOrganization?->name ?? 'une structure officielle')
-                    . '. Présentez-vous à ce guichet avec une pièce justificative.',
-                'custody'   => $document->custodyOrganization?->only(['uuid', 'name', 'address', 'phone']),
-                'reference' => $document->reference,
-            ], 409);
-        }
-
-        if ($document->statut === 'récupéré') {
+        if ($document->statut === 'récupéré' || $document->lifecycle_status === Document::LIFECYCLE_RESTITUTED) {
             return response()->json(['success' => false, 'message' => 'Ce document a déjà été restitué.'], 409);
-        }
-
-        // Règle : seul le propriétaire CONFIRMÉ par DocTrack peut demander une remise directe.
-        $match = $restitutions->confirmedMatchFor($document, $fromUser);
-        if (! $match) {
-            return response()->json([
-                'success' => false,
-                'code'    => 'no_confirmed_match',
-                'message' => 'La remise directe est réservée au propriétaire confirmé par DocTrack. '
-                    . 'Faites d\'abord une déclaration de perte : si ce document est le vôtre, vous serez prévenu dès que la correspondance sera confirmée. '
-                    . 'Vous pouvez aussi vous présenter à la structure de police ou de gendarmerie la plus proche.',
-            ], 403);
         }
 
         if ($active = $restitutions->activeRequest($document)) {
             return response()->json([
                 'success' => false,
                 'message' => $active->requester_user_id === $fromUser->id
-                    ? 'Vous avez déjà une demande en cours pour ce document.'
+                    ? 'Vous avez déjà une demande en cours pour ce document : retrouvez-la dans « Mon espace → Remises ».'
                     : 'Une demande de restitution est déjà en cours pour ce document.',
-                'request' => ['uuid' => $active->uuid, 'status' => $active->status, 'expires_at' => $active->expires_at],
+                'request' => ['uuid' => $active->uuid, 'status' => $active->status, 'channel' => $active->channel],
             ], 400);
         }
 
-        $request = $restitutions->request($document, $fromUser, $match);
+        // ── Cas 2 : document conservé par une structure → retrait au guichet ──
+        if ($document->found_channel === Document::CHANNEL_COUNTER || $document->isInCustody()) {
+            $structure = $document->custodyOrganization;
+            if (! $structure) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Ce document est conservé par une structure officielle. Présentez-vous avec une pièce justificative et la référence ' . $document->reference . '.',
+                ], 409);
+            }
+
+            $req = $restitutions->requestAtStructure($document, $fromUser, $structure);
+
+            return response()->json([
+                'success'   => true,
+                'channel'   => 'counter',
+                'message'   => $structure->name . ' a été prévenu(e) de votre demande. Présentez-vous avec une pièce d\'identité et la référence '
+                    . $document->reference . ' : l\'agent vérifiera votre identité et vous remettra le document contre une décharge.',
+                'custody'   => $structure->only(['uuid', 'name', 'address', 'phone']),
+                'reference' => $document->reference,
+                'request'   => ['uuid' => $req->uuid, 'status' => $req->status, 'channel' => $req->channel],
+            ], 201);
+        }
+
+        // ── Cas 1 : document publié par un citoyen → mise en relation directe ──
+        $data = $request->validate([
+            'accept_terms' => 'accepted',
+            'doc_last4'    => 'nullable|string|max:20',
+            'ask_finder'   => 'nullable|boolean', // identité non prouvée : laisser le trouveur décider
+        ], [
+            'accept_terms.accepted' => 'Vous devez accepter les conditions de la remise directe pour continuer.',
+        ]);
+
+        $match = $restitutions->confirmedMatchFor($document, $fromUser);
+        if (! $restitutions->ownershipLooksRight($document, $fromUser, $data['doc_last4'] ?? null)) {
+            // Identité non prouvée automatiquement : le trouveur, qui a le document en main, décide.
+            if ($request->boolean('ask_finder')) {
+                $req = $restitutions->requestToFinder($document, $fromUser);
+
+                return response()->json([
+                    'success' => true,
+                    'channel' => 'direct',
+                    'message' => 'Votre demande est envoyée au trouveur : il compare avec le document puis accepte ou refuse. '
+                        . 'S\'il accepte, vous recevrez son numéro par SMS. Sans réponse sous 48 h, une structure proche prend le relais.',
+                    'finder'  => null,
+                    'request' => ['uuid' => $req->uuid, 'status' => $req->status, 'channel' => $req->channel],
+                ], 201);
+            }
+
+            $hasNumber = $restitutions->knownLast4($document) !== null;
+
+            return response()->json([
+                'success'    => false,
+                'code'       => 'identity_check',
+                'has_number' => $hasNumber,
+                'message'    => 'Le nom de votre compte ne correspond pas au nom inscrit sur ce document. '
+                    . ($hasNumber
+                        ? 'Indiquez les 4 derniers caractères de son numéro, ou envoyez votre demande au trouveur pour qu\'il vérifie.'
+                        : 'Le trouveur n\'a pas saisi le numéro de la pièce : envoyez votre demande au trouveur pour qu\'il vérifie.'),
+            ], 403);
+        }
+
+        $req    = $restitutions->requestDirect($document, $fromUser, $match);
+        $finder = $document->user;
 
         return response()->json([
             'success' => true,
-            'message' => 'Demande envoyée. Le trouveur est prévenu par SMS et par email ; dès qu\'il accepte, vous recevrez son numéro.',
-            'request' => [
-                'uuid'       => $request->uuid,
-                'status'     => $request->status,
-                'expires_at' => $request->expires_at,
+            'channel' => 'direct',
+            'message' => 'Demande envoyée. Le trouveur a reçu votre numéro par SMS et par email. Vous pouvez aussi l\'appeler.',
+            'finder'  => [
+                'first_name' => $finder?->FirstName,
+                'phone'      => $finder ? ($finder->Phone ?: $document->collectionRequests()->latest('id')->first()?->finderPhone()) : null,
             ],
+            'request' => ['uuid' => $req->uuid, 'status' => $req->status, 'channel' => $req->channel],
         ], 201);
     }
 
@@ -369,7 +415,7 @@ class DocumentController extends Controller
 
             // Invalide le cache
             Cache::forget('publications_by_type');
-            Cache::forget('publications_by_location');
+            Cache::forget('publications_by_department');
 
             return response()->json([
                 'success' => true,
@@ -439,13 +485,15 @@ class DocumentController extends Controller
         // Récupérer uniquement les documents supprimés de l'utilisateur connecté
         $documents = Document::onlyTrashed()
             ->where('user_id', $user->id)
-            ->with(['user', 'media']) // Charge les informations de l'utilisateur associé à chaque document
+            ->with(['user', 'documentType', 'media', 'custodyOrganization'])
             ->latest()
-            ->paginate(20);
+            ->limit(100)
+            ->get();
 
+        // Liste simple (et non une page imbriquée) : le front l'affiche directement dans la corbeille.
         return response()->json([
             'success' => true,
-            'data'    => $documents,
+            'data'    => DocumentResource::collection($documents)->resolve(),
         ]);
     }
 
@@ -648,54 +696,91 @@ class DocumentController extends Controller
     // ══════════════════════════════════════════════════════════════
     // GÉOLOCALISATION — avec cache 48h
     // ══════════════════════════════════════════════════════════════
-    private function getCoordinates(string $location): array
+    /**
+     * Coordonnées d'un lieu inconnu du référentiel (OpenStreetMap / Nominatim).
+     * Un échec n'est gardé en cache qu'une heure : il ne bloque plus la carte pendant 30 jours.
+     */
+    private function geocode(string $location): ?array
     {
-        $cacheKey = 'coords_' . Str::slug($location);
+        if (app()->runningUnitTests()) {
+            return null;
+        }
 
-        return Cache::remember($cacheKey, now()->addDays(30), function () use ($location) {
-            try {
-                $response = Http::timeout(5)
-                    ->withHeaders(['User-Agent' => 'DocTrack/1.0 (sendoctrack@gmail.com)'])
-                    ->get('https://nominatim.openstreetmap.org/search', [
-                        'q'      => $location . ', Sénégal',
-                        'format' => 'json',
-                        'limit'  => 1,
-                    ]);
+        $key = 'geo_sn_' . md5(Str::lower(trim($location)));
+        $cached = Cache::get($key);
+        if ($cached !== null) {
+            return $cached ?: null;
+        }
 
-                if ($response->successful() && ! empty($response->json())) {
-                    $data = $response->json()[0];
-                    return [
-                        'latitude'  => (float) $data['lat'],
-                        'longitude' => (float) $data['lon'],
-                    ];
-                }
-            } catch (\Exception $e) {
-                Log::error("Geocoding error for '$location': " . $e->getMessage());
+        $coords = [];
+        try {
+            $response = Http::timeout(4)
+                ->withHeaders(['User-Agent' => 'DocTrack/1.0 (sendoctrack@gmail.com)'])
+                ->get('https://nominatim.openstreetmap.org/search', [
+                    'q' => $location . ', Sénégal', 'format' => 'json', 'limit' => 1, 'countrycodes' => 'sn',
+                ]);
+            if ($response->successful() && ! empty($response->json()[0])) {
+                $coords = ['lat' => (float) $response->json()[0]['lat'], 'lon' => (float) $response->json()[0]['lon']];
             }
+        } catch (\Throwable $e) {
+            Log::warning("Géocodage impossible pour '$location' : " . $e->getMessage());
+        }
 
-            return ['latitude' => null, 'longitude' => null];
-        });
+        Cache::put($key, $coords, $coords ? now()->addDays(30) : now()->addHour());
+
+        return $coords ?: null;
     }
-    // Méthode pour récupérer les publications et leurs coordonnées
+
+    /**
+     * Carte : nombre de publications par département.
+     * Le département vient, dans l'ordre : du point GPS où le document a été trouvé, du lieu saisi
+     * (référentiel des départements et quartiers courants), de la structure qui le garde,
+     * puis en dernier recours du géocodage OpenStreetMap.
+     */
     public function getPublicationsByLocation()
     {
-        $data = Cache::remember('publications_by_location', now()->addHours(2), function () {
-            $publications = Document::select('Location', DB::raw('COUNT(*) as publications'))
-                ->groupBy('Location')
-                ->get();
+        $data = Cache::remember('publications_by_department', now()->addMinutes(10), function () {
+            $counts = [];
+            $unlocated = 0;
 
-            return $publications->map(function ($item) {
-                $coords = $this->getCoordinates($item->Location);
-                return [
-                    'name'         => $item->Location,
-                    'latitude'     => $coords['latitude'],
-                    'longitude'    => $coords['longitude'],
-                    'publications' => $item->publications,
-                ];
-            })->values();
+            Document::query()
+                ->where(fn ($q) => $q->whereNull('found_channel')->orWhere('found_channel', '!=', Document::CHANNEL_QR_SCAN))
+                ->with('custodyOrganization:id,latitude,longitude,name')
+                ->select(['id', 'Location', 'found_latitude', 'found_longitude', 'custody_organization_id'])
+                ->chunkById(500, function ($documents) use (&$counts, &$unlocated) {
+                    foreach ($documents as $document) {
+                        $department = \App\Support\SenegalGazetteer::nearest(
+                            $document->found_latitude !== null ? (float) $document->found_latitude : null,
+                            $document->found_longitude !== null ? (float) $document->found_longitude : null,
+                        )
+                            ?? \App\Support\SenegalGazetteer::locate($document->Location)
+                            ?? \App\Support\SenegalGazetteer::locate($document->custodyOrganization?->name)
+                            ?? \App\Support\SenegalGazetteer::nearest($document->custodyOrganization?->latitude, $document->custodyOrganization?->longitude);
+
+                        if (! $department && $document->Location && ($coords = $this->geocode($document->Location))) {
+                            $department = \App\Support\SenegalGazetteer::nearest($coords['lat'], $coords['lon']);
+                        }
+
+                        $department ? $counts[$department] = ($counts[$department] ?? 0) + 1 : $unlocated++;
+                    }
+                });
+
+            arsort($counts);
+
+            return [
+                'locations' => collect($counts)->map(function ($count, $name) {
+                    [$region, $lat, $lon] = \App\Support\SenegalGazetteer::DEPARTMENTS[$name];
+
+                    return ['name' => $name, 'region' => $region, 'latitude' => $lat, 'longitude' => $lon, 'publications' => $count];
+                })->values()->all(),
+                'unlocated' => $unlocated,
+            ];
         });
 
-        return response()->json($data);
+        // Liste (format historique) ; les publications non localisées sont indiquées en en-tête.
+        return response()->json($data['locations'])
+            ->header('X-Unlocated', (string) $data['unlocated'])
+            ->header('Access-Control-Expose-Headers', 'X-Unlocated');
     }
 
 

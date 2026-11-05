@@ -24,7 +24,8 @@ class AuthController extends Controller
 {
 
     /**
-     * Consulter tous les logs d'activité — admin uniquement
+     * Consulter tous les logs d'activité — admin uniquement.
+     * ?q= recherche (description, nom ou email de l'auteur) ; ?per_page= (10 à 50).
      */
     public function getActivityLogs(Request $request)
     {
@@ -32,18 +33,7 @@ class AuthController extends Controller
             return response()->json(['success' => false, 'message' => 'Accès refusé.'], 403);
         }
 
-        $page = $request->query('page', 1);
-
-        $logs = Activity::with([
-            'causer:id,FirstName,LastName,email,Phone', // ← sélectionne seulement les colonnes utiles
-            'subject',                                  // ← garde subject pour les détails
-        ])
-            ->select('id', 'log_name', 'description', 'subject_type', 'subject_id',
-                'causer_type', 'causer_id', 'properties', 'event', 'created_at') // ← pas tout charger
-            ->latest()
-            ->paginate(20); // ← réduis de 50 à 20
-
-        return response()->json($logs);
+        return $this->activityLogsResponse($request, null);
     }
 
     /**
@@ -62,22 +52,86 @@ class AuthController extends Controller
         ];
 
         if (! isset($map[$subjectType])) {
-            return response()->json(['error' => 'Type invalide.'], 422);
+            return response()->json(['success' => false, 'message' => 'Type de journal inconnu.'], 422);
         }
 
-        $page = $request->query('page', 1);
+        return $this->activityLogsResponse($request, $map[$subjectType]);
+    }
 
-        $logs = Activity::with([
-            'causer:id,FirstName,LastName,email,Phone',
-            'subject',
-        ])
+    /**
+     * Page de journal légère : on ne charge plus l'objet concerné en entier (photos, textes longs,
+     * relations…), seulement un résumé. C'est ce qui faisait « geler » l'écran du journal.
+     */
+    private function activityLogsResponse(Request $request, ?string $subjectClass)
+    {
+        $perPage = max(10, min(50, (int) $request->query('per_page', 20)));
+        $search  = trim((string) $request->query('q', ''));
+
+        $logs = Activity::query()
+            ->with(['causer' => fn ($q) => $q->select('id', 'FirstName', 'LastName', 'email')])
             ->select('id', 'log_name', 'description', 'subject_type', 'subject_id',
                 'causer_type', 'causer_id', 'properties', 'event', 'created_at')
-            ->where('subject_type', $map[$subjectType])
-            ->latest()
-            ->paginate(20); // ← 20 au lieu de 50
+            ->when($subjectClass, fn ($q) => $q->where('subject_type', $subjectClass))
+            ->when($search !== '', function ($q) use ($search) {
+                $like = '%' . $search . '%';
+                $q->where(fn ($w) => $w->where('description', 'like', $like)
+                    ->orWhereHasMorph('causer', [User::class], fn ($c) => $c->where('FirstName', 'like', $like)
+                        ->orWhere('LastName', 'like', $like)
+                        ->orWhere('email', 'like', $like)));
+            })
+            ->latest('id')
+            ->paginate($perPage);
+
+        $logs->getCollection()->transform(fn (Activity $a) => [
+            'id'            => $a->id,
+            'log_name'      => $a->log_name,
+            'description'   => $a->description,
+            'event'         => $a->event,
+            'created_at'    => $a->created_at,
+            'subject_type'  => $a->subject_type,
+            'subject_label' => $a->subject_type ? class_basename($a->subject_type) : null,
+            'subject_id'    => $a->subject_id,
+            'causer'        => $a->causer ? [
+                'FirstName' => $a->causer->FirstName ?? null,
+                'LastName'  => $a->causer->LastName ?? null,
+                'email'     => $a->causer->email ?? null,
+            ] : null,
+            'properties'    => self::summarizeLogProperties($a->properties),
+        ]);
 
         return response()->json($logs);
+    }
+
+    /**
+     * Propriétés d'un log réduites à une liste « clé → valeur » lisible :
+     * 20 au plus, textes coupés à 160 caractères, données sensibles retirées.
+     *
+     * @return array<int, array{key: string, value: string}>
+     */
+    private static function summarizeLogProperties($properties): array
+    {
+        $props = collect($properties ?? [])->toArray();
+        // Spatie : { attributes: {...}, old: {...} } pour les modifications de modèles.
+        $source = isset($props['attributes']) && is_array($props['attributes']) ? $props['attributes'] : $props;
+        $hidden = '/(password|token|secret|hash|encrypted|remember|verification_code|docidentification|doc_number|id_number)/i';
+
+        $out = [];
+        foreach ($source as $key => $value) {
+            if (count($out) >= 20) {
+                break;
+            }
+            if ($key === 'id' || preg_match($hidden, (string) $key)) {
+                continue;
+            }
+            if (is_array($value) || is_object($value)) {
+                $value = json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            } elseif (is_bool($value)) {
+                $value = $value ? 'oui' : 'non';
+            }
+            $out[] = ['key' => (string) $key, 'value' => Str::limit((string) ($value ?? '—'), 160)];
+        }
+
+        return $out;
     }
 
     /**
@@ -90,7 +144,7 @@ class AuthController extends Controller
             'FirstName' => 'required|string|max:40',
             'LastName'  => 'required|string|max:20',
             'Adress'    => 'required|string|max:100',
-            'Phone'     => 'required|string|max:20',
+            'Phone'     => ['required', 'string', 'max:20', \App\Support\PhoneNumbers::uniqueRule()],
             'email'     => 'required|string|email|max:50|unique:users',
             'password'  => 'required|string|min:8|confirmed',
         ]);
@@ -447,6 +501,8 @@ class AuthController extends Controller
             'status'                  => User::STATUS_SUSPENDED,
         ])->saveQuietly();
         $user->memberships()->whereNull('ends_at')->update(['ends_at' => now()]);
+        // La fiche du guichet (déclarations officielles) est conservée mais n'est plus liée au compte supprimé.
+        \App\Models\CitizenProfile::where('user_id', $user->id)->update(['user_id' => null]);
         $user->delete(); // soft delete
 
         return response()->json([
@@ -474,7 +530,7 @@ class AuthController extends Controller
             'FirstName' => 'required|string|max:40',
             'LastName'  => 'required|string|max:20',
             'Adress'    => 'required|string|max:100',
-            'Phone'     => 'required|string|max:20',
+            'Phone'     => ['required', 'string', 'max:20', \App\Support\PhoneNumbers::uniqueRule()],
             'email'     => 'required|string|email|max:50|unique:users',
             'password'  => 'required|string|min:8|confirmed',
         ]);
@@ -541,7 +597,7 @@ class AuthController extends Controller
             'FirstName' => 'sometimes|required|string|max:40',
             'LastName'  => 'sometimes|required|string|max:20',
             'Adress'    => 'sometimes|required|string|max:100',
-            'Phone'     => 'sometimes|required|string|max:20',
+            'Phone'     => ['sometimes', 'required', 'string', 'max:20', \App\Support\PhoneNumbers::uniqueRule(Auth::id())],
             'email'     => 'sometimes|required|string|email|max:50|unique:users,email,' . Auth::id(),
         ]);
 
@@ -585,12 +641,34 @@ class AuthController extends Controller
             'email' => 'required|email',
         ]);
 
+        $email = Str::lower(trim($request->input('email')));
+        $user  = User::whereRaw('LOWER(email) = ?', [$email])->first();
+
+        if ($user) {
+            if ($user->email_verified_at === null && $user->isCitizen()) {
+                // Compte créé au guichet, jamais activé : on renvoie le lien d'activation (7 jours).
+                app(\App\Services\Citizens\CitizenAccountService::class)->sendActivation($user);
+            } else {
+                Password::sendResetLink(['email' => $user->email]);
+            }
+        } else {
+            // Personne enregistrée au guichet avec cet email, mais sans compte : on crée son compte
+            // et on lui envoie le lien pour choisir son mot de passe (activation en un clic).
+            $profile = \App\Models\CitizenProfile::whereRaw('LOWER(email) = ?', [$email])->whereNull('user_id')->latest('id')->first();
+            if ($profile) {
+                try {
+                    app(\App\Services\Citizens\CitizenAccountService::class)->createForProfile($profile, $email, null, $profile->createdByOrganization);
+                } catch (\Illuminate\Validation\ValidationException $e) {
+                    Log::info('Activation depuis « mot de passe oublié » impossible pour une fiche du guichet', ['profile' => $profile->uuid]);
+                }
+            }
+        }
+
         // Réponse identique que le compte existe ou non (pas d'énumération).
-        Password::sendResetLink($request->only('email'));
 
         return response()->json([
             'success' => true,
-            'message' => 'Si un compte existe pour cet email, un lien de réinitialisation vient d\'être envoyé.',
+            'message' => 'Si un compte (ou une fiche enregistrée au guichet) existe pour cet email, un lien pour choisir votre mot de passe vient d\'être envoyé.',
         ], 200);
     }
 

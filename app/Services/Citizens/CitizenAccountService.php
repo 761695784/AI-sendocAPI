@@ -30,8 +30,12 @@ class CitizenAccountService
 
     public function __construct(private Notifier $notifier) {}
 
-    /** Crée (ou retrouve) le compte de la personne et y rattache sa fiche et ses déclarations. */
-    public function createForProfile(CitizenProfile $profile, string $email, User $agent, ?Organization $structure): User
+    /**
+     * Crée (ou retrouve) le compte de la personne et y rattache sa fiche et ses déclarations.
+     * $agent est null quand la personne le demande elle-même (« mot de passe oublié » avec l'email
+     * donné au guichet).
+     */
+    public function createForProfile(CitizenProfile $profile, string $email, ?User $agent, ?Organization $structure): User
     {
         if ($profile->user_id) {
             return $profile->user;
@@ -75,9 +79,12 @@ class CitizenAccountService
 
         $this->sendActivation($user, $structure);
 
-        activity()->causedBy($agent)->performedOn($user)
-            ->withProperties(['organization_id' => $structure?->id, 'citizen_profile' => $profile->uuid])
-            ->log('Compte citoyen créé au guichet');
+        $log = activity()->performedOn($user)
+            ->withProperties(['organization_id' => $structure?->id, 'citizen_profile' => $profile->uuid]);
+        if ($agent) {
+            $log->causedBy($agent);
+        }
+        $log->log($agent ? 'Compte citoyen créé au guichet' : 'Compte citoyen créé par la personne (lien « mot de passe oublié »)');
 
         return $user;
     }

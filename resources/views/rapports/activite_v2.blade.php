@@ -4,51 +4,64 @@
 <meta charset="UTF-8">
 <title>Rapport d'activités — {{ $r->period_label }}</title>
 <style>
+    /* Charte DocTrack : violet #31287C, or #F6A500, lavande #F4F3FB (même identité que la plateforme). */
     @page { margin: 40px 44px 58px 44px; }
     * { font-family: 'DejaVu Sans', sans-serif; }
-    body { font-size: 9.8px; color: #1a1a1a; line-height: 1.5; }
+    body { font-size: 9.8px; color: #1f1d33; line-height: 1.55; }
     table { width: 100%; border-collapse: collapse; }
     p { margin: 0 0 7px 0; text-align: justify; }
-    .muted { color: #555; }
+    strong { color: #1e1a5c; }
+    .muted { color: #5b5878; }
     .small { font-size: 8.4px; }
 
     /* Page de garde */
-    .cover-title { margin: 70px 0 0 0; border-top: 3px double #1a1a1a; border-bottom: 3px double #1a1a1a; padding: 22px 10px; text-align: center; }
-    .cover-title .t1 { font-size: 24px; font-weight: bold; letter-spacing: 3px; }
-    .cover-title .t2 { font-size: 13px; font-weight: bold; margin-top: 8px; text-transform: uppercase; }
-    .cover-title .t3 { font-size: 10.5px; margin-top: 6px; }
-    .cover-meta { margin: 34px auto 0 auto; width: 74%; }
-    .cover-meta td { padding: 5px 8px; border: 1px solid #999; font-size: 9.8px; }
-    .cover-meta td.k { width: 42%; background: #f1f1f1; font-weight: bold; }
+    .brand { margin: 26px 0 0 0; text-align: center; }
+    .brand .word { font-size: 26px; font-weight: bold; color: #31287C; letter-spacing: .5px; }
+    .brand .word span { color: #F6A500; }
+    .brand .tag { font-size: 8.6px; color: #5b5878; letter-spacing: 1.6px; text-transform: uppercase; margin-top: 2px; }
+    .cover-title { margin: 26px 0 0 0; background: #31287C; color: #ffffff; padding: 24px 16px 20px 16px; text-align: center;
+        border-bottom: 5px solid #F6A500; }
+    .cover-title .t1 { font-size: 23px; font-weight: bold; letter-spacing: 3px; color: #ffffff; }
+    .cover-title .t2 { font-size: 12.5px; font-weight: bold; margin-top: 8px; text-transform: uppercase; color: #F6A500; letter-spacing: 1px; }
+    .cover-title .t3 { font-size: 10.5px; margin-top: 6px; color: #e4e1f7; }
+    .cover-meta { margin: 30px auto 0 auto; width: 78%; }
+    .cover-meta td { padding: 7px 10px; border-bottom: 1px solid #e8e6f5; font-size: 9.8px; }
+    .cover-meta td.k { width: 42%; background: #F4F3FB; font-weight: bold; color: #31287C; border-left: 3px solid #F6A500; }
     .level { font-weight: bold; }
-    .lv-bon { color: #1b7f3b; } .lv-surveiller { color: #8a5a00; } .lv-critique { color: #b3261e; }
-    .cover-foot { position: absolute; bottom: 10px; left: 0; right: 0; text-align: center; font-size: 8.6px; color: #555; }
+    .lv-bon { color: #15803d; } .lv-surveiller { color: #a16207; } .lv-critique { color: #c62828; }
+    .cover-foot { position: absolute; bottom: 10px; left: 0; right: 0; text-align: center; font-size: 8.4px; color: #5b5878;
+        border-top: 1px solid #e8e6f5; padding-top: 6px; }
 
     /* Titres (parties, chapitres, sections) */
-    .part { font-size: 12.5px; font-weight: bold; text-align: center; text-transform: uppercase; letter-spacing: 1px; margin: 4px 0 14px 0;
-        padding: 7px 0; border-top: 1.5px solid #1a1a1a; border-bottom: 1.5px solid #1a1a1a; }
-    h2 { font-size: 11px; font-weight: bold; text-transform: uppercase; margin: 16px 0 7px 0; }
-    h3 { font-size: 10px; font-weight: bold; margin: 11px 0 5px 0; }
+    .part { font-size: 12px; font-weight: bold; text-align: left; text-transform: uppercase; letter-spacing: 1px; margin: 4px 0 14px 0;
+        padding: 8px 12px; background: #31287C; color: #ffffff; border-left: 6px solid #F6A500; }
+    h2 { font-size: 11px; font-weight: bold; text-transform: uppercase; margin: 16px 0 7px 0; color: #31287C;
+        padding: 0 0 3px 8px; border-left: 3px solid #F6A500; border-bottom: 1px solid #e8e6f5; }
+    h3 { font-size: 10px; font-weight: bold; margin: 11px 0 5px 0; color: #1e1a5c; }
 
     /* Tableaux numérotés avec titre au-dessus et source en dessous */
-    .cap { font-size: 9.3px; font-weight: bold; margin: 10px 0 4px 0; }
-    .grid th { background: #e9e9e9; text-align: left; padding: 5px 6px; font-size: 8.5px; border: 1px solid #555; }
-    .grid td { padding: 4px 6px; border: 1px solid #888; font-size: 8.8px; }
+    .cap { font-size: 9.2px; font-weight: bold; margin: 10px 0 4px 0; color: #31287C; }
+    .grid th { background: #31287C; color: #ffffff; text-align: left; padding: 6px 7px; font-size: 8.4px; border: 1px solid #31287C;
+        text-transform: uppercase; letter-spacing: .3px; }
+    .grid td { padding: 5px 7px; border-bottom: 1px solid #e8e6f5; border-left: 0; border-right: 0; font-size: 8.8px; }
+    .grid tr:nth-child(even) td { background: #faf9ff; }
     .grid td.n, .grid th.n { text-align: right; }
-    .grid tr.total td { font-weight: bold; background: #f4f4f4; }
-    .src { font-size: 7.8px; color: #555; font-style: italic; margin: 2px 0 8px 0; }
+    .grid tr.total td { font-weight: bold; background: #f0eeff; color: #1e1a5c; border-top: 2px solid #31287C; }
+    .src { font-size: 7.6px; color: #5b5878; font-style: italic; margin: 3px 0 9px 0; }
 
-    .toc td { padding: 3px 0; font-size: 9.8px; }
+    .toc td { padding: 4px 0 4px 6px; font-size: 9.8px; border-bottom: 1px dotted #d9d5ee; }
     .toc td.p { text-align: right; width: 30px; }
-    .bullet { margin: 0 0 4px 12px; }
-    .up { color: #1b7f3b; } .down { color: #b3261e; }
+    .bullet { margin: 0 0 5px 12px; padding-left: 8px; border-left: 2px solid #F6A500; }
+    .up { color: #15803d; } .down { color: #c62828; }
 
     .sign { margin-top: 26px; }
     .sign td { vertical-align: top; }
     .page-break { page-break-before: always; }
 
-    /* En-tête et pied de page courants (pages intérieures) */
-    .footer { position: fixed; bottom: -40px; left: 0; right: 0; font-size: 7.8px; color: #555; border-top: 1px solid #bbb; padding-top: 4px; }
+    /* Pied de page courant */
+    .footer { position: fixed; bottom: -40px; left: 0; right: 0; font-size: 7.6px; color: #5b5878; border-top: 2px solid #31287C; padding-top: 4px; }
+    .footer .doc { color: #31287C; font-weight: bold; }
+    .footer .doc span { color: #F6A500; }
     .pagenum:before { content: counter(page); }
 </style>
 </head>
@@ -77,7 +90,7 @@
 {{-- Pied de page (numéro de page) : déclaré ici pour figurer sur toutes les pages. --}}
 <div class="footer">
     <table><tr>
-        <td>Rapport d'activités — {{ $r->period_label }} — {{ $scope }} — réf. {{ $r->reference }}</td>
+        <td><span class="doc">Doc<span>Track</span></span> · Rapport d'activités — {{ $r->period_label }} — {{ $scope }} — réf. {{ $r->reference }}</td>
         <td style="text-align: right; width: 60px;">Page <span class="pagenum"></span></td>
     </tr></table>
 </div>
@@ -87,6 +100,13 @@
     'numero'   => 'N° ' . $r->reference,
     'lieuDate' => $lh['city'] . ', le ' . \App\Support\Letterhead::longDate($generated),
 ])
+
+@unless ($official)
+    <div class="brand">
+        <div class="word">Doc<span>Track</span></div>
+        <div class="tag">Plateforme nationale des documents perdus et retrouvés</div>
+    </div>
+@endunless
 
 <div class="cover-title">
     <div class="t1">RAPPORT D'ACTIVITÉS</div>

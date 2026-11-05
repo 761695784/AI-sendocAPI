@@ -35,6 +35,13 @@ return [
         'restitution.requested'          => 'DocTrack : le propriétaire du document au nom de :owner_name (confirmé par DocTrack) demande à le récupérer. Acceptez-vous d\'être mis en contact ? Répondez ici : :url',
         'restitution.accepted.owner'     => 'DocTrack : le trouveur accepte de vous remettre le document au nom de :owner_name. Contactez :finder_name au :finder_phone. Rencontrez-vous dans un lieu public, sans jamais payer.',
         'restitution.accepted.finder'    => 'DocTrack : merci ! Le propriétaire (:owner_first_name, :owner_phone) va vous contacter pour le document au nom de :owner_name. Une fois remis, indiquez-le sur DocTrack.',
+        // Demande de restitution d'un document publié par un citoyen : coordonnées échangées aussitôt.
+        'restitution.contact.finder'     => 'DocTrack : :owner_first_name (:owner_phone) réclame le document au nom de :owner_name que vous avez trouvé. Rencontrez-vous dans un lieu public, puis marquez la publication « récupéré ».',
+        'restitution.contact.owner'      => 'DocTrack : contactez :finder_name au :finder_phone pour récupérer le document au nom de :owner_name. Lieu public conseillé ; ne payez jamais.',
+        'restitution.requested.check'    => 'DocTrack : :requester_name dit être le propriétaire du document au nom de :owner_name que vous avez trouvé. Comparez avec le document, puis acceptez ou refusez : :url',
+        // Demande de restitution d'un document conservé par une structure.
+        'restitution.counter_request.structure' => 'DocTrack : :requester demande à retirer le document :reference (:owner_name) conservé chez vous. Il viendra avec une pièce justificative.',
+        'restitution.counter_request.owner'     => 'DocTrack : votre demande est transmise à :structure:structure_phone. Présentez-vous avec une pièce d\'identité et la référence :reference. Adresse : :address',
         'restitution.declined'           => 'DocTrack : le trouveur n\'a pas accepté la remise directe. :next',
         // Restitution officielle au guichet
         'restitution.official.owner'     => 'DocTrack : votre document au nom de :owner_name vous a été remis par :structure. Décharge :reference, vérifiable ici : :verify_url',
@@ -94,6 +101,10 @@ return [
             'title' => 'Rapport d\'activité — :period (:scope)',
             'body'  => ':summary Alertes : :alerts. Référence :reference.',
         ],
+        'restitution.counter_request' => [
+            'title' => 'Demande de retrait — :document_type :reference',
+            'body'  => ':requester souhaite retirer le document au nom de :owner_name (réf. :reference) conservé dans votre structure. Préparez le document : vérifiez son identité à son passage, puis faites la restitution (décharge).',
+        ],
         'match.pending_review' => [
             'title' => 'Correspondance à vérifier (score :score)',
             'body'  => 'Déclaration :declaration_reference ↔ document :reference (:owner_name). Comparez les deux fiches puis confirmez ou rejetez.',
@@ -115,6 +126,13 @@ return [
                 'Quelqu\'un a scanné le QR code collé sur votre :document_type:label.',
                 ':next',
                 'Si vous ne reconnaissez pas ce signalement, désactivez ce QR depuis votre espace DocTrack.',
+            ],
+        ],
+        'restitution.counter_request' => [
+            'subject' => 'DocTrack — demande de retrait du document :reference',
+            'lines'   => [
+                ':requester souhaite retirer le document :document_type au nom de :owner_name (référence :reference), conservé par :structure.',
+                'Préparez le document. À son passage, vérifiez son identité puis enregistrez la restitution dans l\'espace agent (décharge de restitution).',
             ],
         ],
         'collection.assigned' => [

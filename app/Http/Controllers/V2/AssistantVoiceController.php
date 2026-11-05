@@ -38,7 +38,11 @@ class AssistantVoiceController extends Controller
             ? 'Synthèse vocale non configurée (AI_TTS_PROVIDER et AI_TTS_URL dans le .env).'
             : 'Le modèle de synthèse ne lit que le wolof.');
 
-        @set_time_limit((int) config('ai.tts.hf_space.timeout', 300) + 30);
+        // Allonge la durée maximale de CETTE requête web (synthèse lente). Jamais pendant les tests :
+        // la limite s'appliquerait à toute la suite de tests, qui s'arrêterait au bout de 5 min 30.
+        if (! app()->runningUnitTests() && ! app()->runningInConsole()) {
+            @set_time_limit((int) config('ai.tts.hf_space.timeout', 300) + 30);
+        }
 
         try {
             $meta = $this->voices->generate($lang, $key);

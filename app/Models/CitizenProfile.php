@@ -73,6 +73,12 @@ class CitizenProfile extends Model
         return $this->belongsTo(User::class);
     }
 
+    /** Structure où la fiche a été créée (guichet). */
+    public function createdByOrganization()
+    {
+        return $this->belongsTo(Organization::class, 'created_by_organization_id');
+    }
+
     public function declarations()
     {
         return $this->hasMany(DeclarationDePerte::class);

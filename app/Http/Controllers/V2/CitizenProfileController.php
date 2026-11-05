@@ -12,6 +12,7 @@ use App\Services\Declarations\CitizenProfileService;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Str;
 
 /**
  * Recherche / création de la victime au guichet.
@@ -52,12 +53,27 @@ class CitizenProfileController extends Controller
         Gate::authorize('createCitizen', DeclarationDePerte::class);
         $data = $request->validated();
 
-        if ($existing = $this->service->findDuplicate($data['phone'], $data['last_name'])) {
+        // Un numéro de téléphone = une seule personne : on propose la fiche existante au lieu d'un doublon.
+        if ($this->service->phoneBelongsToStaff($data['phone'])) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'phone' => 'Ce numéro est celui d\'un compte agent ou administrateur : saisissez le numéro personnel de la victime.',
+            ]);
+        }
+        if ($existing = $this->service->findByPhone($data['phone'])) {
+            $sameName = Str::lower(Str::ascii(trim($existing->last_name))) === Str::lower(Str::ascii(trim($data['last_name'])));
+
             return response()->json([
                 'success'  => false,
-                'message'  => 'Une personne avec ce téléphone et ce nom existe déjà.',
-                'existing' => (new CitizenProfileResource($existing))->resolve(),
+                'message'  => $sameName
+                    ? 'Cette personne est déjà enregistrée avec ce numéro de téléphone : utilisez sa fiche.'
+                    : 'Ce numéro de téléphone est déjà enregistré pour une autre personne. Vérifiez le numéro, ou utilisez la fiche existante.',
+                'existing' => (new CitizenProfileResource($existing->loadMissing('user')))->resolve(),
             ], 409);
+        }
+        if (! empty($data['email']) && $this->service->emailTaken($data['email'])) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'email' => 'Cette adresse email est déjà utilisée par un autre compte ou une autre personne.',
+            ]);
         }
 
         $profile = $this->service->createAtCounter($data, $request->user(), ResolveActiveOrganization::current());

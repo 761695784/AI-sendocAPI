@@ -172,8 +172,9 @@ class CollectionTest extends OrganizationTestCase
         // Dossier clos : plus d'action possible.
         $this->asUser($agentB)->postJson("$url/contact", ['outcome' => 'reached'])->assertForbidden();
 
-        // Le trouveur voit que c'est fait ; la remise entre particuliers n'est plus possible.
-        $this->asUser($this->citizen())->postJson("/api/documents/{$docUuid}/restitution")->assertStatus(409);
+        // Le document est à la structure : une demande de restitution devient un retrait au guichet.
+        $this->asUser($this->citizen())->postJson("/api/documents/{$docUuid}/restitution")
+            ->assertCreated()->assertJsonPath('channel', 'counter')->assertJsonPath('custody.name', $this->commissariatB->name);
     }
 
     public function test_finder_can_bring_it_himself(): void

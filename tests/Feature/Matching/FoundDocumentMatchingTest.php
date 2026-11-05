@@ -282,9 +282,10 @@ class FoundDocumentMatchingTest extends OrganizationTestCase
         // Une seconde prise en garde est refusée.
         $this->asUser($this->agent($this->commissariatB))->postJson("/api/v2/found-documents/{$docUuid}/take-custody")->assertForbidden();
 
-        // V1 : plus de remise de particulier à particulier, on renvoie vers le guichet.
+        // Document sous garde : la demande est transmise à la structure (retrait au guichet).
         $this->asUser($this->citizen())->postJson("/api/documents/{$docUuid}/restitution")
-            ->assertStatus(409)
+            ->assertCreated()
+            ->assertJsonPath('channel', 'counter')
             ->assertJsonPath('custody.name', 'Commissariat A');
     }
 

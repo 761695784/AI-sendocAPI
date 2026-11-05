@@ -39,6 +39,18 @@ class DocumentPolicy
             && $this->access->can($user, 'found_documents.view', $document->custodyOrganization);
     }
 
+    /**
+     * Supprimer définitivement un document enregistré au guichet par la structure
+     * (erreur de saisie, doublon). Pas pour un document publié par un citoyen.
+     */
+    public function destroyCustody(User $user, Document $document): bool
+    {
+        return $document->found_channel === Document::CHANNEL_COUNTER
+            && $document->custodyOrganization
+            && ! $user->isSuperAdmin()
+            && $this->access->can($user, 'found_documents.create', $document->custodyOrganization);
+    }
+
     /** Prendre en garde un document publié en ligne (le trouveur l'apporte). */
     public function takeCustody(User $user, Document $document, Organization $structure): bool
     {

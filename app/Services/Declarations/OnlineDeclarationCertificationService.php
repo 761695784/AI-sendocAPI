@@ -110,7 +110,7 @@ class OnlineDeclarationCertificationService
 
     /**
      * @param array{
-     *   person: array{first_name:string, last_name:string, birth_date?:?string, id_type:string, id_number:string},
+     *   person: array{first_name:string, last_name:string, birth_date?:?string, id_type?:?string, id_number?:?string},
      *   checks: array{identity_photo_matches:bool},
      *   name_override_reason?: ?string,
      *   lost_at?: ?string, lost_place?: ?string, territory_code?: ?string, circumstances?: ?string,
@@ -128,8 +128,13 @@ class OnlineDeclarationCertificationService
         $person = $data['person'];
 
         // ── Contrôles d'identité ──────────────────────────────
-        if (empty($data['checks']['identity_photo_matches'])) {
+        $hasIdDocument = ! empty($person['id_number']);
+        if ($hasIdDocument && empty($data['checks']['identity_photo_matches'])) {
             throw ValidationException::withMessages(['checks.identity_photo_matches' => 'Vous devez certifier que la photo de la pièce présentée correspond à la personne.']);
+        }
+        // Sans aucune pièce (tout a été perdu) : l'agent note comment il a vérifié l'identité.
+        if (! $hasIdDocument && mb_strlen(trim((string) ($data['circumstances'] ?? ''))) < 10) {
+            throw ValidationException::withMessages(['circumstances' => 'Sans pièce d\'identité, indiquez dans les circonstances comment l\'identité a été vérifiée (témoin, extrait de naissance, carte professionnelle…).']);
         }
 
         if ($declaration->birth_date_in_doc && ! empty($person['birth_date'])
@@ -151,7 +156,8 @@ class OnlineDeclarationCertificationService
             $override = $data['name_override_reason'];
         }
 
-        $normalizedId = SensitiveData::normalizeDocNumber($person['id_number']);
+        // Pièce présentée facultative : une victime peut avoir perdu toutes ses pièces d'un coup.
+        $normalizedId = ! empty($person['id_number']) ? SensitiveData::normalizeDocNumber($person['id_number']) : null;
 
         DB::transaction(function () use ($declaration, $agent, $structure, $data, $person, $normalizedId, $similarity, $override) {
             $fill = [
@@ -161,9 +167,9 @@ class OnlineDeclarationCertificationService
                 'certification_first_name' => $person['first_name'],
                 'certification_last_name'  => $person['last_name'],
                 'certification_birth_date' => $person['birth_date'] ?? null,
-                'certification_id_type'    => $person['id_type'],
+                'certification_id_type'    => $person['id_type'] ?? null,
                 'certification_id_last4'   => $normalizedId ? substr($normalizedId, -4) : null,
-                'certification_id_hash'    => SensitiveData::hash($normalizedId),
+                'certification_id_hash'    => $normalizedId ? SensitiveData::hash($normalizedId) : null,
             ];
 
             // Compléments saisis au guichet : ne remplacent que ce qui est fourni.
@@ -199,7 +205,7 @@ class OnlineDeclarationCertificationService
                 ->withProperties([
                     'reference'       => $declaration->reference,
                     'organization'    => $structure->uuid,
-                    'id_type'         => $person['id_type'],
+                    'id_type'         => $person['id_type'] ?? null,
                     'name_similarity' => round($similarity, 3),
                     'name_override'   => $override,
                 ])

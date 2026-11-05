@@ -205,7 +205,7 @@ class OfficialRestitutionService
             $document->moveTo(Document::LIFECYCLE_RESTITUTED, 'Restitution officielle ' . $restitution->reference, $agent);
             $this->matches->applyRestitution($document, $agent, 'Restitution officielle ' . $restitution->reference);
             $this->matches->supersedeForDocument($document, $agent, 'Document restitué au guichet');
-            $this->direct->cancelForDocument($document, $agent, 'Document restitué au guichet');
+            $this->direct->closeAfterCounterRestitution($document, $agent);
             $this->collections->cancelForDocument($document, $agent, 'Document restitué au guichet');
 
             foreach ($scans as $scan) {

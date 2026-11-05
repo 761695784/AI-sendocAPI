@@ -165,10 +165,10 @@ class OnlineDeclarationCertificationTest extends OrganizationTestCase
         $this->asUser($agent)->postJson($url, $this->certifyPayload(['checks' => ['identity_photo_matches' => false]]))
             ->assertUnprocessable()->assertJsonValidationErrors('checks.identity_photo_matches');
 
-        // Pièce absente.
-        $payload = $this->certifyPayload();
-        unset($payload['person']['id_number']);
-        $this->asUser($agent)->postJson($url, $payload)->assertUnprocessable()->assertJsonValidationErrors('person.id_number');
+        // Aucune pièce présentée et rien noté sur la vérification de l'identité.
+        $payload = $this->certifyPayload(['circumstances' => '']);
+        unset($payload['person']['id_number'], $payload['person']['id_type']);
+        $this->asUser($agent)->postJson($url, $payload)->assertUnprocessable()->assertJsonValidationErrors('circumstances');
 
         // Nom différent : refusé pour un agent, dérogation motivée possible pour un responsable.
         $other = $this->certifyPayload(['person' => ['first_name' => 'Moussa', 'last_name' => 'Diop']]);
@@ -193,5 +193,24 @@ class OnlineDeclarationCertificationTest extends OrganizationTestCase
 
         $this->asUser($agent)->postJson('/api/v2/online-declarations/' . $counter->json('uuid') . '/certify', $this->certifyPayload())
             ->assertUnprocessable();
+    }
+
+    public function test_a_victim_who_lost_all_her_documents_can_be_certified_without_an_id(): void
+    {
+        $declaration = $this->declareOnline();
+        $payload = $this->certifyPayload([
+            'checks'        => [],
+            'circumstances' => 'Toutes les pièces perdues ; identité confirmée par un témoin (voisin, CNI vérifiée).',
+        ]);
+        unset($payload['person']['id_number'], $payload['person']['id_type']);
+
+        $this->asUser($this->agent($this->commissariatA))
+            ->postJson('/api/v2/online-declarations/' . $declaration->uuid . '/certify', $payload)
+            ->assertCreated()
+            ->assertJsonPath('certificate.kind', 'official');
+
+        $declaration->refresh();
+        $this->assertTrue($declaration->isCertified());
+        $this->assertNull($declaration->certification_id_last4);
     }
 }

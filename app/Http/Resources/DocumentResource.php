@@ -22,9 +22,20 @@ class DocumentResource extends JsonResource
         $privileged = $viewer && ($viewer->id === $this->user_id || $viewer->isSuperAdmin());
 
         // Version masquée (numéros cachés par l'OCR) en priorité, sinon la photo floutée.
-        $public   = $this->getFirstMedia('document_public') ? 'document_public' : 'document_image';
-        $blurred  = $this->getFirstMediaUrl($public, 'blurred') ?: null;
-        $thumb    = $this->getFirstMediaUrl($public, 'thumb') ?: $blurred;
+        // Original marqué « masqué » sans sa copie masquée (masquage interrompu) : aucune image publique,
+        // plutôt qu'un lien qui renverrait une erreur (image cassée dans la liste).
+        $publicMedia = $this->getFirstMedia('document_public');
+        if (! $publicMedia) {
+            $source      = $this->getFirstMedia('document_image');
+            $publicMedia = $source && $source->getCustomProperty('public_version') !== 'masked' ? $source : null;
+        }
+        // Seules les versions réellement générées sont renvoyées : un lien vers une conversion absente
+        // (extension d'image manquante sur le serveur, file d'attente non lancée) donnait une image cassée.
+        // Adresse servie par l'API elle-même (route documents.public-image) : l'image s'affiche même si
+        // APP_URL ou le lien « storage » ne correspondent pas, et une version floutée est produite si besoin.
+        $version = $publicMedia ? '?v=' . ($publicMedia->updated_at?->timestamp ?? 0) : '';
+        $blurred = $publicMedia ? route('documents.public-image', ['media' => $publicMedia->id, 'variant' => 'blurred']) . $version : null;
+        $thumb   = $publicMedia ? route('documents.public-image', ['media' => $publicMedia->id, 'variant' => 'thumb']) . $version : null;
         $original = $privileged && $this->getFirstMedia('document_image')
             ? URL::temporarySignedRoute('documents.image', now()->addMinutes(15), ['uuid' => $this->uuid])
             : null;

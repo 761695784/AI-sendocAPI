@@ -20,7 +20,7 @@ use Illuminate\Support\Facades\Route;
 // ══════════════════════════════════════════════════════════════════
 // ROUTES PUBLIQUES SENSIBLES — throttle strict (anti brute-force)
 // ══════════════════════════════════════════════════════════════════
-Route::middleware('throttle:10,1')->group(function () {
+Route::middleware('throttle:10,1,v1-auth')->group(function () {
     Route::post('register', [AuthController::class, 'register'])->middleware('throttle:register');
     Route::post('login', [AuthController::class, 'login']); // + verrouillage après 5 échecs (AuthController)
     Route::post('forgot-password', [AuthController::class, 'forgotPassword'])->middleware('throttle:password');
@@ -32,12 +32,12 @@ Route::middleware('throttle:10,1')->group(function () {
 });
 
 // Notifications des prestataires de paiement (signature vérifiée, sans compte)
-Route::post('webhooks/{provider}', [PaymentController::class, 'webhook'])->middleware('throttle:120,1');
+Route::post('webhooks/{provider}', [PaymentController::class, 'webhook'])->middleware('throttle:120,1,v1-webhooks');
 
 // ══════════════════════════════════════════════════════════════════
 // ROUTES PUBLIQUES LECTURE — throttle souple
 // ══════════════════════════════════════════════════════════════════
-Route::middleware('throttle:120,1')->group(function () {
+Route::middleware('throttle:120,1,v1-public')->group(function () {
     Route::post('/auth/google/callback', [AuthController::class, 'handleGoogleCallback']);
     Route::post('/auth/google/finalize-account-creation', [AuthController::class, 'finalizeAccountCreation']);
 
@@ -48,10 +48,16 @@ Route::middleware('throttle:120,1')->group(function () {
     Route::get('lieu', [DocumentController::class, 'getPublicationsByLocation']);
 });
 
+// Photos publiques (floutées) des documents publiés : servies par l'API, sans dépendre d'APP_URL.
+Route::get('images/{media}/{variant}', [PrivateFileController::class, 'documentPublicImage'])
+    ->middleware('throttle:600,1,v1-images')
+    ->whereNumber('media')->whereIn('variant', ['blurred', 'thumb'])
+    ->name('documents.public-image');
+
 // ══════════════════════════════════════════════════════════════════
 // FICHIERS PRIVÉS — URLs signées temporaires (générées par l'API)
 // ══════════════════════════════════════════════════════════════════
-Route::middleware(['signed', 'throttle:120,1'])->prefix('files')->group(function () {
+Route::middleware(['signed', 'throttle:120,1,v1-files'])->prefix('files')->group(function () {
     Route::get('documents/{uuid}/image', [PrivateFileController::class, 'documentImage'])->name('documents.image');
     Route::get('qr-codes/{uuid}', [PrivateFileController::class, 'qrCode'])->name('files.qr');
     Route::get('rapports/{uuid}', [PrivateFileController::class, 'rapport'])->name('files.rapport');
@@ -61,7 +67,7 @@ Route::middleware(['signed', 'throttle:120,1'])->prefix('files')->group(function
 // ══════════════════════════════════════════════════════════════════
 // ROUTES PROTÉGÉES — utilisateur connecté
 // ══════════════════════════════════════════════════════════════════
-Route::middleware(['auth:api', 'active', 'throttle:60,1'])->group(function () {
+Route::middleware(['auth:api', 'active', 'throttle:60,1,v1-user'])->group(function () {
 
     // ── Utilisateur ──
     Route::get('me', [AuthController::class, 'me']);
@@ -134,7 +140,7 @@ Route::middleware(['auth:api', 'active', 'throttle:60,1'])->group(function () {
 // ══════════════════════════════════════════════════════════════════
 // ROUTES ADMIN — rôle Admin obligatoire
 // ══════════════════════════════════════════════════════════════════
-Route::middleware(['auth:api', 'active', 'role:super_admin,api', 'throttle:200,1'])->group(function () {
+Route::middleware(['auth:api', 'active', 'role:super_admin,api', 'throttle:200,1,v1-admin'])->group(function () {
 
     // ── Utilisateurs ──
     Route::get('/users', [AuthController::class, 'getAllUsersWithRoles']);

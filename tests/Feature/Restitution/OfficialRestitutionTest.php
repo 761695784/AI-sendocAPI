@@ -63,7 +63,7 @@ class OfficialRestitutionTest extends OrganizationTestCase
         ], $overrides);
     }
 
-    private function restitute($user, array $payload = null)
+    private function restitute($user, ?array $payload = null)
     {
         return $this->asUser($user)->postJson("/api/v2/found-documents/{$this->document->uuid}/restitution", $payload ?? $this->payload());
     }

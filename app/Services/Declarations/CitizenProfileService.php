@@ -118,6 +118,62 @@ class CitizenProfileService
             ->where(fn ($q) => $q->whereNull('account_type')->orWhere('account_type', User::TYPE_CITIZEN));
     }
 
+    /**
+     * Un numéro de téléphone = une seule personne (comme sur le compte DocTrack).
+     * Renvoie la fiche existante pour ce numéro : fiche du guichet, ou fiche du compte citoyen inscrit
+     * (créée à la volée si besoin).
+     */
+    public function findByPhone(string $phone): ?CitizenProfile
+    {
+        $normalized = SmsService::normalizeSenegalPhone($phone) ?? $phone;
+
+        if ($profile = CitizenProfile::wherePhone($normalized)->first()) {
+            return $profile;
+        }
+
+        $account = $this->usersWithPhone($normalized)
+            ->first(fn (User $u) => $u->account_type === null || $u->account_type === User::TYPE_CITIZEN);
+
+        return $account ? ($account->citizenProfile ?? $this->forAccount($account)) : null;
+    }
+
+    /** Ce numéro est-il celui d'un agent ou d'un administrateur ? (ce n'est pas une victime) */
+    public function phoneBelongsToStaff(string $phone): bool
+    {
+        $normalized = SmsService::normalizeSenegalPhone($phone) ?? $phone;
+
+        return $this->usersWithPhone($normalized)
+            ->contains(fn (User $u) => in_array($u->account_type, [User::TYPE_AGENT, User::TYPE_ADMIN], true));
+    }
+
+    /** Cette adresse email est-elle déjà utilisée (compte ou fiche) ? */
+    public function emailTaken(?string $email): bool
+    {
+        $email = Str::lower(trim((string) $email));
+        if ($email === '') {
+            return false;
+        }
+
+        return User::whereRaw('LOWER(email) = ?', [$email])->exists()
+            || CitizenProfile::whereRaw('LOWER(email) = ?', [$email])->exists();
+    }
+
+    /** Comptes (non supprimés) dont le téléphone normalisé est exactement celui-ci. */
+    private function usersWithPhone(string $normalized): Collection
+    {
+        $digits = preg_replace('/\D+/', '', $normalized);
+        if (strlen($digits) < 4) {
+            return collect();
+        }
+
+        return User::query()->with('citizenProfile')
+            ->where('Phone', 'like', '%' . substr($digits, -4))
+            ->limit(200)
+            ->get()
+            ->filter(fn (User $u) => (SmsService::normalizeSenegalPhone($u->Phone) ?? preg_replace('/\D+/', '', (string) $u->Phone)) === $normalized
+                || preg_replace('/\D+/', '', (string) $u->Phone) === $digits);
+    }
+
     /** Profils ayant ce téléphone et ce nom (anti-doublon). */
     public function findDuplicate(string $phone, string $lastName): ?CitizenProfile
     {
