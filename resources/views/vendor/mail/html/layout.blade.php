@@ -1,7 +1,7 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="fr">
 <head>
-<title>{{ config('app.name') }}</title>
+<title>DocTrack</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
 <meta name="color-scheme" content="light">
@@ -14,6 +14,19 @@ width: 100% !important;
 
 .footer {
 width: 100% !important;
+}
+
+.header-band {
+width: 100% !important;
+border-radius: 0 !important;
+}
+
+.inner-body {
+border-radius: 0 !important;
+}
+
+.content-cell {
+padding: 26px 20px !important;
 }
 }
 

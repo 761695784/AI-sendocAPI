@@ -50,8 +50,7 @@ class RestitutionRequestNotification extends Notification
                 . '. Il diffère un peu de celui du document (deux noms de famille, nom d\'épouse, numéro non saisi…) : comparez avec le document que vous avez.')
                 ->line('Si vous acceptez, vous recevrez chacun le numéro de l\'autre. Si vous refusez ou ne répondez pas sous '
                     . config('doctrack.restitution.response_hours', 48) . ' h, la structure de police ou de gendarmerie la plus proche prendra le relais.')
-                ->action('Répondre à la demande', $url)
-                ->line('L\'équipe Sénégal DocTrack');
+                ->action('Répondre à la demande', $url);
 
             $this->log($notifiable, $mail);
 
@@ -65,8 +64,7 @@ class RestitutionRequestNotification extends Notification
         $mail->line('Conseils : rencontrez-vous dans un lieu public et fréquenté, en journée. Vous n\'avez rien à payer ni à demander. '
                 . 'Si vous préférez, déposez le document au commissariat ou à la brigade la plus proche.')
             ->action('Voir la demande', $url)
-            ->line('Une fois le document remis, ouvrez « Mes publications » et marquez-la « Récupéré ».')
-            ->line('L\'équipe Sénégal DocTrack');
+            ->line('Une fois le document remis, ouvrez « Mes publications » et marquez-la « Récupéré ».');
 
         $this->log($notifiable, $mail);
 

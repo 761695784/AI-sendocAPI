@@ -37,13 +37,11 @@ class MatchConfirmedNotification extends Notification
         if ($custody) {
             return $mail
                 ->line('Il est conservé par : ' . $custody->name . ($custody->address ? ', ' . $custody->address : '') . ($custody->phone ? ' — tél. ' . $custody->phone : '') . '.')
-                ->line('Présentez-vous avec une pièce justificative et la référence ' . $doc->reference . '.')
-                ->line('L\'équipe Sénégal DocTrack');
+                ->line('Présentez-vous avec une pièce justificative et la référence ' . $doc->reference . '.');
         }
 
         return $mail
             ->line('Il a été trouvé par un citoyen. Vous pouvez lui demander la restitution depuis DocTrack : il recevra votre demande par SMS et par email.')
-            ->action('Demander la restitution', rtrim(config('doctrack.frontend_url'), '/') . '/document/' . $doc->uuid)
-            ->line('L\'équipe Sénégal DocTrack');
+            ->action('Demander la restitution', rtrim(config('doctrack.frontend_url'), '/') . '/document/' . $doc->uuid);
     }
 }

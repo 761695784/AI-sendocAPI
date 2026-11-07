@@ -1,10 +1,16 @@
 @component('mail::message')
+# Votre document a été trouvé
+
 Bonjour {{ $document->FirstName }},
 
-Votre document a été trouvé par quelqu’un. Vous pouvez contacter le trouveur au numéro suivant : {{ $finderPhone }}.
+Bonne nouvelle : une personne a trouvé votre document et l'a signalé sur DocTrack. Vous pouvez la joindre au numéro suivant :
 
-Nous vous remercions de votre attention et restons à votre disposition pour toute assistance complémentaire.
+@component('mail::panel')
+**{{ $finderPhone }}**
+@endcomponent
+
+Pour votre sécurité, convenez d'un rendez-vous dans un lieu public, de préférence en journée. La remise d'un document est toujours gratuite.
 
 Cordialement,<br>
-{{ config('app.name') }}
+**L'équipe DocTrack**
 @endcomponent

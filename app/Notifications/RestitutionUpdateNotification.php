@@ -36,16 +36,13 @@ class RestitutionUpdateNotification extends Notification
             self::CONTACT_FOR_OWNER => $mail->subject('Le trouveur accepte de vous remettre votre document')
                 ->line('Le trouveur accepte de vous remettre ' . $what . '.')
                 ->line('Contactez ' . $this->request->finder->FirstName . ' au ' . $this->detail . ' pour convenir d\'un lieu de remise.')
-                ->line('Conseils : rencontrez-vous dans un lieu public, vérifiez la pièce, ne payez jamais pour récupérer un document.')
-                ->line('L\'équipe Sénégal DocTrack'),
+                ->line('Conseils : rencontrez-vous dans un lieu public, vérifiez la pièce, ne payez jamais pour récupérer un document.'),
             self::CONTACT_FOR_FINDER => $mail->subject('Mise en contact avec le propriétaire')
                 ->line('Merci ! Le propriétaire (' . $this->request->requester->FirstName . ', ' . $this->detail . ') va vous contacter pour récupérer ' . $what . '.')
-                ->line('Une fois le document remis, indiquez-le sur DocTrack (« Document restitué »).')
-                ->line('L\'équipe Sénégal DocTrack'),
+                ->line('Une fois le document remis, indiquez-le sur DocTrack (« Document restitué »).'),
             default => $mail->subject('Votre demande de restitution')
                 ->line('Le trouveur n\'a pas ' . ($this->event === self::EXPIRED ? 'répondu dans le délai' : 'accepté la remise directe') . '.')
-                ->line((string) $this->detail)
-                ->line('L\'équipe Sénégal DocTrack'),
+                ->line((string) $this->detail),
         };
     }
 }

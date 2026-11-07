@@ -1,8 +1,8 @@
 <x-mail::layout>
     {{-- Header --}}
     <x-slot:header>
-        <x-mail::header :url="config('app.url')">
-            {{ config('app.name') }}
+        <x-mail::header :url="config('doctrack.frontend_url')">
+            DocTrack
         </x-mail::header>
     </x-slot:header>
 
@@ -21,7 +21,9 @@
     {{-- Footer --}}
     <x-slot:footer>
         <x-mail::footer>
-            © {{ date('Y') }} {{ config('app.name') }}. @lang('All rights reserved.')
+            DocTrack · Retrouver ses documents perdus au Sénégal · {{ config('doctrack.frontend_url') }}
+            DocTrack ne vous demandera jamais d'argent pour vous rendre un document.
+            © {{ date('Y') }} DocTrack · Majeli Connect
         </x-mail::footer>
     </x-slot:footer>
 </x-mail::layout>

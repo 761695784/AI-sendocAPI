@@ -3,16 +3,19 @@
 
 Bonjour{{ $recipientName ? ' ' . $recipientName : '' }},
 
-Suite à votre déclaration de perte, nous avons le plaisir de vous informer que le document portant le prénom **{{ $document->OwnerFirstName }}** et le nom **{{ $document->OwnerLastName }}** a été récemment publié. Il pourrait correspondre à votre déclaration de perte.
+Suite à votre déclaration de perte, un document correspondant à votre nom vient d'être publié sur DocTrack :
 
-Cliquez sur le bouton ci-dessous pour voir la publication et, si c'est bien votre document, demander sa restitution.
+@component('mail::panel')
+Prénom : **{{ $document->OwnerFirstName }}**<br>
+Nom : **{{ $document->OwnerLastName }}**
+@endcomponent
 
-@component('mail::button', ['url' => $documentUrl])
+Consultez la publication : si c'est bien votre document, vous pourrez demander sa restitution en quelques clics.
+
+@component('mail::button', ['url' => $documentUrl, 'color' => 'success'])
 Voir la publication
 @endcomponent
 
-Nous vous remercions de votre attention et restons à votre disposition pour toute assistance complémentaire.
-
 Cordialement,<br>
-L'équipe Sénégal DocTrack
+**L'équipe DocTrack**
 @endcomponent

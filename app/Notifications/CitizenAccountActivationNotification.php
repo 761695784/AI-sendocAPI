@@ -30,7 +30,6 @@ class CitizenAccountActivationNotification extends Notification
                 . ' a enregistré votre déclaration de perte et vous a créé un compte DocTrack.')
             ->line('Choisissez votre mot de passe pour suivre vos déclarations, télécharger votre certificat et être prévenu dès qu\'un document correspondant est retrouvé.')
             ->action('Choisir mon mot de passe', $url)
-            ->line('Ce lien est valable ' . $days . ' jours. Passé ce délai, utilisez « Mot de passe oublié » avec cette adresse email.')
-            ->line('L\'équipe Sénégal DocTrack');
+            ->line('Ce lien est valable ' . $days . ' jours. Passé ce délai, utilisez « Mot de passe oublié » avec cette adresse email.');
     }
 }

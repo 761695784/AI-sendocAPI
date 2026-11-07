@@ -25,6 +25,8 @@ class TemplatedMailNotification extends Notification
             $mail->line($line);
         }
 
-        return $mail->line('L\'équipe Sénégal DocTrack');
+        // La formule de fin (« Cordialement, L'équipe DocTrack ») est ajoutée par le modèle
+        // resources/views/vendor/notifications/email.blade.php.
+        return $mail;
     }
 }

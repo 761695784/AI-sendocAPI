@@ -3,19 +3,18 @@
 
 Bonjour **{{ $auteur->FirstName }}**,
 
-Votre avez reçu un nouveau commentaire dans votre publication du document perdu
+Vous avez reçu un nouveau commentaire sur votre publication de document trouvé.
 
 {{-- @component('mail::panel')
 "{{ $commentaire->contenu }}"
 @endcomponent --}}
 
-Nous vous encourageons à cliquer sur le lien ci-dessous pour voir votre publication et répondre au commentaire.
+Cliquez sur le bouton ci-dessous pour voir votre publication et répondre au commentaire.
 
 @component('mail::button', ['url' => $documentUrl])
 Voir la publication
 @endcomponent
 
-Merci,
-L'équipe de la plateforme
-{{ config('app.name') }}
+Cordialement,<br>
+**L'équipe DocTrack**
 @endcomponent
