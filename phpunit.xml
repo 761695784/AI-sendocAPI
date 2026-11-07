@@ -22,6 +22,7 @@
         <ini name="memory_limit" value="1024M"/>
         <ini name="max_execution_time" value="0"/>
         <env name="APP_ENV" value="testing"/>
+        <env name="API_DOCS_ENABLED" value="true"/>
         <!-- Adresses fixes : les tests ne dépendent pas des adresses du .env (local ou en ligne). -->
         <env name="APP_URL" value="http://localhost"/>
         <env name="FRONTEND_URL" value="https://doctrack.test"/>

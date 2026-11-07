@@ -8,6 +8,7 @@ class ApiDocumentationTest extends TestCase
 {
     public function test_swagger_page_and_spec_are_served(): void
     {
+        config(['doctrack.api_docs_enabled' => true]); // désactivée par défaut en production
         $this->get('/api/documentation/v2')->assertOk()->assertSee('swagger-ui')->assertSee('openapi.yaml');
         $spec = $this->get('/api/documentation/v2/openapi.yaml')->assertOk();
         $this->assertStringContainsString('openapi: 3.0.3', $spec->getFile()->getContent());

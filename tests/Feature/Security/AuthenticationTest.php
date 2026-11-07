@@ -32,13 +32,17 @@ class AuthenticationTest extends TestCase
         $this->assertStringNotContainsString('email_verification_code', $json->getContent());
         $this->assertStringNotContainsString($user->email_verification_code, $json->getContent());
         $this->assertStringNotContainsString($user->qr_code_token, $json->getContent());
-        $this->assertStringContainsString('signature=', $json->json('qr_code_url'));
+        // Plus de jeton ni de lien QR avant la vérification de l'email.
+        $this->assertNull($json->json('token'));
+        $this->assertNull($json->json('qr_code_url'));
         $this->assertTrue($user->hasRole('citizen'));
     }
 
     public function test_qr_code_image_is_served_only_through_a_signed_url(): void
     {
-        $url = $this->postJson('/api/register', $this->registerPayload())->json('qr_code_url');
+        // Le lien du QR code est donné au citoyen connecté (après vérification de son email).
+        $url = $this->asUser($this->citizen())->getJson('/api/me')->assertOk()->json('qr_code_url');
+        $this->assertStringContainsString('signature=', (string) $url);
 
         $response = $this->get($url)->assertOk();
         $this->assertContains($response->headers->get('Content-Type'), ['image/png', 'image/svg+xml']);
