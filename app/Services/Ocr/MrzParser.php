@@ -160,8 +160,13 @@ class MrzParser
         // Suites de chevrons lues « K » (fréquent) : KKK / K<K → <<<
         $t = preg_replace_callback('/[<K]{3,}$/', fn ($m) => str_repeat('<', strlen($m[0])), $t);
         $t = preg_replace_callback('/<[K<]*<$/', fn ($m) => str_repeat('<', strlen($m[0])), $t);
+        // Remplissage après les prénoms lu « C » ou « K » (« ABDOU<<<C<<<<<C<<CCCC<C< ») : tout ce qui suit « << » et
+        // ne contient que < / C / K est du remplissage.
+        $t = preg_replace_callback('/<<[<CK]*$/', fn ($m) => str_repeat('<', strlen($m[0])), $t);
 
-        if (strlen($t) < 26 || strlen($t) > 48 || substr_count($t, '<') < 2) {
+        // Ligne 2 du passeport : souvent un seul « < » (numéro personnel complet, ex. passeport sénégalais).
+        $minChevrons = (strlen($t) >= 42 && strlen($t) <= 46 && preg_match('/^[A-Z0-9<]{9}\d[A-Z<]{3}\d{6}/', $t)) ? 1 : 2;
+        if (strlen($t) < 26 || strlen($t) > 48 || substr_count($t, '<') < $minChevrons) {
             return null;
         }
 

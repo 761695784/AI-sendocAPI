@@ -36,9 +36,9 @@ class DocumentReader
         $texts = array_column($lines, 'text');
 
         $mrz    = $this->mrzParser->parse($texts);
-        $visual = $this->visualFields($lines);
-        $fields = $this->merge($mrz, $visual);
         $type   = $this->documentType($texts, $mrz);
+        $visual = $this->visualFields($lines, $type['name'] ?? null);
+        $fields = $this->merge($mrz, $visual);
 
         $checks = $this->checks($fields, $visual, $mrz);
         $numbers = $this->numbers($fields, $visual, $mrz, $type);
@@ -62,7 +62,7 @@ class DocumentReader
 
     // ── Face visible : libellés puis valeurs ─────────────────────────
 
-    private function visualFields(array $lines): array
+    private function visualFields(array $lines, ?string $typeName = null): array
     {
         $labels = [];
         foreach (config('ocr.labels', []) as $field => $words) {
@@ -75,9 +75,10 @@ class DocumentReader
         $found = [];
         $labelLines = [];
         foreach ($lines as $i => $line) {
-            $compact = self::compact($line['text']);
+            $labelText = self::withoutFieldNumber($line['text']);
+            $compact   = self::compact($labelText);
             foreach ($labels as $label) {
-                if ($label['key'] !== '' && self::isLabel($line['text'], $compact, $label['key'])) {
+                if ($label['key'] !== '' && self::isLabel($labelText, $compact, $label['key'])) {
                     $labelLines[$i] = $label['field'];
                     break;
                 }
@@ -92,8 +93,19 @@ class DocumentReader
             // « Nom : NDIAYE » sur la même ligne.
             $value = str_contains($text, ':') ? trim(Str::after($text, ':')) : '';
             $conf  = $lines[$i]['confidence'];
+            // Date écrite sur la même ligne que son libellé (« 4b. Date d'expiration 12/05/2030 »).
+            if ($value === '' && in_array($field, ['birth_date', 'expiry_date'], true) && self::parseDate($text) !== null) {
+                $value = $text;
+            }
             if ($value === '' || self::compact($value) === '') {
-                $j = $this->valueBelow($lines, $i, $labelLines);
+                // Valeur en dessous (carte, passeport), sinon à droite sur la même ligne (« 5. N° Permis   12345 »).
+                $j = null;
+                foreach ([$this->valueBelow($lines, $i, $labelLines), $this->valueRight($lines, $i, $labelLines)] as $candidate) {
+                    if ($candidate !== null && $this->normalize($field, $lines[$candidate]['text']) !== null) {
+                        $j = $candidate;
+                        break;
+                    }
+                }
                 if ($j === null) {
                     continue;
                 }
@@ -121,7 +133,90 @@ class DocumentReader
             }
         }
 
-        return $this->namesByLayout($lines, $labelLines, $found);
+        // Carte grise : « Titulaire » = « M. NOM PRÉNOMS » sur une ligne.
+        if (isset($found['holder']) && ! isset($found['last_name']) && ! isset($found['first_name'])) {
+            [$last, $first] = self::splitHolder($found['holder']['value']);
+            if ($last !== null && $first !== null) {
+                $found['last_name']  = ['value' => self::titleCase($last), 'confidence' => $found['holder']['confidence'], 'source' => 'label'];
+                $found['first_name'] = ['value' => self::titleCase($first), 'confidence' => $found['holder']['confidence'], 'source' => 'label'];
+            }
+        }
+        unset($found['holder']);
+
+        return self::compact((string) $typeName) === self::compact('Passeport')
+            ? $this->passportNamesByLayout($lines, $labelLines, $found)
+            : $this->namesByLayout($lines, $labelLines, $found);
+    }
+
+    /**
+     * Passeport sénégalais (page de données) : Nom, puis Prénoms, puis Nationalité (« SENEGALAISE »),
+     * valeurs en capitales alignées à gauche. Sert quand la zone codée (MRZ) n'est pas sur la photo.
+     */
+    private function passportNamesByLayout(array $lines, array $labelLines, array $found): array
+    {
+        if (isset($found['first_name'], $found['last_name'])) {
+            return $found;
+        }
+        $pick = function (int $from, int $direction) use ($lines, $labelLines, $found): ?int {
+            [$x, $y, $h] = self::geometry($lines[$from]['box']);
+            $best = null;
+            $bestDy = PHP_FLOAT_MAX;
+            foreach ($lines as $j => $line) {
+                if ($j === $from || isset($labelLines[$j]) || in_array($j, [$found['first_name_line'] ?? null, $found['last_name_line'] ?? null], true)) {
+                    continue;
+                }
+                [$x2, $y2] = self::geometry($line['box']);
+                $dy = ($y2 - $y) * $direction;
+                $text = trim($line['text']);
+                if ($dy > $h * 0.6 && $dy < $h * 4.5 && abs($x2 - $x) < $h * 2.5 && $dy < $bestDy
+                    && $text === mb_strtoupper($text) && $this->normalize('last_name', $text) !== null) {
+                    $best = $j;
+                    $bestDy = $dy;
+                }
+            }
+
+            return $best;
+        };
+        $set = function (string $field, ?int $j) use ($lines, &$found): ?int {
+            if ($j !== null) {
+                $found[$field] = ['value' => $this->normalize($field, $lines[$j]['text']), 'confidence' => round($lines[$j]['confidence'] * 0.8, 2), 'source' => 'layout'];
+                $found[$field . '_line'] = $j;
+            }
+
+            return $j;
+        };
+
+        if (isset($found['first_name']) && is_int($found['first_name_line'] ?? null)) {
+            $set('last_name', $pick($found['first_name_line'], -1));
+        } elseif (isset($found['last_name']) && is_int($found['last_name_line'] ?? null)) {
+            $set('first_name', $pick($found['last_name_line'], 1));
+        } else {
+            foreach ($lines as $i => $line) {
+                if (in_array(self::compact($line['text']), config('ocr.nationality_values', []), true)) {
+                    if (($j = $set('first_name', $pick($i, -1))) !== null) {
+                        $set('last_name', $pick($j, -1));
+                    }
+                    break;
+                }
+            }
+        }
+
+        return $found;
+    }
+
+    /** « M. DIOUM BASSIROU » → ['DIOUM', 'BASSIROU'] ; sans espace lisible (« MITOUREMAMEMOR ») : rien. */
+    private static function splitHolder(string $value): array
+    {
+        $v = trim(preg_replace('/^(MONSIEUR|MADAME|MLLE|MME|MR|M)\s*[.\s]\s*/u', '', mb_strtoupper(trim($value))));
+        $parts = preg_split('/\s+/u', $v);
+
+        return count($parts) >= 2 && mb_strlen($parts[0]) >= 2 ? [$parts[0], implode(' ', array_slice($parts, 1))] : [null, null];
+    }
+
+    /** Retire la numérotation des champs du permis : « 1. Nom », « 4b. Date… », « 5N° Permis ». */
+    private static function withoutFieldNumber(string $text): string
+    {
+        return preg_replace('/^\s*\d{1,2}\s*[a-cA-C]?\s*[.)]?\s*(?=\D)/u', '', $text) ?? $text;
     }
 
     /**
@@ -208,6 +303,33 @@ class DocumentReader
         return $best;
     }
 
+    /** Valeur à droite du libellé, sur la même ligne (permis : « 5. N° Permis   12345678 »). */
+    private function valueRight(array $lines, int $i, array $labelLines): ?int
+    {
+        [$x, $y, $h] = self::geometry($lines[$i]['box']);
+        $xEnd = max(array_column($lines[$i]['box'], 0));
+        $best = null;
+        $bestDx = PHP_FLOAT_MAX;
+        foreach ($lines as $j => $line) {
+            if ($j === $i || isset($labelLines[$j])) {
+                continue;
+            }
+            // Texte en biais (filigrane « SPECIMEN », hologramme) : jamais une valeur.
+            [[$ax, $ay], [$bx, $by]] = [$line['box'][0], $line['box'][1]];
+            if (abs($by - $ay) > 0.35 * max(1.0, abs($bx - $ax))) {
+                continue;
+            }
+            [$x2, $y2] = self::geometry($line['box']);
+            $dx = $x2 - $xEnd;
+            if (abs($y2 - $y) < $h * 0.6 && $dx > -$h * 0.5 && $dx < $h * 15 && $dx < $bestDx) {
+                $best = $j;
+                $bestDx = $dx;
+            }
+        }
+
+        return $best;
+    }
+
     private function normalize(string $field, string $value): ?string
     {
         $value = trim($value);
@@ -243,8 +365,17 @@ class DocumentReader
             case 'doc_number':
             case 'nin':
                 $v = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $value));
+                // Plaque d'immatriculation (carte grise) : « AA-263-ND », « DK-1234-AB ».
+                if ($field === 'doc_number' && preg_match('/^[A-Z]{1,3}\d{2,4}[A-Z]{1,3}$/', $v)) {
+                    return $v;
+                }
 
                 return strlen($v) >= 6 && preg_match('/\d{4,}/', $v) ? $v : null;
+
+            case 'holder':
+                $clean = trim(preg_replace('/[^\p{L}\s.\'\-]/u', '', $value));
+
+                return mb_strlen($clean) >= 4 && ! preg_match('/\d/', $value) ? $clean : null;
         }
 
         return null;
@@ -345,6 +476,10 @@ class DocumentReader
             }
         }
 
+        if (! isset($fields['first_name']) || ! isset($fields['last_name'])) {
+            $add('names_not_read', 'info', 'Nom ou prénom non lu automatiquement : saisissez-le. Les numéros sont déjà masqués sur la photo.');
+        }
+
         if (isset($fields['expiry_date']) && $fields['expiry_date']['value'] < now()->toDateString()) {
             $add('expired', 'info', 'Pièce expirée (elle peut quand même être restituée à son propriétaire).');
         }
@@ -436,7 +571,9 @@ class DocumentReader
     private static function isLabel(string $text, string $compact, string $key): bool
     {
         if (! str_starts_with($compact, $key)) {
-            return false;
+            // Long libellé mal lu (« Date denainsance ») : jusqu'à 1 erreur pour 7 lettres.
+            return strlen($key) >= 12 && strlen($compact) <= strlen($key) + 28
+                && levenshtein(substr($compact, 0, strlen($key)), $key) <= intdiv(strlen($key), 7);
         }
         if (strlen($key) > 4) {
             return strlen($compact) <= strlen($key) + 28;
@@ -463,6 +600,8 @@ class DocumentReader
 
         if (preg_match('/(\d{1,2})\s*[\/.\-]\s*(\d{1,2})\s*[\/.\-]\s*(\d{2,4})/', $t, $m)) {
             [$d, $mo, $y] = [(int) $m[1], (int) $m[2], (int) $m[3]];
+        } elseif (preg_match('/(\d{1,2})\s*([A-Z]{3,5})\s*\/\s*[A-Z]{3,5}\s*(\d{2,4})/', $t, $m) && isset(self::MONTHS[$m[2]])) {
+            [$d, $mo, $y] = [(int) $m[1], self::MONTHS[$m[2]], (int) $m[3]];
         } elseif (preg_match('/(\d{1,2})\s*([A-Z]{3,5})\.?\s*(\d{2,4})/', $t, $m) && isset(self::MONTHS[$m[2]])) {
             [$d, $mo, $y] = [(int) $m[1], self::MONTHS[$m[2]], (int) $m[3]];
         } else {

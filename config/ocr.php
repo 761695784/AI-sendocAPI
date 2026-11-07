@@ -40,16 +40,20 @@ return [
     // Libellés des champs sur la face visible (français / anglais).
     'labels' => [
         'first_name'  => ['prenoms', 'prenom', 'given names', 'given name', 'forenames'],
-        'last_name'   => ['nom', 'surname', 'nom de famille', 'last name'],
-        'birth_date'  => ['date de naissance', 'date of birth', 'ne le', 'nee le', 'ne e le'],
+        'last_name'   => ['nom', 'surname', 'nom de famille', 'last name', 'nom name', 'nom i name', 'nom l name', 'nom 1 name'],
+        'birth_date'  => ['date de naissance', 'date et lieu de naissance', 'date of birth', 'ne le', 'nee le', 'ne e le'],
         'sex'         => ['sexe', 'sex'],
         'expiry_date' => ['date d expiration', 'date of expiry', 'date d expiry', 'valable jusqu au', 'expire le'],
-        'doc_number'  => ['n de la carte d identite', 'numero de la carte', 'n de la carte', 'n du passeport', 'passport no', 'numero du passeport', 'n du permis', 'numero', 'card no', 'document no'],
-        'nin'         => ['nin', 'numero d identification nationale', 'n i n'],
+        'doc_number'  => ['n de la carte d identite', 'numero de la carte', 'n de la carte', 'n du passeport', 'passport no', 'numero du passeport', 'n du permis', 'n permis', 'no permis', 'numero du permis', 'n immatriculation', 'numero', 'card no', 'document no'],
+        'nin'         => ['nin', 'numero d identification nationale', 'n i n', 'n personnel', 'personal no'],
+        // Carte grise : « Titulaire » → « M. NOM PRÉNOMS » (découpé en nom + prénoms).
+        'holder'      => ['titulaire'],
     ],
 
     // Libellés à ne jamais prendre pour une valeur.
-    'noise' => ['specimen', 'republique du senegal', 'photo', 'signature', 'cedeao', 'ecowas', 'passeport', 'passport'],
+    'noise' => ['specimen', 'republique du senegal', 'photo', 'signature', 'cedeao', 'ecowas', 'passeport', 'passport', 'senegalaise', 'senegalais', 'permis de conduire'],
+    // Valeur « Nationalité » du passeport : repère pour retrouver Nom et Prénoms au-dessus.
+    'nationality_values' => ['senegalaise', 'senegalais', 'senegalese'],
 
     // Seuils de qualité.
     'min_line_confidence' => 0.5,
