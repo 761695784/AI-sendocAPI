@@ -259,9 +259,28 @@ class DocumentController extends Controller
         ]);
 
         $match = $restitutions->confirmedMatchFor($document, $fromUser);
-        if (! $restitutions->ownershipLooksRight($document, $fromUser, $data['doc_last4'] ?? null)) {
-            // Identité non prouvée automatiquement : le trouveur, qui a le document en main, décide.
-            if ($request->boolean('ask_finder')) {
+
+        // 4 caractères du numéro : 3 essais par personne et par document (24 h), sinon on pourrait les deviner.
+        $last4     = $data['doc_last4'] ?? null;
+        $guessKey  = 'restitution-last4:' . $fromUser->id . ':' . $document->id;
+        $tooMany   = \Illuminate\Support\Facades\RateLimiter::tooManyAttempts($guessKey, 3);
+        if ($tooMany) {
+            $last4 = null;
+        }
+
+        $proven = $restitutions->ownershipLooksRight($document, $fromUser, $last4);
+        if (! $proven && $last4 !== null && $restitutions->knownLast4($document) !== null) {
+            \Illuminate\Support\Facades\RateLimiter::hit($guessKey, 86400);
+            activity()->causedBy($fromUser)->performedOn($document)
+                ->withProperties(['ip' => $request->ip()])
+                ->log('Restitution : 4 caractères du numéro incorrects');
+            $tooMany = \Illuminate\Support\Facades\RateLimiter::tooManyAttempts($guessKey, 3);
+        }
+
+        if (! $proven) {
+            // Identité non prouvée : le trouveur, qui a le document en main, décide. Un nom de compte
+            // concordant envoie directement la demande au trouveur (le nom seul ne prouve rien).
+            if ($request->boolean('ask_finder') || ($last4 === null && ! $tooMany && $restitutions->nameMatches($document, $fromUser))) {
                 $req = $restitutions->requestToFinder($document, $fromUser);
 
                 return response()->json([
@@ -274,13 +293,16 @@ class DocumentController extends Controller
                 ], 201);
             }
 
-            $hasNumber = $restitutions->knownLast4($document) !== null;
+            $hasNumber = $restitutions->knownLast4($document) !== null && ! $tooMany;
 
             return response()->json([
                 'success'    => false,
                 'code'       => 'identity_check',
                 'has_number' => $hasNumber,
-                'message'    => 'Le nom de votre compte ne correspond pas au nom inscrit sur ce document. '
+                'locked'     => $tooMany,
+                'message'    => $tooMany
+                    ? 'Trop d\'essais pour les 4 caractères du numéro. Envoyez votre demande au trouveur : il compare avec le document qu\'il a en main.'
+                    : 'Le nom de votre compte ne correspond pas au nom inscrit sur ce document. '
                     . ($hasNumber
                         ? 'Indiquez les 4 derniers caractères de son numéro, ou envoyez votre demande au trouveur pour qu\'il vérifie.'
                         : 'Le trouveur n\'a pas saisi le numéro de la pièce : envoyez votre demande au trouveur pour qu\'il vérifie.'),

@@ -48,7 +48,7 @@ class DataExposureTest extends TestCase
         $this->assertStringNotContainsString('1234567890123', $json);
 
         $item = $response->json('data.0');
-        $this->assertSame('•••••••••0123', $item['DocIdentification']);
+        $this->assertNull($item['DocIdentification']); // aucun chiffre public (preuve de propriété)
         $this->assertSame(['uuid', 'FirstName', 'LastName'], array_keys($item['user']));
         $this->assertStringNotContainsString('signature=', (string) $item['image']);
     }
@@ -92,7 +92,7 @@ class DataExposureTest extends TestCase
         $item = $this->asUser($this->citizen())->getJson('/api/documents/' . $document->uuid)->json();
 
         $this->assertFalse($item['is_owner']);
-        $this->assertSame('•••••••••0123', $item['DocIdentification']);
+        $this->assertNull($item['DocIdentification']); // aucun chiffre public (preuve de propriété)
         $this->assertArrayNotHasKey('email', $item['user']);
     }
 

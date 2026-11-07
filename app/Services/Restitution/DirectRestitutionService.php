@@ -42,20 +42,16 @@ class DirectRestitutionService
     }
 
     /**
-     * Le demandeur est-il vraisemblablement le propriétaire ?
+     * Le demandeur a-t-il PROUVÉ qu'il est le propriétaire (mise en relation immédiate) ?
      *  - correspondance confirmée par DocTrack ;
-     *  - OU nom proche de celui du document, tolérant aux usages sénégalais : deux noms de famille
-     *    (« Diop Ndiaye » / « Ndiaye »), prénoms composés (« Mame Fatou » / « Fatou »), graphies
-     *    (« Ndiaye » / « Njaay »), accents, ordre des mots ;
-     *  - OU 4 derniers caractères exacts du numéro de la pièce (si le trouveur l'a saisi).
+     *  - OU 4 derniers caractères exacts du numéro de la pièce (si le trouveur l'a saisi). Ils ne sont
+     *    jamais affichés au public (DocumentResource) : seul le vrai titulaire les connaît.
+     * Le nom du compte n'est PAS une preuve : n'importe qui peut s'inscrire sous le nom affiché sur la
+     * liste publique. Un nom concordant envoie la demande au trouveur (voir nameMatches()).
      */
     public function ownershipLooksRight(Document $document, User $requester, ?string $last4 = null): bool
     {
         if ($this->confirmedMatchFor($document, $requester)) {
-            return true;
-        }
-
-        if ($this->namesLookAlike($document, $requester)) {
             return true;
         }
 
@@ -72,6 +68,17 @@ class DirectRestitutionService
             ?: substr((string) \App\Support\SensitiveData::normalizeDocNumber($document->DocIdentification), -4);
 
         return $known !== '' ? $known : null;
+    }
+
+    /**
+     * Le nom du compte est-il proche de celui du document ? Comparaison tolérante aux usages sénégalais :
+     * deux noms de famille (« Diop Ndiaye » / « Ndiaye »), prénoms composés (« Mame Fatou » / « Fatou »),
+     * graphies (« Ndiaye » / « Njaay »), accents, ordre des mots. Simple indice : la demande part alors
+     * au trouveur, qui compare avec la pièce qu'il a en main (photo comprise) avant d'accepter.
+     */
+    public function nameMatches(Document $document, User $requester): bool
+    {
+        return $this->namesLookAlike($document, $requester);
     }
 
     private function namesLookAlike(Document $document, User $requester): bool

@@ -23,3 +23,7 @@ rr.exe
 /storage/*.key
 /storage/app/*
 !/storage/app/.gitignore
+
+# Exports Insomnia / Postman : contiennent des mots de passe et jetons de test
+Insomnia_*.json
+*.postman_collection.json

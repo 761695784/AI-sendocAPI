@@ -24,8 +24,6 @@ Route::middleware('throttle:10,1,v1-auth')->group(function () {
     Route::post('register', [AuthController::class, 'register'])->middleware('throttle:register');
     Route::post('login', [AuthController::class, 'login']); // + verrouillage après 5 échecs (AuthController)
     Route::post('forgot-password', [AuthController::class, 'forgotPassword'])->middleware('throttle:password');
-    // @deprecated — l'email passe dans l'URL. Conservé le temps d'adapter le front.
-    Route::get('forgot-password', [AuthController::class, 'forgotPassword']);
     Route::post('reset-password', [AuthController::class, 'resetPassword'])->middleware('throttle:password');
     Route::post('/verify-email', [EmailVerificationController::class, 'verify']);
     Route::post('/found-qr', [QrCodeController::class, 'handleFoundQr']);
@@ -38,8 +36,9 @@ Route::post('webhooks/{provider}', [PaymentController::class, 'webhook'])->middl
 // ROUTES PUBLIQUES LECTURE — throttle souple
 // ══════════════════════════════════════════════════════════════════
 Route::middleware('throttle:120,1,v1-public')->group(function () {
-    Route::post('/auth/google/callback', [AuthController::class, 'handleGoogleCallback']);
-    Route::post('/auth/google/finalize-account-creation', [AuthController::class, 'finalizeAccountCreation']);
+    // Connexion Google désactivée : non utilisée par le front, et le jeton d'accès reçu n'était pas
+    // vérifié comme émis pour DocTrack (un jeton obtenu par une autre application ouvrait le compte).
+    // Pour la réactiver : vérifier un jeton d'identité Google et son destinataire (aud = GOOGLE_CLIENT_ID).
 
     // Documents publics (vue floutée, données personnelles masquées)
     Route::get('documents', [DocumentController::class, 'index']);

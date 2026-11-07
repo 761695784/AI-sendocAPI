@@ -22,6 +22,14 @@ class EnsureAccountIsActive
             ], 403);
         }
 
+        // Email jamais vérifié (même règle qu'à la connexion) : un jeton obtenu autrement ne sert à rien.
+        if ($user && is_null($user->email_verified_at) && ! $user->isSuperAdmin()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Email non vérifié.',
+            ], 403);
+        }
+
         return $next($request);
     }
 }

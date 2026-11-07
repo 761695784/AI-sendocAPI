@@ -109,12 +109,56 @@ class AuthenticationTest extends TestCase
         $this->assertSame($a->json('message'), $b->json('message'));
     }
 
-    public function test_google_callback_route_now_reaches_the_controller(): void
+    public function test_google_login_is_disabled(): void
     {
-        // Avant : méthode inexistante → erreur 500. Maintenant : réponse maîtrisée.
-        $this->postJson('/api/auth/google/callback', ['token' => 'faux'])
-            ->assertStatus(401)
-            ->assertJsonMissingPath('error');
+        // Le jeton Google n'était pas vérifié comme émis pour DocTrack : routes retirées.
+        $this->postJson('/api/auth/google/callback', ['token' => 'faux'])->assertNotFound();
+        $this->postJson('/api/auth/google/finalize-account-creation', ['token' => 'faux'])->assertNotFound();
+    }
+
+    public function test_forgot_password_is_post_only(): void
+    {
+        $this->getJson('/api/forgot-password?email=victime@example.com')->assertStatus(405);
+    }
+
+    public function test_register_gives_no_token_before_the_email_is_verified(): void
+    {
+        \Illuminate\Support\Facades\Mail::fake();
+        $res = $this->postJson('/api/register', [
+            'FirstName' => 'Awa', 'LastName' => 'Ndiaye', 'Adress' => 'Dakar', 'Phone' => '+221770001122',
+            'email' => 'awa.test@example.sn', 'password' => 'motdepasse123', 'password_confirmation' => 'motdepasse123',
+        ])->assertCreated()->assertJsonPath('requires_verification', true);
+        $this->assertArrayNotHasKey('token', $res->json());
+
+        // Un jeton obtenu autrement ne sert à rien tant que l'email n'est pas vérifié.
+        $user = \App\Models\User::where('email', 'awa.test@example.sn')->sole();
+        $this->asUser($user)->getJson('/api/my-declarations')->assertForbidden();
+    }
+
+    public function test_email_code_is_cancelled_after_five_wrong_attempts(): void
+    {
+        $user = \App\Models\User::factory()->unverified()->create(['email' => 'code@example.sn', 'email_verification_code' => '123456']);
+        $user->assignRole(\App\Models\User::ROLE_CITIZEN);
+
+        for ($i = 0; $i < 5; $i++) {
+            $this->postJson('/api/verify-email', ['email' => 'code@example.sn', 'code' => '000000'])->assertStatus(401);
+        }
+        // Même le bon code ne passe plus : il faut demander un lien d'activation.
+        $this->postJson('/api/verify-email', ['email' => 'code@example.sn', 'code' => '123456'])->assertStatus(401);
+        $this->assertNull($user->fresh()->email_verified_at);
+    }
+
+    public function test_changing_email_requires_the_current_password(): void
+    {
+        \Illuminate\Support\Facades\Mail::fake();
+        $user = $this->citizen(['email' => 'avant@example.sn', 'password' => \Illuminate\Support\Facades\Hash::make('secret-123')]);
+
+        $this->asUser($user)->putJson('/api/profil', ['email' => 'pirate@example.sn'])
+            ->assertStatus(422)->assertJsonValidationErrors('current_password');
+        $this->assertSame('avant@example.sn', $user->fresh()->email);
+
+        $this->asUser($user)->putJson('/api/profil', ['email' => 'nouveau@example.sn', 'current_password' => 'secret-123'])->assertOk();
+        $this->assertSame('nouveau@example.sn', $user->fresh()->email);
     }
 
     public function test_renewing_the_qr_code_changes_the_token(): void

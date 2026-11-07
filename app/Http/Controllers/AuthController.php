@@ -199,16 +199,13 @@ class AuthController extends Controller
             ])
             ->log('Nouvel utilisateur inscrit');
 
-        // Génération du token JWT
-        $token = JWTAuth::fromUser($user);
-
-        // Retourner un message de succès
+        // Pas de jeton de connexion ici : il n'est remis qu'après la vérification de l'email
+        // (POST /verify-email), sinon on pourrait utiliser un compte créé avec l'email d'un autre.
         return response()->json([
-            'success'     => true,
-            'message'     => 'Inscription réussie ! Bienvenue sur la plateforme.',
-            'user'        => $user,
-            'token'       => $token,
-            'qr_code_url' => QrCodeUrl::imageFor($user),
+            'success'               => true,
+            'message'               => 'Inscription réussie ! Saisissez le code reçu par email pour activer votre compte.',
+            'user'                  => $user->only(['uuid', 'FirstName', 'LastName', 'email']),
+            'requires_verification' => true,
         ], 201);
     }
 
@@ -225,8 +222,11 @@ class AuthController extends Controller
         // 5 échecs max par couple email + IP, blocage 5 minutes.
         $throttleKey = 'login:' . Str::lower($request->input('email')) . '|' . $request->ip();
 
-        if (RateLimiter::tooManyAttempts($throttleKey, 5)) {
-            $seconds = RateLimiter::availableIn($throttleKey);
+        // Et 20 échecs max par compte sur une heure, quelle que soit l'adresse IP (attaque répartie).
+        $accountKey = 'login-account:' . Str::lower($request->input('email'));
+
+        if (RateLimiter::tooManyAttempts($throttleKey, 5) || RateLimiter::tooManyAttempts($accountKey, 20)) {
+            $seconds = max(RateLimiter::availableIn($throttleKey), RateLimiter::availableIn($accountKey));
             return response()->json([
                 'success' => false,
                 'message' => 'Trop de tentatives. Veuillez attendre ' . $seconds . ' secondes avant de réessayer.',
@@ -239,6 +239,7 @@ class AuthController extends Controller
         // on ne révèle pas quels comptes existent.
         if (! $token = JWTAuth::attempt($credentials)) {
             RateLimiter::hit($throttleKey, 300);
+            RateLimiter::hit($accountKey, 3600);
 
             activity()
                 ->withProperties(['ip' => $request->ip()])
@@ -612,8 +613,33 @@ class AuthController extends Controller
 
         $user = Auth::user();
 
+        // Changer d'email permettrait de prendre le contrôle du compte (puis « mot de passe oublié ») :
+        // le mot de passe actuel est exigé et l'ancienne adresse est prévenue.
+        $oldEmail     = $user->email;
+        $emailChanges = $request->filled('email') && Str::lower($request->input('email')) !== Str::lower((string) $oldEmail);
+        if ($emailChanges) {
+            $password = (string) ($request->input('current_password') ?? $request->input('oldPassword') ?? '');
+            if ($password === '' || ! Hash::check($password, $user->password)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Pour changer votre adresse email, saisissez votre mot de passe actuel.',
+                    'errors'  => ['current_password' => ['Pour changer votre adresse email, saisissez votre mot de passe actuel.']],
+                ], 422);
+            }
+        }
+
         // Mettre à jour les informations de l'utilisateur
         $user->update($request->only('FirstName', 'LastName', 'Adress', 'Phone', 'email'));
+
+        if ($emailChanges && $oldEmail) {
+            try {
+                Mail::raw("L'adresse email de votre compte DocTrack vient d'être remplacée par {$user->email}. "
+                    . "Si vous n'êtes pas à l'origine de ce changement, contactez-nous immédiatement : contact@majeliconnect.com.",
+                    fn ($message) => $message->to($oldEmail)->subject('Votre adresse email DocTrack a été modifiée'));
+            } catch (\Throwable $e) {
+                Log::warning('Alerte de changement d\'email non envoyée', ['user' => $user->uuid]);
+            }
+        }
 
         // ── Log ──
         /** @var \App\Models\User $user */

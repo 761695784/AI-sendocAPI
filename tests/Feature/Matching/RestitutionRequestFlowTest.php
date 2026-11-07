@@ -146,9 +146,12 @@ class RestitutionRequestFlowTest extends OrganizationTestCase
     {
         $docUuid = $this->publish(['OwnerFirstName' => 'Fatou', 'OwnerLastName' => 'Sarr']);
 
-        // Même nom que sur le document : accepté sans déclaration préalable.
+        // Même nom que sur le document : la demande part au trouveur (le nom seul ne prouve rien,
+        // n'importe qui peut s'inscrire sous le nom affiché sur la liste publique).
         $fatou = $this->citizen(['FirstName' => 'Fatou', 'LastName' => 'SARR', 'Phone' => '+221775556677']);
-        $this->ask($fatou, $docUuid)->assertCreated()->assertJsonPath('finder.phone', '+221784445566');
+        $this->ask($fatou, $docUuid)->assertCreated()
+            ->assertJsonPath('request.status', 'pending')
+            ->assertJsonPath('finder', null);
     }
 
     public function test_finder_declines_and_the_owner_is_told_the_structure_takes_over(): void
@@ -190,6 +193,36 @@ class RestitutionRequestFlowTest extends OrganizationTestCase
 
         // Les 4 derniers caractères exacts du numéro de la pièce suffisent.
         $this->ask($stranger, $docUuid, ['doc_last4' => '0123'])->assertCreated();
+    }
+
+    public function test_an_impostor_using_the_owner_name_never_gets_the_finder_number(): void
+    {
+        $docUuid = $this->publish(['OwnerFirstName' => 'Fatou', 'OwnerLastName' => 'Sarr']);
+
+        // Le numéro n'est jamais affiché au public, même partiellement.
+        $this->assertNull($this->getJson('/api/documents/' . $docUuid)->json('DocIdentification'));
+        $this->assertNull($this->getJson('/api/documents')->json('data.0.DocIdentification'));
+
+        // Compte créé sous le nom affiché : demande envoyée au trouveur, sans son numéro.
+        $impostor = $this->citizen(['FirstName' => 'Fatou', 'LastName' => 'Sarr', 'Phone' => '+221775550000']);
+        $res = $this->ask($impostor, $docUuid)->assertCreated();
+        $res->assertJsonPath('request.status', 'pending')->assertJsonPath('finder', null);
+        $this->assertStringNotContainsString('784445566', $res->getContent());
+    }
+
+    public function test_the_last4_cannot_be_guessed(): void
+    {
+        $docUuid  = $this->publish();
+        $stranger = $this->citizen(['FirstName' => 'Ibou', 'LastName' => 'Faye']);
+
+        foreach (['1111', '2222', '3333'] as $guess) {
+            $this->ask($stranger, $docUuid, ['doc_last4' => $guess])->assertForbidden();
+        }
+        // Après 3 essais, même la bonne valeur est refusée : il faut passer par le trouveur.
+        $this->ask($stranger, $docUuid, ['doc_last4' => '0123'])->assertForbidden()
+            ->assertJsonPath('code', 'identity_check')
+            ->assertJsonPath('locked', true)
+            ->assertJsonPath('has_number', false);
     }
 
     public function test_handover_closes_the_declaration(): void
@@ -293,7 +326,7 @@ class RestitutionRequestFlowTest extends OrganizationTestCase
         $docUuid = $this->publish(['OwnerFirstName' => 'Mame Fatou', 'OwnerLastName' => 'Diop Ndiaye']);
         $fatou = $this->citizen(['FirstName' => 'Fatou', 'LastName' => 'Ndiaye', 'Phone' => '+221775556600']);
 
-        $this->ask($fatou, $docUuid)->assertCreated()->assertJsonPath('request.status', 'accepted');
+        $this->ask($fatou, $docUuid)->assertCreated()->assertJsonPath('request.status', 'pending');
     }
 
     public function test_without_proof_the_finder_decides(): void

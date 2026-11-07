@@ -24,7 +24,8 @@ return [
     ],
 
     // Documentation de l'API V2 (/api/documentation/v2). Désactivable en production.
-    'api_docs_enabled' => (bool) env('API_DOCS_ENABLED', true),
+    // Documentation de l'API (Swagger) : cachée par défaut en production (elle donne la carte de toutes les routes).
+    'api_docs_enabled' => (bool) env('API_DOCS_ENABLED', env('APP_ENV', 'production') !== 'production'),
 
     // Délais de réaction attendus des structures (statistiques + relances automatiques).
     'sla' => [

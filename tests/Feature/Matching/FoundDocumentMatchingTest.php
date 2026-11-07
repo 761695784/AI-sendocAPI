@@ -297,7 +297,7 @@ class FoundDocumentMatchingTest extends OrganizationTestCase
         $public = $this->getJson('/api/documents/' . $uuid)->assertOk();
         $public->assertJsonPath('found_channel', 'counter')
             ->assertJsonPath('custody.name', 'Commissariat A')
-            ->assertJsonPath('DocIdentification', '••••0123')
+            ->assertJsonPath('DocIdentification', null)
             ->assertJsonPath('user', null);
         $this->assertStringNotContainsString('Secret', $public->getContent());
         $this->assertStringNotContainsString('1234567890123', $public->getContent());

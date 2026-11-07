@@ -250,15 +250,15 @@ class Document extends Model implements HasMedia
         $this->addMediaConversion('thumb')
              ->width(400)
              ->height(300)
-             ->blur(8)
+             ->blur(25) // 0–100 : assez fort pour rendre numéros et dates illisibles
              ->format('webp')
              ->performOnCollections('document_image', 'document_public')
              ->nonQueued();
 
         // Version floutée — détail public
         $this->addMediaConversion('blurred')
-             ->blur(8)
              ->width(800)
+             ->blur(25)
              ->format('webp')
              ->performOnCollections('document_image', 'document_public')
              ->nonQueued();

@@ -41,10 +41,10 @@ class DocumentResource extends JsonResource
             : null;
 
         $counter = $this->found_channel === \App\Models\Document::CHANNEL_COUNTER;
-        // Guichet : le numéro n'existe que chiffré ; on n'affiche que les 4 derniers chiffres.
-        $number = $counter
-            ? ($this->doc_number_last4 ? '••••' . $this->doc_number_last4 : null)
-            : ($privileged ? $this->DocIdentification : self::mask($this->DocIdentification));
+        // Aucun chiffre du numéro n'est montré au public : les 4 derniers servent de preuve de propriété
+        // pour la restitution directe (DirectRestitutionService::ownershipLooksRight).
+        // Guichet : le numéro n'existe que chiffré ; seul le publicateur (ou l'admin) voit le numéro saisi.
+        $number = $privileged && ! $counter ? $this->DocIdentification : null;
 
         return [
             'id'                => $this->id,
