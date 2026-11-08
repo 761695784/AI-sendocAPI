@@ -245,6 +245,36 @@ class AssistantTest extends OrganizationTestCase
         $this->assertStringContainsString('Brigade Z', $r->json('reply.messages.0.text'));
     }
 
+    public function test_a_city_with_several_structures_asks_for_the_quarter(): void
+    {
+        $dakar = Territory::where('name', 'Dakar')->where('level', 'department')->value('id');
+        $this->commissariatA->update(['name' => 'Commissariat de Dieuppeul', 'territory_id' => $dakar, 'accepts_collections' => true, 'is_active' => true]);
+        $this->commissariatB->update(['name' => 'Commissariat de la Médina', 'territory_id' => $dakar, 'accepts_collections' => true, 'is_active' => true]);
+
+        $id   = $this->chat(['Où récupérer ma pièce ?'])->json('conversation.id');
+        $send = fn ($t, array $extra = []) => $this->postJson('/api/v2/assistant/messages', ['conversation_id' => $id, 'text' => $t] + $extra)->assertOk();
+
+        // « Dakar » seul : on ne choisit pas au hasard, on liste et on demande le quartier.
+        $r = $send('dakar');
+        $this->assertSame(['several_structures'], $this->keys($r));
+        $this->assertStringContainsString('Commissariat de Dieuppeul', $r->json('reply.messages.0.text'));
+        $this->assertStringContainsString('Commissariat de la Médina', $r->json('reply.messages.0.text'));
+        $this->assertContains('__position__', array_column($r->json('reply.quick_replies'), 'value'));
+
+        // Le quartier désigne la structure.
+        $r = $send('Médina');
+        $this->assertSame(['nearest_structure'], $this->keys($r));
+        $this->assertStringContainsString('Commissariat de la Médina', $r->json('reply.messages.0.text'));
+
+        // « Pourquoi ? » : l'assistant explique son choix et cite les autres structures.
+        $r = $send('pourquoi médina ?');
+        $this->assertSame(['why_quarter', 'other_structures'], $this->keys($r));
+        $this->assertStringContainsString('Commissariat de Dieuppeul', $r->json('reply.messages.1.text'));
+
+        // Bouton « Partager ma position » sans coordonnées : on redemande le lieu.
+        $this->assertSame(['position_unavailable'], $this->keys($send('__position__')));
+    }
+
     public function test_information_questions(): void
     {
         $this->assertSame(['what_to_bring_info'], $this->keys($this->chat(['Que faut-il apporter ?'])));

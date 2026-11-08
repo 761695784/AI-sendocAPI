@@ -126,10 +126,14 @@ return [
             'model' => env('DEEPSEEK_MODEL', 'deepseek-chat'),
         ],
         // Groq : formule gratuite sans carte bancaire (limites par minute et par jour). Recommandé pour l'assistant.
+        // Modèles accessibles avec votre clé : php artisan doctrack:assistant-ai-check (liste affichée en cas d'erreur 404).
+        // gpt-oss « réfléchit » avant de répondre : effort bas = plus rapide et moins de jetons consommés.
         'groq' => [
-            'url'   => env('GROQ_API_URL', 'https://api.groq.com/openai/v1'),
-            'key'   => env('GROQ_API_KEY'),
-            'model' => env('GROQ_MODEL', 'llama-3.3-70b-versatile'),
+            'url'     => env('GROQ_API_URL', 'https://api.groq.com/openai/v1'),
+            'key'     => env('GROQ_API_KEY'),
+            'model'   => env('GROQ_MODEL', 'openai/gpt-oss-120b'),
+            'options' => str_contains((string) env('GROQ_MODEL', 'openai/gpt-oss-120b'), 'gpt-oss')
+                ? ['reasoning_effort' => env('GROQ_REASONING_EFFORT', 'low')] : [],
         ],
         // Google AI Studio (Gemini) par son accès compatible OpenAI. Formule gratuite : les questions
         // peuvent servir à entraîner les modèles de Google (hors Europe) — jamais de données personnelles.

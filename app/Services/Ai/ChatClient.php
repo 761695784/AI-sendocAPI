@@ -29,19 +29,21 @@ class ChatClient
             if (! empty($cfg['key'])) {
                 $request = $request->withToken($cfg['key']);
             }
+            // « options » : paramètres propres au fournisseur (ex. reasoning_effort pour les modèles qui « réfléchissent »).
             $response = $request->post(rtrim($cfg['url'], '/') . '/chat/completions', [
                 'model'       => $cfg['model'],
                 'messages'    => $messages,
                 'temperature' => $temperature,
                 'max_tokens'  => $maxTokens,
-            ]);
+            ] + ($cfg['options'] ?? []));
         } catch (Throwable $e) {
             throw new AiUnavailableException("« {$endpoint} » injoignable : " . $e->getMessage(), 0, $e);
         }
 
         $text = $response->json('choices.0.message.content');
         if (! $response->successful() || ! is_string($text) || trim($text) === '') {
-            throw new AiUnavailableException("« {$endpoint} » en erreur ({$response->status()}) : " . mb_substr($response->body(), 0, 200));
+            $reason = $response->json('choices.0.finish_reason') === 'length' ? ' — réponse coupée : augmenter max_tokens' : '';
+            throw new AiUnavailableException("« {$endpoint} » en erreur ({$response->status()}){$reason} : " . mb_substr($response->body(), 0, 200));
         }
 
         return ['text' => $text, 'model' => (string) ($response->json('model') ?: $cfg['model'])];

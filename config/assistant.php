@@ -165,6 +165,7 @@ return [
         'fix_number'    => ['fr' => 'Le numéro', 'wo' => 'Nimero bi'],
         'fix_place'     => ['fr' => 'Le lieu', 'wo' => 'Bérab bi'],
         'cancel'        => ['fr' => 'Annuler', 'wo' => 'Bayyi ko'],
+        'share_position' => ['fr' => 'Partager ma position'],
     ],
 
     /*
@@ -331,6 +332,24 @@ return [
         'location_unknown' => [
             'fr' => 'Je ne trouve pas ce lieu. Donnez le nom de votre ville ou de votre département, par exemple : Dakar, Pikine, Ziguinchor.',
             'wo' => 'Gisuma bérab boobu. Waxal turu sa dëkk walla sa département, misaal : Dakar, Pikine, Ziguinchor.',
+        ],
+        'several_structures' => [
+            'fr' => ':area compte plusieurs structures participantes : :list. Dans quel quartier êtes-vous ? Vous pouvez aussi partager votre position pour connaître la plus proche.',
+        ],
+        'why_gps' => [
+            'fr' => 'Je vous ai indiqué :structure parce que c\'est la structure participante la plus proche de votre position (environ :km km).',
+        ],
+        'why_quarter' => [
+            'fr' => 'Je vous ai indiqué :structure parce qu\'elle se trouve dans le quartier que vous avez cité (:area).',
+        ],
+        'why_area' => [
+            'fr' => 'Vous avez indiqué :area sans préciser le quartier : :structure est une structure participante de ce secteur, pas forcément la plus proche de vous. Donnez votre quartier ou partagez votre position pour une réponse plus précise.',
+        ],
+        'other_structures' => [
+            'fr' => 'Autres structures participantes dans ce secteur : :list.',
+        ],
+        'position_unavailable' => [
+            'fr' => 'Je n\'ai pas reçu votre position. Indiquez le nom de votre quartier ou de votre ville.',
         ],
         'no_structure' => [
             'fr' => 'Aucune structure partenaire n\'est encore enregistrée près de ce lieu. Rendez-vous au commissariat ou à la brigade la plus proche.',

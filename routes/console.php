@@ -268,3 +268,72 @@ Artisan::command('doctrack:mail-test {email} {--all : Envoyer aussi un exemple d
 
     return 0;
 })->purpose('Vérifie l\'envoi des emails (SMTP) et envoie un exemple de chaque email DocTrack');
+
+// Assistant « Une question ? » : vérifie la configuration de l'IA et appelle chaque fournisseur (aucune clé affichée).
+Artisan::command('doctrack:assistant-ai-check {question? : question à poser à l\'assistant (facultatif)}', function () {
+    $chat      = app(\App\Services\Ai\ChatClient::class);
+    $providers = config('assistant_faq.providers', []);
+
+    $this->line('Configuration en cache : ' . (app()->configurationIsCached() ? 'OUI → après chaque modification du .env : php artisan config:clear' : 'non'));
+    $sections = app(\App\Services\Assistant\KnowledgeBase::class)->sections();
+    $this->line('Base de connaissances : ' . count($sections) . ' section(s) — ' . config('assistant_faq.knowledge_file'));
+    if (! $providers) {
+        $this->error('ASSISTANT_AI_PROVIDERS est vide : ajoutez par exemple ASSISTANT_AI_PROVIDERS=groq,glm dans le .env.');
+
+        return 1;
+    }
+    $this->line('Fournisseurs (dans l\'ordre) : ' . implode(', ', $providers));
+
+    $ok = 0;
+    foreach ($providers as $provider) {
+        $cfg = config("ai.endpoints.{$provider}");
+        if (! is_array($cfg)) {
+            $this->error("  {$provider} : inconnu (choix possibles : " . implode(', ', array_keys(config('ai.endpoints', []))) . ')');
+            continue;
+        }
+        $this->line("  {$provider} : url={$cfg['url']} modèle={$cfg['model']} clé=" . (empty($cfg['key']) ? 'ABSENTE' : 'présente'));
+        if (! $chat->configured($provider)) {
+            $this->error("  {$provider} : non configuré (clé ou modèle manquant).");
+            continue;
+        }
+        try {
+            $r = $chat->complete($provider, [['role' => 'user', 'content' => 'Réponds seulement : OK']], 0, 400, 30);
+            $this->info("  {$provider} : répond (" . $r['model'] . ') → ' . trim(mb_substr($r['text'], 0, 40)));
+            $ok++;
+        } catch (\Throwable $e) {
+            $msg = $e->getMessage();
+            $this->error("  {$provider} : ERREUR → " . mb_substr($msg, 0, 300));
+            if (str_contains($msg, 'cURL error 60') || str_contains($msg, 'certificate')) {
+                $this->warn('    PHP ne trouve pas les certificats SSL : renseignez curl.cainfo et openssl.cafile (fichier cacert.pem) dans php.ini, puis redémarrez PHP.');
+            } elseif (str_contains($msg, '(401)') || str_contains($msg, '(403)')) {
+                $this->warn('    Clé refusée : vérifiez la clé (sans espace ni guillemets) dans le .env.');
+            } elseif (str_contains($msg, '(404)')) {
+                $this->warn('    Modèle introuvable ou non autorisé pour cette clé. Modèles accessibles avec votre clé :');
+                try {
+                    $ids = \Illuminate\Support\Facades\Http::timeout(30)->withToken($cfg['key'])->acceptJson()
+                        ->get(rtrim($cfg['url'], '/') . '/models')->json('data.*.id') ?? [];
+                    sort($ids);
+                    $this->line($ids ? '    - ' . implode("\n    - ", $ids) : '    (liste vide : vérifiez les réglages de votre compte chez le fournisseur)');
+                } catch (\Throwable $e) {
+                    $this->line('    (liste indisponible : ' . mb_substr($e->getMessage(), 0, 120) . ')');
+                }
+            } elseif (str_contains($msg, '(429)')) {
+                $this->warn('    Quota atteint ou épuisé chez ce fournisseur.');
+            }
+        }
+    }
+
+    if ($question = $this->argument('question')) {
+        \Illuminate\Support\Facades\Cache::forget('assistant-faq:' . sha1(\App\Services\Assistant\TextNormalizer::normalize(\App\Services\Assistant\FaqResponder::mask($question))));
+        $responder = app(\App\Services\Assistant\FaqResponder::class);
+        $answer    = $responder->answerWithAi($question, 'check-' . \Illuminate\Support\Str::random(8), 'diagnostic');
+        foreach ($responder->trace as $t) {
+            $this->line("  [{$t['provider']}] {$t['verdict']}" . ($t['raw'] !== '' ? "\n    brut : " . str_replace("\n", ' ', $t['raw']) : ''));
+        }
+        $answer
+            ? $this->info("Réponse IA ({$answer['provider']}, sources : " . implode(', ', array_column($answer['entries'], 'id')) . ") :\n" . $answer['answer'])
+            : $this->warn('Pas de réponse IA retenue (hors base de connaissances, réponse rejetée par les garde-fous, ou plafond du jour atteint).');
+    }
+
+    return $ok > 0 ? 0 : 1;
+})->purpose('Vérifie les clés et la connexion des fournisseurs IA de l\'assistant');

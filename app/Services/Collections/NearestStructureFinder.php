@@ -24,12 +24,7 @@ class NearestStructureFinder
      */
     public function find(?float $lat, ?float $lng, ?int $territoryId, array $excludeIds = []): ?array
     {
-        $candidates = Organization::query()
-            ->where('is_active', true)
-            ->where('accepts_collections', true)
-            ->whereHas('type', fn ($q) => $q->where('level', OrganizationType::LEVEL_STRUCTURE))
-            ->when($excludeIds, fn ($q) => $q->whereNotIn('id', $excludeIds))
-            ->get();
+        $candidates = $this->candidates($excludeIds);
 
         if ($candidates->isEmpty()) {
             return null;
@@ -77,6 +72,33 @@ class NearestStructureFinder
         return null;
     }
 
+    /**
+     * Structures participantes du même département que le lieu (sinon de la même région), pour les lister.
+     *
+     * @return array{level: string, organizations: Collection<int, Organization>}
+     */
+    public function inArea(int $territoryId): array
+    {
+        $candidates  = $this->candidates([]);
+        $territories = Territory::all(['id', 'level', 'parent_id'])->keyBy('id');
+        $target      = $territories->get($territoryId);
+
+        foreach ([Territory::LEVEL_DEPARTMENT => 'department', Territory::LEVEL_REGION => 'region'] as $level => $reason) {
+            $targetAtLevel = $this->ancestorAt($territories, $target, $level);
+            if (! $targetAtLevel) {
+                continue;
+            }
+            $sameArea = $candidates->filter(
+                fn ($o) => $this->ancestorAt($territories, $territories->get($o->territory_id), $level)?->id === $targetAtLevel->id
+            )->values();
+            if ($sameArea->isNotEmpty()) {
+                return ['level' => $reason, 'organizations' => $sameArea];
+            }
+        }
+
+        return ['level' => 'none', 'organizations' => collect()];
+    }
+
     public static function distanceKm(float $lat1, float $lng1, float $lat2, float $lng2): float
     {
         $r    = 6371.0;
@@ -85,6 +107,17 @@ class NearestStructureFinder
         $a    = sin($dLat / 2) ** 2 + cos(deg2rad($lat1)) * cos(deg2rad($lat2)) * sin($dLng / 2) ** 2;
 
         return round($r * 2 * atan2(sqrt($a), sqrt(1 - $a)), 2);
+    }
+
+    /** Structures actives qui acceptent de récupérer des documents. */
+    private function candidates(array $excludeIds): Collection
+    {
+        return Organization::query()
+            ->where('is_active', true)
+            ->where('accepts_collections', true)
+            ->whereHas('type', fn ($q) => $q->where('level', OrganizationType::LEVEL_STRUCTURE))
+            ->when($excludeIds, fn ($q) => $q->whereNotIn('id', $excludeIds))
+            ->get();
     }
 
     private function pickAmong(Collection $orgs, string $reason, ?float $lat, ?float $lng): array

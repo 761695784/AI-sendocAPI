@@ -19,6 +19,11 @@ use Illuminate\Support\Facades\Log;
  */
 class FaqResponder
 {
+    /** Dernier essai, pour le diagnostic (php artisan doctrack:assistant-ai-check) : fournisseur, réponse brute, verdict. */
+    public array $trace = [];
+
+    private string $rejection = '';
+
     public function __construct(private KnowledgeBase $kb, private ChatClient $chat) {}
 
     /** @return array{answer: string, entries: array<int, array>, source: string}|null */
@@ -60,10 +65,14 @@ class FaqResponder
         }
 
         $cacheKey = 'assistant-faq:' . sha1(TextNormalizer::normalize($question));
+        $this->trace = [];
         if (is_array($cached = Cache::get($cacheKey))) {
+            $this->trace[] = ['provider' => '-', 'raw' => '', 'verdict' => 'réponse en cache'];
             return $cached['answer'] ? $cached : null; // réponse déjà donnée, ou « pas dans les fiches »
         }
         if (! $this->withinLimits($conversationId, $ip)) {
+            $this->trace[] = ['provider' => '-', 'raw' => '', 'verdict' => 'plafond atteint (conversation, adresse IP ou jour)'];
+
             return null;
         }
 
@@ -77,17 +86,22 @@ class FaqResponder
                 continue;
             }
             try {
-                $raw = $this->chat->complete($provider, $messages, 0.1, 500, (int) config('assistant_faq.timeout', 20));
+                $raw = $this->chat->complete($provider, $messages, 0.1, 1500, (int) config('assistant_faq.timeout', 20));
             } catch (AiUnavailableException $e) {
                 Log::warning('Assistant : fournisseur IA indisponible', ['provider' => $provider, 'error' => mb_substr($e->getMessage(), 0, 200)]);
+                $this->trace[] = ['provider' => $provider, 'raw' => '', 'verdict' => 'indisponible : ' . mb_substr($e->getMessage(), 0, 200)];
                 continue;
             }
             $result = $this->validate($raw['text']);
+            $this->trace[] = ['provider' => $provider, 'raw' => mb_substr($raw['text'], 0, 800),
+                'verdict' => $result === false ? 'rejetée : ' . $this->rejection : ($result ? 'acceptée' : 'hors base de connaissances (answer null)')];
             if ($result === false) {
+                Log::info('Assistant : réponse IA rejetée', ['provider' => $provider, 'reason' => $this->rejection]);
                 continue; // réponse hors règles : fournisseur suivant
             }
             $result = $result ? $result + ['provider' => $provider] : null;
-            Cache::put($cacheKey, $result ?? ['answer' => null], now()->addDays((int) config('assistant_faq.cache_days', 7)));
+            // « Hors base » n'est gardé qu'un jour : la base de connaissances peut être complétée entre-temps.
+            Cache::put($cacheKey, $result ?? ['answer' => null], $result ? now()->addDays((int) config('assistant_faq.cache_days', 7)) : now()->addDay());
 
             return $result;
         }
@@ -110,6 +124,8 @@ class FaqResponder
     {
         $json = json_decode(preg_match('/\{.*\}/s', $raw, $m) ? $m[0] : $raw, true);
         if (! is_array($json)) {
+            $this->rejection = 'pas de JSON lisible';
+
             return false;
         }
         $answer = is_string($json['answer'] ?? null) ? trim($json['answer']) : '';
@@ -117,9 +133,20 @@ class FaqResponder
             return null;
         }
 
-        $sources = array_values(array_unique(array_filter((array) ($json['sources'] ?? []), 'is_string')));
-        $entries = array_values(array_filter(array_map(fn ($id) => is_string($id) ? $this->kb->source($id) : null, $sources)));
-        if (! $entries || mb_strlen($answer) > 900 || preg_match('/https?:|www\./i', $answer)) {
+        // Identifiants tolérés avec crochets, dièse ou majuscules (« [limites] », « #limites »).
+        $sources = array_values(array_unique(array_map(
+            fn ($id) => strtolower(trim($id, " \t[]#{}'\"")),
+            array_filter((array) ($json['sources'] ?? []), 'is_string')
+        )));
+        $entries = array_values(array_filter(array_map(fn ($id) => $this->kb->source($id), $sources)));
+        if (! $entries) {
+            $this->rejection = 'aucune source connue citée (' . implode(', ', $sources) . ')';
+
+            return false;
+        }
+        if (mb_strlen($answer) > 900 || preg_match('/https?:|www\./i', $answer)) {
+            $this->rejection = 'réponse trop longue ou contenant un lien';
+
             return false;
         }
 
@@ -128,6 +155,8 @@ class FaqResponder
         preg_match_all('/\d+/', $answer, $numbers);
         foreach ($numbers[0] as $n) {
             if (! preg_match('/(?<!\d)' . $n . '(?!\d)/', $allowed)) {
+                $this->rejection = "nombre « {$n} » absent des sources citées";
+
                 return false;
             }
         }
@@ -173,7 +202,10 @@ pour déclarer la perte d'un document, rechercher les documents retrouvés et or
 
 Règles strictes :
 - Réponds UNIQUEMENT à partir de la base de connaissances ci-dessous. Chaque section commence par son identifiant entre crochets.
-- Si la base ne permet pas de répondre, ou si la question ne concerne pas DocTrack, réponds {"answer": null, "sources": []}.
+- Réponds dès qu'une section permet de répondre, même en partie ou par la négative : si DocTrack ne fait pas ce qui est demandé,
+  dis-le simplement (section « limites ») et indique ce que DocTrack permet de faire à la place.
+- Réponds {"answer": null, "sources": []} SEULEMENT si la question n'a aucun rapport avec DocTrack, les documents perdus ou trouvés,
+  ou si répondre obligerait à inventer une information absente de la base.
 - N'invente jamais de délai, de prix, de numéro de téléphone, d'adresse ni de procédure administrative.
 - Ne demande jamais de numéro de pièce, de mot de passe ni de code reçu par SMS ou e-mail.
 - Ne parle pas au nom de la police, de la gendarmerie ou de l'État.
@@ -182,6 +214,8 @@ Règles strictes :
 - Français simple, 2 à 4 phrases, vouvoiement, sans lien internet ni mise en forme Markdown.
 
 Réponds UNIQUEMENT en JSON : {"answer": "...", "sources": ["identifiant_de_section", ...]}
+Exemple — question « Vous pouvez me refaire mon passeport ? » :
+{"answer": "Non, DocTrack ne fabrique pas et ne renouvelle pas les pièces d'identité : il faut s'adresser à l'administration compétente. En attendant, déclarez votre perte sur DocTrack : vous serez prévenu par SMS et par e-mail si votre passeport est retrouvé.", "sources": ["limites", "etre_prevenu"]}
 
 Base de connaissances :
 {$knowledge}

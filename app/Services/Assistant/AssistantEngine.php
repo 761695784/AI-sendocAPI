@@ -13,6 +13,8 @@ use App\Services\Ai\IntentClassifier;
 use App\Services\Collections\NearestStructureFinder;
 use App\Services\Declarations\OnlineDeclarationService;
 use App\Services\Notifications\Notifier;
+use App\Support\SenegalGazetteer;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -27,6 +29,9 @@ use Throwable;
  */
 class AssistantEngine
 {
+    /** Valeur envoyée par le bouton « Partager ma position ». */
+    public const POSITION = '__position__';
+
     public const MAIN_INTENTS = ['declare_loss', 'report_found', 'track_status', 'where_to_go', 'what_to_bring', 'proxy', 'human', 'help'];
 
     private AssistantConversation $conv;
@@ -75,6 +80,13 @@ class AssistantEngine
 
         if ($lang = $this->lexicon->detectLanguage($text)) {
             $conv->language = $lang;
+        }
+
+        // Bouton « Partager ma position » (coordonnées envoyées par le navigateur).
+        if ($text === self::POSITION) {
+            $this->nearestFromText($text);
+
+            return $this->finish();
         }
 
         // Au milieu d'un parcours : « non, je n'ai rien trouvé… » ou une question d'aide ne sont pas des réponses à l'étape.
@@ -129,6 +141,13 @@ class AssistantEngine
 
     private function handleTopLevel(string $text): void
     {
+        // « Pourquoi Dieuppeul ? », « il y en a d'autres ? » juste après l'indication d'une structure.
+        if (($last = $this->conv->slot('last_nearest')) && $this->asksAboutStructure($text, $last)) {
+            $this->explainNearest($last);
+
+            return;
+        }
+
         $detected = $this->lexicon->detectIntent($text);
         $intent   = $detected['score'] > 0 ? $detected['intent'] : null;
         $docType  = $this->lexicon->documentType($text);
@@ -699,27 +718,75 @@ class AssistantEngine
     private function askLocation(string $phrase): void
     {
         if (isset($this->ctx['latitude'], $this->ctx['longitude'])) {
-            $this->answerNearest($this->structures->find((float) $this->ctx['latitude'], (float) $this->ctx['longitude'], null));
+            $found = $this->structures->find((float) $this->ctx['latitude'], (float) $this->ctx['longitude'], null);
+            $this->answerNearest($found, $found['reason'] ?? 'gps');
 
             return;
         }
         $this->conv->startFlow('nearest', 'location');
         $this->say($phrase);
+        $this->reply->buttons([$this->positionButton()]);
     }
 
+    /**
+     * Lieu donné en texte :
+     *  - quartier connu et structure de ce quartier → cette structure ;
+     *  - un seul choix dans le secteur → cette structure, en disant qu'elle n'est pas forcément la plus proche ;
+     *  - plusieurs structures dans le secteur → on les liste et on demande le quartier (ou la position).
+     */
     private function nearestFromText(string $text): void
     {
-        $territory = $this->resolveTerritory($text);
-        if (! $territory) {
-            $this->say('location_unknown');
+        if ($text === self::POSITION) {
+            if (isset($this->ctx['latitude'], $this->ctx['longitude'])) {
+                $found = $this->structures->find((float) $this->ctx['latitude'], (float) $this->ctx['longitude'], null);
+                $this->answerNearest($found, $found['reason'] ?? 'gps');
+
+                return;
+            }
+            $this->conv->startFlow('nearest', 'location');
+            $this->say('position_unavailable');
+            $this->reply->buttons([$this->positionButton()]);
 
             return;
         }
-        $this->conv->startFlow(null);
-        $this->answerNearest($this->structures->find(null, null, $territory->id));
+
+        $quarter   = self::quarterIn($text);
+        $territory = $this->resolveTerritory($text);
+        if (! $territory && $quarter) {
+            $territory = Territory::where('level', Territory::LEVEL_DEPARTMENT)->where('name', $quarter['department'])->first();
+        }
+        if (! $territory) {
+            $this->say('location_unknown');
+            $this->reply->buttons([$this->positionButton()]);
+
+            return;
+        }
+
+        $orgs = $this->structures->inArea($territory->id)['organizations'];
+        if ($quarter) {
+            $inQuarter = $orgs->first(fn (Organization $o) => str_contains(
+                ' ' . TextNormalizer::normalize($o->name . ' ' . $o->address) . ' ',
+                ' ' . $quarter['term'] . ' '
+            ));
+            if ($inQuarter) {
+                $this->answerNearest(['organization' => $inQuarter, 'distance_km' => null], 'quarter', $quarter['label'], $orgs);
+
+                return;
+            }
+        }
+
+        if ($orgs->count() > 1) {
+            $this->conv->startFlow('nearest', 'location');
+            $this->say('several_structures', ['area' => $territory->name, 'list' => self::listNames($orgs)]);
+            $this->reply->buttons([$this->positionButton()]);
+
+            return;
+        }
+
+        $this->answerNearest($orgs->isNotEmpty() ? ['organization' => $orgs->first(), 'distance_km' => null] : null, 'area', $territory->name, $orgs);
     }
 
-    private function answerNearest(?array $found): void
+    private function answerNearest(?array $found, string $basis = 'gps', ?string $area = null, ?Collection $areaOrgs = null): void
     {
         $this->conv->startFlow(null);
         $structure = $found['organization'] ?? null;
@@ -730,7 +797,93 @@ class AssistantEngine
         }
         $this->say('nearest_structure', $this->structureParams($structure));
         $this->reply->card = ['type' => 'structure', 'data' => $this->structureCard($structure) + ['distance_km' => $found['distance_km'] ?? null]];
-        $this->reply->buttons([$this->phrases->button('what_to_bring', $this->lang())]);
+
+        // Gardé pour répondre à « pourquoi celle-ci ? » ou « il y en a d'autres ? ».
+        $others = ($areaOrgs ?? collect())->reject(fn ($o) => $o->id === $structure->id)->values();
+        $this->conv->setSlot('last_nearest', [
+            'name'   => $structure->name,
+            'basis'  => in_array($basis, ['gps', 'quarter'], true) ? $basis : 'area',
+            'area'   => $area,
+            'km'     => $found['distance_km'] ?? null,
+            'others' => $others->take(5)->pluck('name')->all(),
+        ]);
+
+        $buttons = [$this->phrases->button('what_to_bring', $this->lang())];
+        if ($basis !== 'gps' && $basis !== 'quarter') {
+            $buttons[] = $this->positionButton();
+        }
+        $this->reply->buttons($buttons);
+    }
+
+    /** Question sur la structure qui vient d'être indiquée. */
+    private function asksAboutStructure(string $text, array $last): bool
+    {
+        $norm  = TextNormalizer::normalize($text);
+        $words = explode(' ', $norm);
+        if (preg_match('/\b(d autres|autre structure|autres structures|une autre|plus pres|plus proche|c est loin|trop loin|la plus proche)\b/', $norm)) {
+            return true;
+        }
+        if (! preg_match('/^(pourquoi|pk|pq|pkoi|pourkoi|comment ca)\b/', $norm)) {
+            return false;
+        }
+        $nameWords = array_filter(explode(' ', TextNormalizer::normalize($last['name'] ?? '')), fn ($w) => strlen($w) >= 4);
+
+        return count($words) <= 4
+            || array_intersect($words, $nameWords)
+            || preg_match('/\b(structure|commissariat|brigade|celle ci|celle la|celui ci|ce choix)\b/', $norm);
+    }
+
+    private function explainNearest(array $last): void
+    {
+        $this->conv->misunderstood = 0;
+        $this->reply->intent = 'where_to_go';
+        $params = ['structure' => $last['name'], 'area' => (string) ($last['area'] ?? '')];
+
+        if ($last['basis'] === 'gps' && $last['km'] !== null) {
+            $this->say('why_gps', $params + ['km' => number_format((float) $last['km'], 1, ',', '')]);
+        } elseif ($last['basis'] === 'quarter') {
+            $this->say('why_quarter', $params);
+        } else {
+            $this->say('why_area', $params);
+        }
+        if (! empty($last['others'])) {
+            $this->say('other_structures', ['list' => self::listNames(collect($last['others']))]);
+        }
+
+        // On attend un quartier ou la position pour préciser.
+        $this->conv->startFlow('nearest', 'location');
+        $this->reply->buttons([$this->positionButton(), $this->phrases->button('what_to_bring', $this->lang())]);
+    }
+
+    private function positionButton(): array
+    {
+        return $this->phrases->button('share_position', $this->lang(), self::POSITION);
+    }
+
+    /** Quartier ou localité connue citée dans la phrase (le terme le plus long gagne). */
+    private static function quarterIn(string $text): ?array
+    {
+        $norm = ' ' . TextNormalizer::normalize($text) . ' ';
+        $best = null;
+        foreach (SenegalGazetteer::PLACES as $place => $department) {
+            $term = TextNormalizer::normalize($place);
+            if ($term !== '' && str_contains($norm, ' ' . $term . ' ') && (! $best || strlen($term) > strlen($best['term']))) {
+                $best = ['term' => $term, 'department' => $department, 'label' => mb_convert_case($place, MB_CASE_TITLE)];
+            }
+        }
+
+        return $best;
+    }
+
+    /** « A, B et C » (5 noms au plus). */
+    private static function listNames(Collection $items): string
+    {
+        $names = $items->map(fn ($o) => $o instanceof Organization ? $o->name : (string) $o)->values();
+        $shown = $names->take(5)->all();
+        $last  = count($shown) > 1 ? array_pop($shown) : null;
+        $list  = implode(', ', $shown) . ($last ? ' et ' . $last : '');
+
+        return $names->count() > 5 ? $list . ' (et ' . ($names->count() - 5) . ' autres)' : $list;
     }
 
     /**
