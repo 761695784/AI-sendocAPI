@@ -107,7 +107,8 @@ return [
 
     // Points d'accès compatibles OpenAI (chat/completions).
     'endpoints' => [
-        // Alibaba Model Studio, région Singapour : 1 M de jetons gratuits par modèle pendant 90 jours.
+        // Alibaba Model Studio, région Singapour. Le quota gratuit des nouveaux comptes a été retiré sur la plupart
+        // des modèles le 29/10/2026 (les comptes existants gardent leur reste) : désormais payant.
         'qwen' => [
             'url'   => env('QWEN_API_URL', 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1'),
             'key'   => env('QWEN_API_KEY'),
@@ -123,6 +124,19 @@ return [
             'url'   => env('DEEPSEEK_API_URL', 'https://api.deepseek.com'),
             'key'   => env('DEEPSEEK_API_KEY'),
             'model' => env('DEEPSEEK_MODEL', 'deepseek-chat'),
+        ],
+        // Groq : formule gratuite sans carte bancaire (limites par minute et par jour). Recommandé pour l'assistant.
+        'groq' => [
+            'url'   => env('GROQ_API_URL', 'https://api.groq.com/openai/v1'),
+            'key'   => env('GROQ_API_KEY'),
+            'model' => env('GROQ_MODEL', 'llama-3.3-70b-versatile'),
+        ],
+        // Google AI Studio (Gemini) par son accès compatible OpenAI. Formule gratuite : les questions
+        // peuvent servir à entraîner les modèles de Google (hors Europe) — jamais de données personnelles.
+        'gemini' => [
+            'url'   => env('GEMINI_OPENAI_URL', 'https://generativelanguage.googleapis.com/v1beta/openai'),
+            'key'   => env('GEMINI_API_KEY'),
+            'model' => env('GEMINI_CHAT_MODEL', 'gemini-2.5-flash-lite'),
         ],
         'openrouter' => [
             'url'   => env('OPENROUTER_API_URL', 'https://openrouter.ai/api/v1'),

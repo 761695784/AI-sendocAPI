@@ -66,6 +66,7 @@ class AssistantController extends Controller
         $user = $this->currentUser();
         $conversation = $this->conversation($data['conversation_id'] ?? null, $user, $data['lang'] ?? null);
         $text = (string) ($data['text'] ?? '');
+        $data['ip'] = $request->ip(); // plafond des réponses rédigées par l'IA (jamais transmise au fournisseur)
 
         $reply = $this->run($conversation, $text, $user, $data, $data['input_mode'] ?? 'text');
 
@@ -155,6 +156,7 @@ class AssistantController extends Controller
         $reply = $this->engine->handle($conversation, $text, $user, [
             'latitude'  => $data['latitude'] ?? null,
             'longitude' => $data['longitude'] ?? null,
+            'ip'        => $data['ip'] ?? request()->ip(),
         ]);
 
         $conversation->messages()->create([

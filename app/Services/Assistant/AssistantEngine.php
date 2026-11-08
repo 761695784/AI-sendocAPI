@@ -44,6 +44,7 @@ class AssistantEngine
         private OnlineDeclarationService $declarations,
         private NearestStructureFinder $structures,
         private Notifier $notifier,
+        private FaqResponder $faq,
     ) {}
 
     /**
@@ -74,6 +75,11 @@ class AssistantEngine
 
         if ($lang = $this->lexicon->detectLanguage($text)) {
             $conv->language = $lang;
+        }
+
+        // Au milieu d'un parcours : « non, je n'ai rien trouvé… » ou une question d'aide ne sont pas des réponses à l'étape.
+        if ($conv->flow && $conv->step && $this->interruptsFlow($text)) {
+            return $this->finish();
         }
 
         if ($conv->flow && $conv->step && $this->handleStep($text)) {
@@ -127,6 +133,41 @@ class AssistantEngine
         $intent   = $detected['score'] > 0 ? $detected['intent'] : null;
         $docType  = $this->lexicon->documentType($text);
 
+        // « Comment savoir que MON document est trouvé ? » : c'est le propriétaire qui parle, pas un trouveur.
+        $ownerAsks = $intent === 'report_found' && self::ownerAsksAboutFound($text);
+        if ($ownerAsks) {
+            $intent = null;
+            $detected['score'] = 0;
+        }
+
+        // Question générale proche d'une fiche d'aide : réponse de la fiche (« est-ce payant ? », « récépissé ou certificat ? »).
+        // Une vraie question l'emporte sur un mot-clé d'action (« que faire si le trouveur demande de l'argent ? »).
+        $faq = $this->faq->answerFromFaq($text);
+        // Les parcours « déclarer » et « publier » cèdent la place à une question proche d'une fiche ;
+        // « où aller », « suivi » et « que faut-il apporter » seulement si la fiche est plus proche que le mot-clé.
+        $question    = self::looksLikeQuestion($text);
+        $overridable = in_array($intent, ['declare_loss', 'report_found'], true);
+        $softIntent  = in_array($intent, ['where_to_go', 'track_status', 'what_to_bring'], true);
+        if ($faq && (! $intent
+            || ($overridable && (($question && $faq['score'] >= $detected['score']) || $faq['score'] >= $detected['score'] + 2))
+            || ($softIntent && $question && $faq['score'] > $detected['score'])
+        )) {
+            $this->answerFaq($faq);
+
+            return;
+        }
+
+        // Propriétaire qui parle d'un document trouvé, sans fiche précise : l'IA, sinon la fiche « être prévenu ».
+        if ($ownerAsks) {
+            $faq = $this->faq->answerWithAi($text, $this->conv->uuid, $this->ctx['ip'] ?? null)
+                ?? $this->faq->entry('rechercher');
+            if ($faq) {
+                $this->answerFaq($faq);
+
+                return;
+            }
+        }
+
         if (! $intent && ! $docType) {
             $suggestion = $this->classifier->classify($text, self::MAIN_INTENTS, DocumentType::pluck('TypeName')->all());
             $intent  = $suggestion['intent'] ?? null;
@@ -136,12 +177,30 @@ class AssistantEngine
             }
         }
 
+        // Vraie question à peine reliée à une action (un seul mot-clé, ou seulement un nom de pièce) :
+        // on tente d'abord une réponse d'aide (« comment refaire ma carte d'identité ? »).
+        $weakAction = ($intent && ! $docType && $detected['score'] <= 1
+                && in_array($intent, ['declare_loss', 'report_found', 'where_to_go', 'track_status'], true))
+            || (! $intent && $docType);
+        if ($question && $weakAction
+            && ($faq = $this->faq->answerWithAi($text, $this->conv->uuid, $this->ctx['ip'] ?? null))) {
+            $this->answerFaq($faq);
+
+            return;
+        }
+
         // « Ma CNI » seul : on suppose une perte (cas le plus fréquent), on récapitulera.
         if (! $intent && $docType) {
             $intent = 'declare_loss';
         }
 
         if (! $intent) {
+            // Dernier recours : réponse rédigée par l'IA à partir de la base de connaissances (si un fournisseur est configuré).
+            if ($faq = $this->faq->answerWithAi($text, $this->conv->uuid, $this->ctx['ip'] ?? null)) {
+                $this->answerFaq($faq);
+
+                return;
+            }
             $this->misunderstood();
 
             return;
@@ -672,6 +731,94 @@ class AssistantEngine
         $this->say('nearest_structure', $this->structureParams($structure));
         $this->reply->card = ['type' => 'structure', 'data' => $this->structureCard($structure) + ['distance_km' => $found['distance_km'] ?? null]];
         $this->reply->buttons([$this->phrases->button('what_to_bring', $this->lang())]);
+    }
+
+    /**
+     * Message reçu pendant un parcours qui n'est pas une réponse à l'étape :
+     *  - le citoyen dément le parcours (« non, je n'ai rien trouvé ») → parcours annulé, message traité normalement ;
+     *  - il pose une question d'aide → réponse, puis la question de l'étape est reposée (le parcours continue).
+     */
+    private function interruptsFlow(string $text): bool
+    {
+        if (in_array($this->conv->step, ['fix', 'confirm'], true) && ! self::looksLikeQuestion($text)) {
+            return false;
+        }
+        $norm  = TextNormalizer::normalize($text);
+        $words = count(explode(' ', $norm));
+
+        $denies = match ($this->conv->flow) {
+            'report_found' => (bool) preg_match('/\b(n ?(ai|a)|j ai) (pas|rien|jamais|aucun\w*) (\w+ )?(trouve|ramasse)/', $norm),
+            'declare_loss' => (bool) preg_match('/\b(n ?(ai|a)|j ai) (pas|rien|jamais|aucun\w*) (\w+ )?(perdu|egare)/', $norm),
+            default        => false,
+        };
+        if ($denies) {
+            $this->conv->startFlow(null);
+            $this->handleTopLevel($text);
+
+            return true;
+        }
+
+        if ($words < 4 || ! self::looksLikeQuestion($text)) {
+            return false;
+        }
+        $faq = $this->faq->answerFromFaq($text)
+            ?? $this->faq->answerWithAi($text, $this->conv->uuid, $this->ctx['ip'] ?? null);
+        if (! $faq) {
+            return false;
+        }
+        $this->answerFaq($faq, false);
+        $this->reask();
+
+        return true;
+    }
+
+    /** Le propriétaire demande comment savoir si SON document est trouvé (pas un trouveur qui signale). */
+    private static function ownerAsksAboutFound(string $text): bool
+    {
+        $norm = TextNormalizer::normalize($text);
+
+        return (bool) preg_match('/\b(quelqu un|quelqu une|une personne|on|il|elle) (a |m a )?(re)?trouve (mon|ma|mes)\b/', $norm)
+            || (bool) preg_match('/\b(mon|ma|mes) (document|carte|piece|passeport|permis|cni|papier)\w*( \w+){0,3} (est|soit|sera|a ete|ont ete|sont|serait) (re)?trouve/', $norm)
+            || (bool) preg_match('/\b(si|quand|lorsque) (on|quelqu un|quelqu une|une personne) (le |la |les )?(re)?trouve/', $norm)
+            || (bool) preg_match('/\b(n ?(ai|a)|j ai) (pas|rien|jamais) (\w+ )?trouve/', $norm);
+    }
+
+    /** Réponse d'aide (fiche, ou IA à partir de la base de connaissances) + liens utiles + menu. */
+    private function answerFaq(array $faq, bool $menu = true): void
+    {
+        $this->conv->misunderstood = 0;
+        $this->reply->intent = 'faq';
+        $ids = array_column($faq['entries'], 'id');
+        $this->reply->add($this->phrases->raw($faq['answer'], 'faq:' . $ids[0]));
+        if ($faq['source'] === 'ai') {
+            $this->reply->add($this->phrases->raw('Réponse rédigée par l\'IA à partir de l\'aide DocTrack : vérifiez les informations importantes.', 'faq_ai_notice'));
+        }
+
+        $links = [];
+        foreach ($faq['entries'] as $entry) {
+            foreach ($entry['links'] ?? [] as $link) {
+                $links[$link['url']] = $link;
+            }
+        }
+        if ($links) {
+            $this->reply->card = ['type' => 'links', 'data' => ['links' => array_values($links)]];
+        }
+        $this->reply->meta['faq'] = array_filter(['source' => $faq['source'], 'entries' => $ids, 'provider' => $faq['provider'] ?? null]);
+        if ($menu) {
+            $this->mainButtons();
+        }
+    }
+
+    private static function looksLikeQuestion(string $text): bool
+    {
+        $norm = TextNormalizer::normalize($text);
+
+        // Début de phrase sans les petits mots d'amorce (« non, … », « bonjour, … », « en fait … »).
+        $start = preg_replace('/^((non|oui|ok|d accord|bonjour|salut|svp|mais|euh|en fait|alors|donc|merci) )+/', '', $norm);
+
+        return str_contains($text, '?')
+            || (bool) preg_match('/^(comment|pourquoi|combien|quand|ou |est ce|qu est|quel|quelle|quels|quelles|puis je|peut on|peux je|faut il|que faire|a quoi|c est quoi|qui |dois je|est il|y a t il)/', $start)
+            || (bool) preg_match('/\b(comment (je|on|savoir|faire)|est ce que|je (veux|voudrais) savoir|j aimerais savoir|c est quoi|qu est ce que)\b/', $norm);
     }
 
     private function info(string $phrase): void
