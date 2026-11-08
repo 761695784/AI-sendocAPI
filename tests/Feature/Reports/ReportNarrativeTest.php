@@ -17,8 +17,8 @@ use Tests\Feature\Organizations\OrganizationTestCase;
 use ZipArchive;
 
 /**
- * Rapports : synthèse rédigée par un modèle de langage (Qwen, puis GLM en
- * secours), chiffres vérifiés, validation par le super admin avant envoi.
+ * Rapports : synthèse rédigée par un modèle de langage (Groq, Qwen, GLM… enchaînés
+ * en secours), chiffres vérifiés, validation par le super admin avant envoi.
  */
 class ReportNarrativeTest extends OrganizationTestCase
 {
@@ -185,6 +185,77 @@ class ReportNarrativeTest extends OrganizationTestCase
 
         $this->asUser($admin)->postJson("/api/v2/reports/{$report->uuid}/narrative/regenerate")
             ->assertOk()->assertJsonPath('narrative_status', 'pending');
+    }
+
+    private function useGroq(): void
+    {
+        config([
+            'ai.reports.providers'          => ['groq', 'groq_fast'],
+            'ai.endpoints.groq.key'         => 'groq-key',
+            'ai.endpoints.groq.model'       => 'openai/gpt-oss-120b',
+            'ai.endpoints.groq.options'     => ['reasoning_effort' => 'low'],
+            'ai.endpoints.groq_fast.key'    => 'groq-key',
+            'ai.endpoints.groq_fast.model'  => 'openai/gpt-oss-20b',
+            'ai.endpoints.groq_fast.options' => ['reasoning_effort' => 'low'],
+        ]);
+    }
+
+    public function test_groq_writes_the_narrative_and_the_light_model_takes_over_when_the_first_is_too_busy(): void
+    {
+        $this->useGroq();
+        Http::fake(fn (HttpRequest $req) => str_contains($req->body(), 'gpt-oss-120b')
+            ? Http::response(['error' => ['message' => 'Request too large for model', 'code' => 'rate_limit_exceeded']], 413)
+            : Http::response($this->answer('La période compte 1 déclaration au guichet et 1 dépôt.')));
+
+        $report = $this->monthly();
+
+        $this->assertSame(ActivityReport::NARRATIVE_PENDING, $report->narrative_status);
+        $this->assertSame('groq_fast', $report->narrative['provider']);
+        $this->assertFalse($report->narrative_attempts[0]['ok']);
+        $this->assertStringContainsString('413', $report->narrative_attempts[0]['error']);
+
+        // Clé Groq, effort de réflexion bas, données compactes (moins de jetons), aucune donnée personnelle.
+        Http::assertSent(function (HttpRequest $req) {
+            $content = $req->data()['messages'][1]['content'] ?? '';
+
+            return str_contains($req->url(), 'api.groq.com/openai/v1/chat/completions')
+                && $req->hasHeader('Authorization', 'Bearer groq-key')
+                && ($req->data()['reasoning_effort'] ?? null) === 'low'
+                && ! str_contains($content, "\n    ")
+                && ! str_contains($content, 'Ndiaye') && ! str_contains($content, '1234567890123');
+        });
+    }
+
+    public function test_check_command_writes_a_narrative_without_saving_anything(): void
+    {
+        $this->useGroq();
+        Http::fake(['api.groq.com/*' => Http::response($this->answer('La période compte 1 déclaration au guichet et 1 dépôt.'))]);
+
+        $this->artisan('doctrack:report-ai-check')
+            ->expectsOutputToContain('Synthèse :')
+            ->expectsOutputToContain('Essai seulement')
+            ->assertSuccessful();
+
+        $this->assertSame(0, ActivityReport::count());
+    }
+
+    public function test_check_command_can_save_the_narrative_in_the_latest_report(): void
+    {
+        config(['ai.reports.enabled' => false]);
+        $report = $this->monthly();
+        $this->assertSame(ActivityReport::NARRATIVE_NONE, $report->narrative_status);
+
+        config(['ai.reports.enabled' => true]);
+        $this->useGroq();
+        Http::fake(['api.groq.com/*' => Http::response($this->answer('La période compte 1 déclaration au guichet et 1 dépôt.'))]);
+
+        $this->artisan('doctrack:report-ai-check', ['report' => $report->uuid, '--save' => true])
+            ->expectsOutputToContain('Synthèses IA à valider')
+            ->assertSuccessful();
+
+        $report->refresh();
+        $this->assertSame(ActivityReport::NARRATIVE_PENDING, $report->narrative_status);
+        $this->assertSame('groq', $report->narrative['provider']);
     }
 
     public function test_without_ai_nothing_changes(): void

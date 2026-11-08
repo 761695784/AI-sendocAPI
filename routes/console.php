@@ -61,6 +61,150 @@ Artisan::command('doctrack:monthly-reports {--month= : AAAA-MM (défaut : mois p
 
 Schedule::command('doctrack:monthly-reports')->monthlyOn(1, '06:15');
 
+// Synthèse IA des rapports : vérifie la configuration, appelle chaque fournisseur et fait rédiger
+// la synthèse d'un rapport. Sans --save, rien n'est enregistré ni envoyé (aucune clé affichée).
+Artisan::command('doctrack:report-ai-check
+    {report? : uuid du rapport (défaut : le plus récent ; s\'il n\'y en a aucun, le mois en cours au niveau national, sans l\'enregistrer)}
+    {--save : enregistrer la synthèse dans le rapport (à valider ensuite par le super admin) et refaire le PDF et l\'Excel}', function () {
+    $chat     = app(\App\Services\Ai\ChatClient::class);
+    $narrator = app(\App\Services\Reports\ReportNarrator::class);
+
+    $this->line('Configuration en cache : ' . (app()->configurationIsCached() ? 'OUI → après chaque modification du .env : php artisan config:clear' : 'non'));
+    $this->line('AI_REPORTS_ENABLED : ' . (config('ai.reports.enabled') ? 'true' : 'false → la synthèse IA ne sera pas demandée lors de la génération des rapports'));
+    $this->line('Validation par le super admin avant envoi : ' . (config('ai.reports.require_validation') ? 'oui' : 'non'));
+    $providers = config('ai.reports.providers', []);
+    if (! $providers) {
+        $this->error('AI_REPORTS_PROVIDERS est vide : ajoutez AI_REPORTS_PROVIDERS=groq,groq_fast dans le .env.');
+
+        return 1;
+    }
+    $this->line('Fournisseurs (dans l\'ordre) : ' . implode(', ', $providers));
+    foreach ($providers as $provider) {
+        $cfg = config("ai.endpoints.{$provider}");
+        if (! is_array($cfg)) {
+            $this->error("  {$provider} : inconnu (choix possibles : " . implode(', ', array_keys(config('ai.endpoints', []))) . ')');
+            continue;
+        }
+        $this->line("  {$provider} : modèle={$cfg['model']} clé=" . (empty($cfg['key']) ? 'ABSENTE' : 'présente') . ($chat->configured($provider) ? '' : ' → non configuré'));
+    }
+    if (! collect($providers)->contains(fn ($p) => $chat->configured($p))) {
+        $this->error('Aucun fournisseur configuré : renseignez GROQ_API_KEY dans le .env (php artisan doctrack:assistant-ai-check pour tester la clé).');
+
+        return 1;
+    }
+
+    if ($this->option('save') && ! config('ai.reports.enabled')) {
+        $this->error('Pour enregistrer la synthèse, mettez AI_REPORTS_ENABLED=true dans le .env (puis php artisan config:clear).');
+
+        return 1;
+    }
+
+    // Rapport à faire rédiger.
+    if ($uuid = $this->argument('report')) {
+        $report = \App\Models\ActivityReport::where('uuid', $uuid)->first();
+        if (! $report) {
+            $this->error("Rapport {$uuid} introuvable.");
+
+            return 1;
+        }
+    } else {
+        $report = \App\Models\ActivityReport::latest('id')->first();
+    }
+    if (! $report) {
+        if ($this->option('save')) {
+            $this->error('Aucun rapport enregistré : générez-en un d\'abord (écran Rapports, ou php artisan doctrack:monthly-reports).');
+
+            return 1;
+        }
+        $from = now()->startOfMonth();
+        $to   = now();
+        $data = app(\App\Services\Reports\ReportBuilder::class)->build(null, null, $from, $to);
+        $report = (new \App\Models\ActivityReport)->forceFill([
+            'data'     => $data,
+            'analysis' => app(\App\Services\Reports\ReportAnalyzer::class)->analyze($data),
+        ]);
+        $this->line('Aucun rapport enregistré : essai sur le mois en cours (national), rien ne sera enregistré.');
+    } else {
+        $this->line("Rapport : {$report->title} — {$report->period_label} (uuid {$report->uuid})");
+    }
+
+    $chars = mb_strlen(collect($narrator->preview($report))->pluck('content')->implode("\n"));
+    $this->line("Données envoyées : {$chars} caractères (chiffres agrégés uniquement), soit environ " . (int) ceil($chars / 3.5) . ' jetons (estimation).');
+
+    $this->line('Rédaction en cours (jusqu\'à ' . config('ai.reports.timeout') . ' s par appel)…');
+    $started = microtime(true);
+    if ($this->option('save')) {
+        // Même chemin que le bouton « Régénérer » : synthèse enregistrée, PDF et Excel refaits (rien n'est envoyé).
+        $service = app(\App\Services\Reports\ActivityReportService::class);
+        $service->narrate($report);
+        $service->render($report);
+        $result = ['narrative' => $report->narrative, 'attempts' => $report->narrative_attempts ?? []];
+    } else {
+        $result = $narrator->write($report);
+    }
+    $this->line('Durée : ' . round(microtime(true) - $started, 1) . ' s');
+
+    foreach ($result['attempts'] as $a) {
+        $label = "  [{$a['provider']}" . (isset($a['model']) ? " · {$a['model']}" : '') . ']';
+        $a['ok'] ? $this->info("{$label} synthèse acceptée (chiffres vérifiés)") : $this->warn("{$label} {$a['error']}");
+        $err = $a['error'] ?? '';
+        if (str_contains($err, '(413)')) {
+            $this->line('    Demande trop grosse pour le quota par minute de ce modèle : le fournisseur suivant prend le relais.');
+        } elseif (str_contains($err, '(429)')) {
+            $this->line('    Quota du fournisseur atteint : réessayez dans une minute (ou demain si c\'est le quota du jour).');
+        } elseif (str_contains($err, 'max_tokens')) {
+            $this->line('    Réponse coupée : augmentez AI_REPORTS_MAX_TOKENS dans le .env (ex. 5000).');
+        }
+    }
+
+    $n = $result['narrative'];
+    if (! $n) {
+        $this->error('Aucune synthèse retenue : le rapport garderait l\'analyse par règles.');
+
+        return 1;
+    }
+
+    $this->newLine();
+    $this->info('Synthèse :');
+    $this->line($n['summary_fr']);
+    if ($n['highlights']) {
+        $this->newLine();
+        $this->info('Constats clés :');
+        foreach ($n['highlights'] as $h) {
+            $this->line("  • {$h}");
+        }
+    }
+    if ($n['structures']) {
+        $this->newLine();
+        $this->info('Commentaires par structure :');
+        foreach ($n['structures'] as $s) {
+            $this->line("  • {$s['name']} : {$s['comment']}");
+        }
+    }
+    if ($n['recommendations']) {
+        $this->newLine();
+        $this->info('Recommandations :');
+        foreach ($n['recommendations'] as $r) {
+            $this->line("  • [{$r['priority']}] {$r['text']}");
+        }
+    }
+    if ($n['summary_en']) {
+        $this->newLine();
+        $this->info('Executive summary :');
+        $this->line($n['summary_en']);
+    }
+
+    $this->newLine();
+    if ($this->option('save')) {
+        $this->info('Enregistré : état de la synthèse = ' . $report->narrative_status
+            . ($report->narrative_status === \App\Models\ActivityReport::NARRATIVE_PENDING ? ' → à relire et valider avec un compte super admin : Rapports → « Synthèses IA à valider ».' : '.'));
+    } else {
+        $this->line('Essai seulement : rien n\'a été enregistré. Pour l\'enregistrer dans le rapport : ajoutez --save.');
+    }
+
+    return 0;
+})->purpose('Vérifie la synthèse IA des rapports (Groq…) et affiche le texte rédigé');
+
 // ── Assistant conversationnel ──
 
 // Liste des phrases à enregistrer à l'avance (autre méthode : voix générée sur Colab, plus rapide avec une carte graphique).

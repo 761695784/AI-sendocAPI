@@ -17,7 +17,7 @@ class ChatClient
     }
 
     /** @return array{text: string, model: string} */
-    public function complete(string $endpoint, array $messages, float $temperature = 0.2, int $maxTokens = 2000, int $timeout = 60): array
+    public function complete(string $endpoint, array $messages, float $temperature = 0.2, int $maxTokens = 2000, int $timeout = 60, ?float $retryAfterMax = null): array
     {
         if (! $this->configured($endpoint)) {
             throw new AiUnavailableException("Point d'accès IA « {$endpoint} » non configuré.");
@@ -43,7 +43,7 @@ class ChatClient
             }
             // Quota par minute atteint : si le fournisseur demande d'attendre quelques secondes, on attend une fois.
             $wait = (float) ($response->header('retry-after') ?: 0);
-            if ($response->status() === 429 && $attempt === 1 && $wait > 0 && $wait <= (float) config('ai.retry_after_max', 5)) {
+            if ($response->status() === 429 && $attempt === 1 && $wait > 0 && $wait <= ($retryAfterMax ?? (float) config('ai.retry_after_max', 5))) {
                 usleep((int) ($wait * 1_000_000));
                 continue;
             }

@@ -49,7 +49,10 @@ class ReportNarrator
                     $answer = $this->chat->complete($provider, $messages,
                         (float) config('ai.reports.temperature', 0.2),
                         (int) config('ai.reports.max_tokens', 2500),
-                        (int) config('ai.reports.timeout', 90));
+                        (int) config('ai.reports.timeout', 90),
+                        // Longue attente seulement hors requête web (rapport mensuel planifié, commande) :
+                        // un clic sur « Régénérer » ne doit pas dépasser le délai d'exécution du serveur.
+                        app()->runningInConsole() ? (float) config('ai.reports.retry_after_max', 30) : null);
                 } catch (AiUnavailableException $e) {
                     $attempts[] = ['provider' => $provider, 'ok' => false, 'error' => mb_substr($e->getMessage(), 0, 200)];
                     Log::warning('Rédaction IA du rapport impossible : ' . $e->getMessage());
@@ -154,8 +157,20 @@ TXT;
 
         return [
             ['role' => 'system', 'content' => $system],
-            ['role' => 'user', 'content' => "Données agrégées du rapport (JSON) :\n" . json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)],
+            ['role' => 'user', 'content' => "Données agrégées du rapport (JSON) :\n" . self::compactJson($payload)],
         ];
+    }
+
+    /** JSON sans mise en forme : moins de jetons envoyés (quota par minute des formules gratuites). */
+    public static function compactJson(array $payload): string
+    {
+        return json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
+    /** Le message envoyé au modèle (pour le diagnostic : taille, contenu). */
+    public function preview(ActivityReport $report): array
+    {
+        return $this->messages($this->payload($report->data ?? [], $report->analysis ?? []));
     }
 
     // ── Lecture et vérification ──────────────────────────────────────

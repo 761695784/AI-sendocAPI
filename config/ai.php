@@ -91,16 +91,22 @@ return [
     | admin avant envoi (par défaut). Plusieurs fournisseurs peuvent être
     | enchaînés : si le premier échoue, le suivant prend le relais, puis
     | l'analyse par règles.
+    | Par défaut : Groq (gpt-oss-120b), puis le second modèle Groq (gpt-oss-20b,
+    | quota par minute séparé). Vérification : php artisan doctrack:report-ai-check
     */
     'reports' => [
         'enabled'            => (bool) env('AI_REPORTS_ENABLED', false),
-        'providers'          => array_filter(array_map('trim', explode(',', (string) env('AI_REPORTS_PROVIDERS', 'qwen,glm')))),
+        'providers'          => array_filter(array_map('trim', explode(',', (string) env('AI_REPORTS_PROVIDERS', 'groq,groq_fast')))),
         'require_validation' => (bool) env('AI_REPORTS_REQUIRE_VALIDATION', true),
         // Effectifs plus petits masqués (« <3 ») avant l'envoi.
         'min_count'          => 3,
         'timeout'            => (int) env('AI_REPORTS_TIMEOUT', 90),
         'temperature'        => 0.2,
-        'max_tokens'         => 2500,
+        // gpt-oss « réfléchit » avant d'écrire : ces jetons comptent dans le plafond.
+        'max_tokens'         => (int) env('AI_REPORTS_MAX_TOKENS', 3500),
+        // Quota par minute atteint : le rapport mensuel (tâche planifiée, commande) n'est pas pressé, il peut attendre
+        // plus longtemps que l'assistant. Depuis l'écran (bouton « Régénérer »), l'attente reste celle de retry_after_max.
+        'retry_after_max'    => (float) env('AI_REPORTS_RETRY_AFTER_MAX', 30),
         // Nouvelles tentatives si le texte contient un chiffre absent des données.
         'max_attempts'       => 2,
     ],
