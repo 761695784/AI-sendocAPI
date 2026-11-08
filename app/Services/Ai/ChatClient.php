@@ -24,26 +24,37 @@ class ChatClient
         }
         $cfg = config("ai.endpoints.{$endpoint}");
 
-        try {
-            $request = Http::timeout($timeout)->acceptJson();
-            if (! empty($cfg['key'])) {
-                $request = $request->withToken($cfg['key']);
+        $payload = [
+            'model'       => $cfg['model'],
+            'messages'    => $messages,
+            'temperature' => $temperature,
+            'max_tokens'  => $maxTokens,
+        ] + ($cfg['options'] ?? []); // « options » : paramètres propres au fournisseur (ex. reasoning_effort).
+
+        for ($attempt = 1; ; $attempt++) {
+            try {
+                $request = Http::timeout($timeout)->acceptJson();
+                if (! empty($cfg['key'])) {
+                    $request = $request->withToken($cfg['key']);
+                }
+                $response = $request->post(rtrim($cfg['url'], '/') . '/chat/completions', $payload);
+            } catch (Throwable $e) {
+                throw new AiUnavailableException("« {$endpoint} » injoignable : " . $e->getMessage(), 0, $e);
             }
-            // « options » : paramètres propres au fournisseur (ex. reasoning_effort pour les modèles qui « réfléchissent »).
-            $response = $request->post(rtrim($cfg['url'], '/') . '/chat/completions', [
-                'model'       => $cfg['model'],
-                'messages'    => $messages,
-                'temperature' => $temperature,
-                'max_tokens'  => $maxTokens,
-            ] + ($cfg['options'] ?? []));
-        } catch (Throwable $e) {
-            throw new AiUnavailableException("« {$endpoint} » injoignable : " . $e->getMessage(), 0, $e);
+            // Quota par minute atteint : si le fournisseur demande d'attendre quelques secondes, on attend une fois.
+            $wait = (float) ($response->header('retry-after') ?: 0);
+            if ($response->status() === 429 && $attempt === 1 && $wait > 0 && $wait <= (float) config('ai.retry_after_max', 5)) {
+                usleep((int) ($wait * 1_000_000));
+                continue;
+            }
+            break;
         }
 
         $text = $response->json('choices.0.message.content');
         if (! $response->successful() || ! is_string($text) || trim($text) === '') {
             $reason = $response->json('choices.0.finish_reason') === 'length' ? ' — réponse coupée : augmenter max_tokens' : '';
-            throw new AiUnavailableException("« {$endpoint} » en erreur ({$response->status()}){$reason} : " . mb_substr($response->body(), 0, 200));
+            // Le code de l'exception porte le statut HTTP (429 = quota du fournisseur atteint).
+            throw new AiUnavailableException("« {$endpoint} » en erreur ({$response->status()}){$reason} : " . mb_substr($response->body(), 0, 400), $response->status());
         }
 
         return ['text' => $text, 'model' => (string) ($response->json('model') ?: $cfg['model'])];

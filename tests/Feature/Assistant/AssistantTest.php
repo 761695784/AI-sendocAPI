@@ -298,7 +298,7 @@ class AssistantTest extends OrganizationTestCase
 
         $r = $this->chat(['Je veux parler à un agent'], $user);
 
-        $this->assertSame(['handoff_done'], $this->keys($r));
+        $this->assertSame(['handoff_done', 'support_contact'], $this->keys($r));
         $this->assertSame(AssistantConversation::STATUS_HANDED_OFF, $r->json('conversation.status'));
         $message = InboxMessage::latest('id')->first();
         $this->assertNotNull($message);

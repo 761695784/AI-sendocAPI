@@ -170,6 +170,8 @@ class AssistantEngine
         if ($faq && (! $intent
             || ($overridable && (($question && $faq['score'] >= $detected['score']) || $faq['score'] >= $detected['score'] + 2))
             || ($softIntent && $question && $faq['score'] > $detected['score'])
+            // Fiche beaucoup plus proche que le mot-clé (« DocTrack peut-il chercher à ma place ? » ≠ procuration).
+            || $faq['score'] >= $detected['score'] + 3
         )) {
             $this->answerFaq($faq);
 
@@ -220,7 +222,7 @@ class AssistantEngine
 
                 return;
             }
-            $this->misunderstood();
+            $this->misunderstood($text);
 
             return;
         }
@@ -242,10 +244,20 @@ class AssistantEngine
         };
     }
 
-    private function misunderstood(): void
+    private function misunderstood(string $text = ''): void
     {
         $this->conv->misunderstood = min(255, $this->conv->misunderstood + 1);
         $this->reply->intent = 'unknown';
+
+        // Vraie question restée sans réponse : on le dit franchement et on donne le service technique.
+        // Si l'IA était seulement saturée (quota par minute), on invite plutôt à réessayer.
+        if ($text !== '' && (self::looksLikeQuestion($text) || count(explode(' ', TextNormalizer::normalize($text))) >= 3)) {
+            $this->reply->meta['no_answer'] = $this->faq->busy ? 'busy' : true;
+            $this->supportContact($this->faq->busy ? 'ai_busy' : 'no_answer_contact');
+            $this->mainButtons();
+
+            return;
+        }
 
         if ($this->conv->misunderstood >= config('assistant.max_misunderstood', 2)) {
             $this->say('offer_human');
@@ -984,7 +996,7 @@ class AssistantEngine
     {
         if (! $this->user) {
             $this->say('handoff_guest');
-            $this->reply->card = ['type' => 'login_required', 'data' => ['then' => 'human']];
+            $this->supportContact('support_contact');
 
             return;
         }
@@ -1001,6 +1013,21 @@ class AssistantEngine
         $this->conv->startFlow(null);
         $this->conv->status = AssistantConversation::STATUS_HANDED_OFF;
         $this->say('handoff_done');
+        $this->supportContact('support_contact');
+    }
+
+    /** Coordonnées du service technique (WhatsApp, e-mail) en message et en boutons. */
+    private function supportContact(string $phrase): void
+    {
+        $support = config('assistant_faq.support', []);
+        $this->say($phrase, ['whatsapp' => $support['whatsapp'] ?? '', 'email' => $support['email'] ?? '']);
+        $links = array_values(array_filter([
+            ! empty($support['whatsapp_url']) ? ['label' => 'WhatsApp ' . $support['whatsapp'], 'url' => $support['whatsapp_url']] : null,
+            ! empty($support['email']) ? ['label' => $support['email'], 'url' => 'mailto:' . $support['email']] : null,
+        ]));
+        if ($links) {
+            $this->reply->card = ['type' => 'links', 'data' => ['links' => $links]];
+        }
     }
 
     // ── Outils ───────────────────────────────────────────────────────

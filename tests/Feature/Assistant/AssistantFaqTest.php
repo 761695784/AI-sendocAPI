@@ -118,6 +118,29 @@ class AssistantFaqTest extends TestCase
         $this->assertSame('/declarer', $sections['declarer']['links'][0]['url']);
     }
 
+    public function test_an_unanswered_question_gives_the_support_contacts(): void
+    {
+        config(['assistant_faq.support' => ['whatsapp' => '+221 70 000 00 00', 'whatsapp_url' => 'https://wa.me/221700000000', 'email' => 'aide@doctrack.test']]);
+
+        $r = $this->ask('Est-ce que la mairie de mon quartier travaille avec vous ?');
+
+        $r->assertJsonPath('reply.messages.0.key', 'no_answer_contact')
+            ->assertJsonPath('reply.card.type', 'links')
+            ->assertJsonPath('reply.card.data.links.0.url', 'https://wa.me/221700000000')
+            ->assertJsonPath('reply.card.data.links.1.url', 'mailto:aide@doctrack.test');
+        $this->assertStringContainsString('+221 70 000 00 00', $r->json('reply.messages.0.text'));
+    }
+
+    public function test_only_the_closest_sections_are_sent_to_the_ai(): void
+    {
+        $kb = app(\App\Services\Assistant\KnowledgeBase::class);
+        $ids = array_keys($kb->relevantSections('Comment obtenir un certificat de perte au commissariat ?', 6));
+
+        $this->assertContains('recepisse_certificat', $ids);
+        $this->assertContains('contact', $ids);
+        $this->assertLessThanOrEqual(7, count($ids));
+    }
+
     public function test_without_ai_an_unknown_question_falls_back_to_the_menu(): void
     {
         $this->ask('xyz abc')->assertJsonPath('reply.messages.0.key', 'not_understood');
@@ -139,14 +162,27 @@ class AssistantFaqTest extends TestCase
     {
         $this->enableAi(['answer' => 'Le délai est de 15 jours.', 'sources' => ['delai']]);
 
-        $this->ask('Au bout de combien de semaines je saurai ?')->assertJsonPath('reply.messages.0.key', 'not_understood');
+        $this->ask('Au bout de combien de semaines je saurai ?')->assertJsonPath('reply.messages.0.key', 'no_answer_contact');
     }
 
     public function test_ai_answer_without_a_known_source_is_rejected(): void
     {
         $this->enableAi(['answer' => 'Allez à la mairie.', 'sources' => ['inventee']]);
 
-        $this->ask('Puis-je aller à la mairie ?')->assertJsonPath('reply.messages.0.key', 'not_understood');
+        $this->ask('Puis-je aller à la mairie ?')->assertJsonPath('reply.messages.0.key', 'no_answer_contact');
+    }
+
+    public function test_a_saturated_ai_asks_to_try_again_instead_of_saying_it_does_not_know(): void
+    {
+        config([
+            'assistant_faq.providers' => ['qwen'],
+            'ai.endpoints.qwen'       => ['url' => 'https://ia.test/v1', 'key' => 'cle-test', 'model' => 'qwen-plus'],
+        ]);
+        Http::fake(['ia.test/*' => Http::response(['error' => ['message' => 'Rate limit reached']], 429)]);
+
+        $this->ask('Est-ce que la mairie de mon quartier travaille avec vous ?')
+            ->assertJsonPath('reply.messages.0.key', 'ai_busy')
+            ->assertJsonPath('reply.card.type', 'links');
     }
 
     public function test_ai_calls_are_capped_per_conversation(): void

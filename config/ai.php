@@ -105,6 +105,9 @@ return [
         'max_attempts'       => 2,
     ],
 
+    // Attente maximale (secondes) quand un fournisseur demande de patienter (erreur 429).
+    'retry_after_max' => (float) env('AI_RETRY_AFTER_MAX', 5),
+
     // Points d'accès compatibles OpenAI (chat/completions).
     'endpoints' => [
         // Alibaba Model Studio, région Singapour. Le quota gratuit des nouveaux comptes a été retiré sur la plupart
@@ -133,6 +136,15 @@ return [
             'key'     => env('GROQ_API_KEY'),
             'model'   => env('GROQ_MODEL', 'openai/gpt-oss-120b'),
             'options' => str_contains((string) env('GROQ_MODEL', 'openai/gpt-oss-120b'), 'gpt-oss')
+                ? ['reasoning_effort' => env('GROQ_REASONING_EFFORT', 'low')] : [],
+        ],
+        // Second modèle Groq, plus léger : son quota par minute est séparé de celui du premier.
+        // Placé après « groq » dans ASSISTANT_AI_PROVIDERS, il prend le relais quand le premier est saturé.
+        'groq_fast' => [
+            'url'     => env('GROQ_API_URL', 'https://api.groq.com/openai/v1'),
+            'key'     => env('GROQ_API_KEY'),
+            'model'   => env('GROQ_FAST_MODEL', 'openai/gpt-oss-20b'),
+            'options' => str_contains((string) env('GROQ_FAST_MODEL', 'openai/gpt-oss-20b'), 'gpt-oss')
                 ? ['reasoning_effort' => env('GROQ_REASONING_EFFORT', 'low')] : [],
         ],
         // Google AI Studio (Gemini) par son accès compatible OpenAI. Formule gratuite : les questions

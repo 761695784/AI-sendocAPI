@@ -24,6 +24,9 @@ class FaqResponder
 
     private string $rejection = '';
 
+    /** Vrai si la dernière question n'a pas eu de réponse parce que les fournisseurs étaient saturés (quota par minute). */
+    public bool $busy = false;
+
     public function __construct(private KnowledgeBase $kb, private ChatClient $chat) {}
 
     /** @return array{answer: string, entries: array<int, array>, source: string}|null */
@@ -66,10 +69,12 @@ class FaqResponder
 
         $cacheKey = 'assistant-faq:' . sha1(TextNormalizer::normalize($question));
         $this->trace = [];
+        $this->busy  = false;
         if (is_array($cached = Cache::get($cacheKey))) {
             $this->trace[] = ['provider' => '-', 'raw' => '', 'verdict' => 'réponse en cache'];
             return $cached['answer'] ? $cached : null; // réponse déjà donnée, ou « pas dans les fiches »
         }
+        $saturated = 0;
         if (! $this->withinLimits($conversationId, $ip)) {
             $this->trace[] = ['provider' => '-', 'raw' => '', 'verdict' => 'plafond atteint (conversation, adresse IP ou jour)'];
 
@@ -77,7 +82,7 @@ class FaqResponder
         }
 
         $messages = [
-            ['role' => 'system', 'content' => $this->systemPrompt()],
+            ['role' => 'system', 'content' => $this->systemPrompt($question)],
             ['role' => 'user', 'content' => mb_substr($question, 0, 500)],
         ];
 
@@ -86,8 +91,9 @@ class FaqResponder
                 continue;
             }
             try {
-                $raw = $this->chat->complete($provider, $messages, 0.1, 1500, (int) config('assistant_faq.timeout', 20));
+                $raw = $this->chat->complete($provider, $messages, 0.1, 1000, (int) config('assistant_faq.timeout', 20));
             } catch (AiUnavailableException $e) {
+                $saturated += $e->getCode() === 429 ? 1 : 0;
                 Log::warning('Assistant : fournisseur IA indisponible', ['provider' => $provider, 'error' => mb_substr($e->getMessage(), 0, 200)]);
                 $this->trace[] = ['provider' => $provider, 'raw' => '', 'verdict' => 'indisponible : ' . mb_substr($e->getMessage(), 0, 200)];
                 continue;
@@ -105,6 +111,9 @@ class FaqResponder
 
             return $result;
         }
+
+        // Aucun fournisseur n'a répondu parce qu'ils étaient tous saturés : ce n'est pas « hors base ».
+        $this->busy = $saturated > 0;
 
         return null;
     }
@@ -186,9 +195,9 @@ class FaqResponder
         return true;
     }
 
-    private function systemPrompt(): string
+    private function systemPrompt(?string $question = null): string
     {
-        $knowledge = $this->kb->document();
+        $knowledge = $this->kb->document($question, (int) config('assistant_faq.context_sections', 10));
         if ($knowledge === '') {
             // Pas de base de connaissances : les fiches servent de source.
             $knowledge = collect($this->kb->entries())

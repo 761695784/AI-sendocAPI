@@ -62,7 +62,8 @@ class KnowledgeBase
             $lines = [];
             foreach (explode("\n", trim($body)) as $line) {
                 if (preg_match('/^Liens\s*:/i', $line)) {
-                    preg_match_all('/\[([^\]]+)\]\((\/[^)\s]*)\)/', $line, $found, PREG_SET_ORDER);
+                    // Chemins du site (/liste), WhatsApp (https://wa.me/…) et e-mail (mailto:…).
+                    preg_match_all('/\[([^\]]+)\]\((\/[^)\s]*|https:\/\/wa\.me\/[^)\s]+|mailto:[^)\s]+)\)/', $line, $found, PREG_SET_ORDER);
                     foreach ($found as $f) {
                         $links[] = ['label' => $f[1], 'url' => $f[2]];
                     }
@@ -76,10 +77,51 @@ class KnowledgeBase
         return $this->sections;
     }
 
-    /** Texte envoyé à l'IA : chaque section précédée de son identifiant. */
-    public function document(): string
+    /**
+     * Texte envoyé à l'IA : chaque section précédée de son identifiant.
+     * Avec une question, seulement les sections les plus proches (+ « limites » et « contact ») :
+     * moins de texte envoyé = réponses plus rapides et quota gratuit préservé.
+     */
+    public function document(?string $question = null, int $max = 0): string
     {
-        return implode("\n\n", array_map(fn ($s) => "[{$s['id']}] {$s['question']}\n{$s['answer']}", $this->sections()));
+        $sections = $this->sections();
+        if ($question !== null && $max > 0 && count($sections) > $max) {
+            $sections = $this->relevantSections($question, $max);
+        }
+
+        return implode("\n\n", array_map(fn ($s) => "[{$s['id']}] {$s['question']}\n{$s['answer']}", $sections));
+    }
+
+    /**
+     * Sections classées par mots en commun avec la question (racines de 5 lettres : « déclarer » ≈ « déclaration »).
+     *
+     * @return array<string, array>
+     */
+    public function relevantSections(string $question, int $max): array
+    {
+        $stems = self::stems(TextNormalizer::normalize($question));
+        $scores = [];
+        foreach ($this->sections() as $id => $s) {
+            $title = self::stems(TextNormalizer::normalize($s['question']));
+            $body  = self::stems(TextNormalizer::normalize($s['answer']));
+            $scores[$id] = 2 * count(array_intersect($stems, $title)) + count(array_intersect($stems, $body));
+        }
+        arsort($scores);
+
+        $keep = ['limites', 'contact'];
+        $ids  = array_slice(array_keys(array_filter($scores)), 0, max(1, $max - count($keep)));
+        $ids  = array_values(array_unique(array_merge($ids, $keep)));
+
+        return array_intersect_key($this->sections(), array_flip($ids));
+    }
+
+    /** @return string[] */
+    private static function stems(string $norm): array
+    {
+        return array_values(array_unique(array_map(
+            fn ($w) => substr($w, 0, 5),
+            self::significantWords($norm)
+        )));
     }
 
     /** Source citable par l'IA : section de la base, ou fiche. */

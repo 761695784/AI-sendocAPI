@@ -337,3 +337,96 @@ Artisan::command('doctrack:assistant-ai-check {question? : question à poser à 
 
     return $ok > 0 ? 0 : 1;
 })->purpose('Vérifie les clés et la connexion des fournisseurs IA de l\'assistant');
+
+// Banc d'essai de l'assistant : pose les questions de resources/assistant/questions-citoyens.txt
+// (comme un citoyen anonyme, sans rien enregistrer) et compare avec la réponse attendue.
+Artisan::command('doctrack:assistant-eval
+    {--file= : fichier de questions (défaut : resources/assistant/questions-citoyens.txt)}
+    {--limit=0 : nombre maximum de questions}
+    {--sleep=2 : pause en secondes après un appel IA (quota gratuit par minute)}
+    {--fresh : ignorer les réponses IA déjà en cache}', function () {
+    $file = $this->option('file') ?: resource_path('assistant/questions-citoyens.txt');
+    if (! is_file($file)) {
+        $this->error("Fichier introuvable : {$file}");
+
+        return 1;
+    }
+    $cases = [];
+    foreach (file($file, FILE_IGNORE_NEW_LINES) as $line) {
+        $line = trim($line);
+        if ($line === '' || str_starts_with($line, '#') || ! str_contains($line, '||')) {
+            continue;
+        }
+        [$question, $expected] = array_map('trim', explode('||', $line, 2));
+        $cases[] = [$question, $expected];
+    }
+    if ((int) $this->option('limit') > 0) {
+        $cases = array_slice($cases, 0, (int) $this->option('limit'));
+    }
+
+    // Le banc d'essai ne doit pas buter sur les plafonds prévus pour le public.
+    config(['assistant_faq.limits' => ['per_conversation' => 100000, 'per_ip_per_day' => 100000, 'global_per_day' => 100000]]);
+    $this->line('IA : ' . (config('assistant_faq.providers') ? implode(', ', config('assistant_faq.providers')) : 'aucune (fiches et parcours seulement)'));
+
+    $rows  = [];
+    $count = ['OK' => 0, 'KO' => 0, 'A VERIFIER' => 0];
+    foreach ($cases as $i => [$question, $expected]) {
+        if ($this->option('fresh')) {
+            \Illuminate\Support\Facades\Cache::forget('assistant-faq:' . sha1(\App\Services\Assistant\TextNormalizer::normalize(\App\Services\Assistant\FaqResponder::mask($question))));
+        }
+
+        \Illuminate\Support\Facades\DB::beginTransaction();
+        try {
+            $conv  = \App\Models\AssistantConversation::create(['channel' => 'web', 'language' => 'fr']);
+            $reply = app(\App\Services\Assistant\AssistantEngine::class)->handle($conv, $question, null, ['ip' => 'banc-essai']);
+        } finally {
+            \Illuminate\Support\Facades\DB::rollBack();   // rien n'est enregistré
+        }
+
+        $first = $reply->messages[0]['key'] ?? '';
+        $faq   = $reply->meta['faq'] ?? null;
+        $got   = match (true) {
+            $faq && ($faq['source'] ?? '') === 'ai' => 'ia:' . implode('+', $faq['entries'] ?? []),
+            str_starts_with($first, 'faq:')         => $first,
+            $first === 'no_answer_contact'          => 'contact',
+            in_array($first, ['not_understood', 'offer_human'], true) => 'incompris',
+            default                                 => 'parcours:' . ($reply->intent ?? $first),
+        };
+
+        $verdict = match (true) {
+            $expected === 'ia'                    => str_starts_with($got, 'ia:') || str_starts_with($got, 'faq:') ? 'OK' : 'KO',
+            str_starts_with($expected, 'faq:')    => $got === $expected || (str_starts_with($got, 'ia:') && str_contains($got, substr($expected, 4))) ? 'OK'
+                : (str_starts_with($got, 'ia:') || str_starts_with($got, 'faq:') ? 'A VERIFIER' : 'KO'),
+            $expected === 'contact'               => $got === 'contact' ? 'OK' : (str_starts_with($got, 'ia:') ? 'A VERIFIER' : 'KO'),
+            default                               => $got === $expected ? 'OK' : 'KO',
+        };
+        $count[$verdict]++;
+
+        $answer = str_replace("\n", ' ', $reply->text());
+        $this->line(sprintf('%3d. [%s] %s', $i + 1, $verdict, $question));
+        $this->line("     attendu : {$expected} — obtenu : {$got}");
+        if ($verdict !== 'OK') {
+            $this->line('     réponse : ' . mb_substr($answer, 0, 220));
+        }
+        $rows[] = [$i + 1, $question, $expected, $got, $verdict, $answer];
+
+        if (str_starts_with($got, 'ia:') || $got === 'contact') {
+            sleep(max(0, (int) $this->option('sleep')));
+        }
+    }
+
+    $csv = fopen(storage_path('app/assistant-eval.csv'), 'w');
+    fwrite($csv, "\xEF\xBB\xBF"); // accents lisibles dans Excel
+    fputcsv($csv, ['n', 'question', 'attendu', 'obtenu', 'verdict', 'reponse'], ';');
+    foreach ($rows as $row) {
+        fputcsv($csv, $row, ';');
+    }
+    fclose($csv);
+
+    $total = count($rows);
+    $this->newLine();
+    $this->info("Résultat : {$count['OK']}/{$total} OK — {$count['A VERIFIER']} à vérifier — {$count['KO']} KO");
+    $this->line('Rapport complet : ' . storage_path('app/assistant-eval.csv'));
+
+    return 0;
+})->purpose('Pose les 100 questions du banc d\'essai à l\'assistant et produit un rapport');

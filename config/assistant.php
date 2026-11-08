@@ -65,7 +65,7 @@ return [
             'wo' => ['ana', 'naka la tollu', 'fan la tollu', 'xibaar', 'sama dossier', 'sama declaration'],
         ],
         'what_to_bring' => [
-            'fr' => ['apporter', 'amener', 'quels documents', 'quelles pieces', 'que faut il', 'il faut quoi', 'necessaire', 'justificatif*'],
+            'fr' => ['apporter', 'amener', 'quels documents', 'quelles pieces', 'que faut il', 'il faut quoi', 'necessaire', 'justificatif*', 'dois apporter', 'faut apporter'],
             'wo' => ['indi', 'lan laa war indi', 'lan laa war', 'lan la soxla', 'soxla'],
         ],
         'proxy' => [
@@ -192,6 +192,15 @@ return [
         'not_understood' => [
             'fr' => 'Pardon, je n\'ai pas bien compris. Pouvez-vous reformuler, ou choisir une option ?',
             'wo' => 'Baal ma, dégguma bu baax. Mën nga ko waxaat, walla nga tann ci li ci suuf ?',
+        ],
+        'no_answer_contact' => [
+            'fr' => 'Je n\'ai pas encore la réponse à cette question. Le service technique DocTrack peut vous aider : WhatsApp :whatsapp ou e-mail :email.',
+        ],
+        'ai_busy' => [
+            'fr' => 'Beaucoup de questions arrivent en même temps : réessayez la vôtre dans une minute. En cas d\'urgence, le service technique DocTrack répond sur WhatsApp :whatsapp ou par e-mail :email.',
+        ],
+        'support_contact' => [
+            'fr' => 'Vous pouvez aussi joindre le service technique DocTrack : WhatsApp :whatsapp ou e-mail :email.',
         ],
         'offer_human' => [
             'fr' => 'Je n\'arrive pas à vous comprendre. Voulez-vous parler à un agent ?',

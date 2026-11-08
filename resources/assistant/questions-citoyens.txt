@@ -1,0 +1,125 @@
+# 100 questions d'un citoyen qui découvre DocTrack — banc d'essai de l'assistant.
+# Lancer : php artisan doctrack:assistant-eval   (rapport dans storage/app/assistant-eval.csv)
+#
+# Format : question || réponse attendue
+#   faq:<id>        fiche de config/assistant_faq.php donnée mot pour mot
+#   ia              réponse rédigée par l'IA à partir de la base de connaissances (ou une fiche)
+#   parcours:<nom>  parcours guidé (declare_loss, report_found, where_to_go, what_to_bring, proxy, human, thanks…)
+#   contact         l'information n'existe pas dans la base : renvoi honnête vers le service technique
+# Ajouter une ligne ici = ajouter une question au banc d'essai.
+
+# 1. Comprendre DocTrack
+C'est quoi DocTrack ? || faq:qui_sommes_nous
+DocTrack c'est un site de l'État ? || faq:qui_sommes_nous
+C'est la police qui gère DocTrack ? || ia
+Est-ce que DocTrack est gratuit ? || faq:gratuit
+Il faut payer quelque chose pour retrouver ma carte ? || faq:gratuit
+Ça marche dans toutes les régions du Sénégal ? || ia
+Est-ce que je peux faire confiance à DocTrack ? || ia
+DocTrack peut chercher mon document à ma place ? || faq:doctrack_cherche
+Vous avez une application à télécharger ? || ia
+Il y a DocTrack sur WhatsApp ? || ia
+Je ne sais pas bien lire le français, comment je fais ? || ia
+Est-ce que DocTrack marche si j'ai perdu mon document à l'étranger ? || contact
+
+# 2. Perdre un document, déclarer
+J'ai perdu ma carte d'identité, je fais quoi ? || parcours:declare_loss
+Comment déclarer une perte ? || faq:declarer_perte
+Je dois aller à la police d'abord ou sur DocTrack ? || ia
+La déclaration sur DocTrack remplace la déclaration de perte à la police ? || faq:recepisse_certificat
+C'est quoi le récépissé DocTrack ? || faq:recepisse_certificat
+Le récépissé peut remplacer ma carte d'identité ? || faq:recepisse_certificat
+Comment avoir un certificat de perte ? || faq:obtenir_certificat
+Le certificat de perte est accepté par l'administration ? || faq:recepisse_certificat
+Je ne connais pas le numéro de ma carte, je peux déclarer quand même ? || ia
+On m'a volé mon portefeuille avec tous mes papiers || parcours:declare_loss
+Est-ce que DocTrack enregistre les plaintes pour vol ? || ia
+J'ai perdu mon téléphone, vous pouvez m'aider ? || ia
+Comment supprimer ma déclaration ? || faq:supprimer_compte
+J'ai retrouvé ma carte moi-même, je fais quoi sur le site ? || faq:supprimer_compte
+Je n'ai pas d'adresse e-mail, je peux déclarer ? || ia
+Je peux déclarer la perte directement au commissariat ? || faq:declarer_perte
+J'ai fait ma déclaration au guichet, je la vois où sur internet ? || faq:compte_guichet
+Quels documents on peut déclarer sur DocTrack ? || faq:types_documents
+Je peux déclarer la perte de ma carte bancaire ? || contact
+Ma déclaration reste active pendant combien de temps ? || faq:delai
+
+# 3. Être prévenu, chercher
+Comment je saurai si quelqu'un a trouvé ma carte ? || faq:rechercher
+Vous allez m'appeler quand on trouve mon document ? || ia
+Mon nom n'est pas dans la liste, ça veut dire quoi ? || ia
+Mon nom est mal écrit sur la carte trouvée, vous allez quand même me prévenir ? || faq:rechercher
+Pourquoi la photo de la carte est floue ? || faq:confidentialite_photo
+Pourquoi on ne voit pas le numéro de la carte sur le site ? || faq:confidentialite_photo
+J'ai reçu un SMS qui dit que mon document est retrouvé, c'est vrai ? || faq:message_suspect
+Un monsieur m'appelle, il dit qu'il a ma carte et il veut 10000 francs || ia
+Ça fait deux mois et toujours rien, c'est normal ? || faq:delai
+
+# 4. Récupérer son document
+Mon document a été retrouvé, comment je le récupère ? || parcours:where_to_go
+Comment contacter la personne qui a trouvé ma carte ? || faq:recuperer_trouveur
+C'est quoi les 4 derniers caractères qu'on me demande ? || ia
+Je n'ai plus le numéro de ma carte pour prouver qu'elle est à moi || ia
+Le trouveur ne répond pas à ma demande || faq:trouveur_ne_repond_pas
+J'ai peur d'aller rencontrer un inconnu || faq:securite_rencontre
+Où se trouve la structure qui garde mon document ? || parcours:where_to_go
+Qu'est-ce que je dois apporter au commissariat ? || parcours:what_to_bring
+Je n'ai aucune autre pièce d'identité, comment prouver que c'est à moi ? || ia
+Mon frère peut aller chercher ma carte à ma place ? || parcours:proxy
+Il faut payer au commissariat pour récupérer ma carte ? || faq:gratuit
+C'est quoi une décharge ? || ia
+Le commissariat ouvre à quelle heure ? || ia
+La structure peut m'envoyer ma carte par la poste ? || contact
+
+# 5. J'ai trouvé un document
+J'ai trouvé une carte d'identité dans la rue || parcours:report_found
+J'ai trouvé un document, je fais quoi ? || parcours:report_found
+Je ne veux pas créer de compte, je peux juste rendre la carte ? || ia
+Je peux déposer la carte trouvée au commissariat ? || faq:publier_trouve
+Le propriétaire va avoir mon numéro de téléphone ? || ia
+Je ne veux pas rencontrer le propriétaire, comment faire ? || faq:passer_structure
+Je peux demander une récompense au propriétaire ? || ia
+Comment publier la photo d'une carte trouvée ? || faq:publier_trouve
+Le site n'arrive pas à lire la carte que j'ai photographiée || ia
+Comment savoir que c'est le vrai propriétaire qui me contacte ? || faq:vrai_proprietaire
+Le propriétaire n'est pas venu au rendez-vous, je fais quoi ? || faq:passer_structure
+J'ai déjà rendu la carte, qu'est-ce que je fais sur le site ? || ia
+Que faire si la carte trouvée a un QR code DocTrack ? || faq:qr_code
+J'ai trouvé plusieurs cartes en même temps || parcours:report_found
+
+# 6. Compte et connexion
+Comment créer un compte ? || faq:creer_compte
+Pourquoi je dois créer un compte ? || faq:creer_compte
+Je n'ai pas reçu le code par e-mail || faq:code_verification
+J'ai oublié mon mot de passe || faq:mot_de_passe
+Je n'arrive pas à me connecter || faq:mot_de_passe
+Je veux changer mon adresse e-mail || ia
+Je veux changer mon numéro de téléphone sur mon compte || contact
+C'est quoi « Mon espace » ? || ia
+Comment supprimer mon compte ? || faq:supprimer_compte
+Je peux utiliser DocTrack sur mon téléphone ? || ia
+Il faut internet pour utiliser DocTrack ? || ia
+Qui peut voir mes informations personnelles ? || faq:confidentialite_photo
+Le site affiche une erreur quand je publie, que faire ? || contact
+
+# 7. QR code, vérification, contact
+C'est quoi le QR code DocTrack ? || faq:qr_code
+Comment vérifier qu'un certificat de perte est vrai ? || faq:verifier_certificat
+Ma banque peut vérifier mon récépissé ? || faq:verifier_certificat
+Je veux parler à quelqu'un || parcours:human
+Comment vous contacter ? || faq:contact
+Vous avez un numéro WhatsApp ? || faq:contact
+Le service client est ouvert le dimanche ? || faq:contact
+Je travaille dans un commissariat, comment rejoindre DocTrack ? || ia
+Est-ce que l'assistant comprend le wolof ? || ia
+Tu es un robot ou une vraie personne ? || ia
+
+# 8. Wolof et écriture familière
+Sama kart dafa réer, lan laa war def ? || parcours:declare_loss
+Gis naa ab kart ci mbedd mi || parcours:report_found
+Fan laa koy jëlé ? || parcours:where_to_go
+svp ma cni a disparu kom fer || parcours:declare_loss
+jai trouver 1 permis ki apartien a qlq || parcours:report_found
+cest payant ou bien || faq:gratuit
+bjr jai pa recu le code || ia
+Merci beaucoup || parcours:thanks
