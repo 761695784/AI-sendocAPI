@@ -23,6 +23,6 @@ class StoreDeclarationDePerteRequest extends FormRequest
             // Facultatifs : aident les correspondances et pré-remplissent le certificat au guichet.
             'lost_place'        => 'nullable|string|max:255',
             'lost_at'           => 'nullable|date|before_or_equal:today',
-        ];
+        ] + \App\Support\OfflineSubmission::rules(); // envoi préparé hors connexion
     }
 }

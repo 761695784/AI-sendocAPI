@@ -54,6 +54,7 @@ class Document extends Model implements HasMedia
         'birth_date_in_doc'    => 'date',
         'custody_since'        => 'datetime',
         'contact_consent_at'   => 'datetime',
+        'client_created_at'    => 'datetime',
         'found_latitude'       => 'float',
         'found_longitude'      => 'float',
         'doc_number_encrypted' => 'encrypted',

@@ -49,6 +49,7 @@ class DeclarationDePerte extends Model
         'closed_at'            => 'datetime',
         'certified_at'         => 'datetime',
         'certification_birth_date' => 'date',
+        'client_created_at'    => 'datetime',
         'doc_number_encrypted' => 'encrypted',
     ];
 

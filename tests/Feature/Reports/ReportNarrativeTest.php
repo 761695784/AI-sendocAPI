@@ -258,6 +258,41 @@ class ReportNarrativeTest extends OrganizationTestCase
         $this->assertSame('groq', $report->narrative['provider']);
     }
 
+    public function test_large_national_reports_are_condensed_to_fit_the_free_quota(): void
+    {
+        $structures = [];
+        for ($i = 1; $i <= 400; $i++) {
+            $active = $i <= 30;
+            $structures[] = [
+                'uuid' => "uuid-{$i}", 'name' => "Commissariat {$i}", 'parent' => 'Police nationale', 'is_active' => true,
+                'collections_assigned' => $active ? 5 : 0, 'median_first_contact_hours' => $active ? 12.5 : null,
+                'contacted_within_sla_pct' => $active ? 80.0 : null, 'collections_overdue_now' => $i === 17 ? 4 : 0,
+                'collected' => 0, 'median_hours_to_collect' => null, 'in_custody_now' => $active ? 7 : 0,
+                'pending_reviews_now' => 0, 'counter_declarations' => $active ? 9 : 0, 'restitutions' => 0,
+            ];
+        }
+        config(['ai.reports.max_input_chars' => 6000, 'ai.reports.max_structures' => 12]);
+
+        $payload = app(ReportNarrator::class)->payload(['meta' => ['title' => 'Rapport'], 'structures' => $structures], []);
+
+        $this->assertLessThanOrEqual(6000, mb_strlen(ReportNarrator::compactJson($payload)));
+        $this->assertSame(['total' => 400, 'avec_activite' => 30, 'sans_activite' => 370, 'detaillees_ci_dessous' => 12], $payload['structures_resume']);
+        $this->assertSame('Commissariat 17', $payload['structures'][0]['name']);        // retards en premier
+        $this->assertArrayNotHasKey('uuid', $payload['structures'][0]);
+        $this->assertArrayNotHasKey('collected', $payload['structures'][0]);            // zéros retirés
+    }
+
+    public function test_less_than_three_is_kept_in_the_text_but_html_is_removed(): void
+    {
+        $n = app(ReportNarrator::class)->parse(json_encode([
+            'summary_fr' => 'Les structures actives affichent toutes « <3 » collectes en retard.',
+            'structures' => [['name' => 'Commissariat A', 'comment' => 'La brigade a <3 dépôts et <b>aucun</b> retard.']],
+        ]), ['Commissariat A']);
+
+        $this->assertSame('Les structures actives affichent toutes « <3 » collectes en retard.', $n['summary_fr']);
+        $this->assertSame('La brigade a <3 dépôts et aucun retard.', $n['structures'][0]['comment']);
+    }
+
     public function test_without_ai_nothing_changes(): void
     {
         config(['ai.reports.enabled' => false]);

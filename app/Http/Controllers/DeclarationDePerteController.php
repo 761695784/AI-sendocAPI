@@ -27,7 +27,17 @@ class DeclarationDePerteController extends Controller
             ], 401);
         }
 
-        [$declaration, $certificat] = $declarations->create($user, $request->validated());
+        // Envoi préparé hors connexion et déjà reçu (nouvelle tentative de l'appareil) : pas de doublon.
+        if ($existing = $this->alreadyReceived($user->id, $request->validated('client_uuid'))) {
+            return $existing;
+        }
+
+        try {
+            [$declaration, $certificat] = $declarations->create($user, $request->validated());
+        } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
+            // Deux envois identiques arrivés en même temps : le premier a gagné.
+            return $this->alreadyReceived($user->id, $request->validated('client_uuid')) ?? throw $e;
+        }
 
         return response()->json([
             'success' => true,
@@ -38,6 +48,30 @@ class DeclarationDePerteController extends Controller
                 'pdf_url'     => url('/api/certificats/' . $certificat->uuid . '/voir'), // Lien pour voir le PDF via l'API
             ],
         ], 201);
+    }
+
+    /** Réponse identique à la création, pour un envoi hors connexion déjà enregistré. */
+    private function alreadyReceived(int $userId, ?string $clientUuid): ?\Illuminate\Http\JsonResponse
+    {
+        if (! $clientUuid) {
+            return null;
+        }
+        $declaration = DeclarationDePerte::where('user_id', $userId)->where('client_uuid', $clientUuid)->first();
+        if (! $declaration) {
+            return null;
+        }
+        $certificat = $declaration->receipt;
+
+        return response()->json([
+            'success'  => true,
+            'replayed' => true,
+            'message'  => 'Cette déclaration avait déjà été reçue.',
+            'data'     => [
+                'declaration' => $declaration,
+                'certificat'  => $certificat,
+                'pdf_url'     => $certificat ? url('/api/certificats/' . $certificat->uuid . '/voir') : null,
+            ],
+        ], 200);
     }
 
     // ══════════════════════════════════════════════════════════════

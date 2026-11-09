@@ -130,6 +130,10 @@ Artisan::command('doctrack:report-ai-check
 
     $chars = mb_strlen(collect($narrator->preview($report))->pluck('content')->implode("\n"));
     $this->line("Données envoyées : {$chars} caractères (chiffres agrégés uniquement), soit environ " . (int) ceil($chars / 3.5) . ' jetons (estimation).');
+    $resume = $narrator->payload($report->data ?? [], $report->analysis ?? [])['structures_resume'] ?? null;
+    if ($resume) {
+        $this->line("Structures : {$resume['total']} au total, {$resume['avec_activite']} avec activité, {$resume['detaillees_ci_dessous']} détaillées (les plus actives).");
+    }
 
     $this->line('Rédaction en cours (jusqu\'à ' . config('ai.reports.timeout') . ' s par appel)…');
     $started = microtime(true);
@@ -150,6 +154,9 @@ Artisan::command('doctrack:report-ai-check
         $err = $a['error'] ?? '';
         if (str_contains($err, '(413)')) {
             $this->line('    Demande trop grosse pour le quota par minute de ce modèle : le fournisseur suivant prend le relais.');
+            if (preg_match('/Limit (\d+), Requested (\d+)/', $err, $m)) {
+                $this->line("    Quota : {$m[1]} jetons par minute ; demande : {$m[2]} (données + réponse). Réduisez AI_REPORTS_MAX_INPUT_CHARS ou AI_REPORTS_MAX_TOKENS dans le .env.");
+            }
         } elseif (str_contains($err, '(429)')) {
             $this->line('    Quota du fournisseur atteint : réessayez dans une minute (ou demain si c\'est le quota du jour).');
         } elseif (str_contains($err, 'max_tokens')) {

@@ -88,6 +88,11 @@ class DocumentController extends Controller
     {
         $validatedData = $request->validated();
 
+        // Envoi préparé hors connexion et déjà reçu (nouvelle tentative de l'appareil) : pas de doublon.
+        if ($existing = $this->publicationAlreadyReceived($validatedData['client_uuid'] ?? null)) {
+            return $existing;
+        }
+
         // Pièce scannée juste avant : la photo vient du scan (déjà lue et masquée).
         $scan = ! empty($validatedData['ocr_scan_id'])
             ? \App\Models\OcrScan::where('uuid', $validatedData['ocr_scan_id'])->where('user_id', Auth::id())->first()
@@ -99,22 +104,27 @@ class DocumentController extends Controller
         }
 
         // ── Crée le document SANS image ──
-        $document = Document::create([
-            'OwnerFirstName'    => $validatedData['OwnerFirstName'],
-            'OwnerLastName'     => $validatedData['OwnerLastName'],
-            'Location'          => $validatedData['Location'],
-            'statut'            => 'non récupéré',
-            'document_type_id'  => $validatedData['document_type_id'],
-            'user_id'           => Auth::id(),
-            'DocIdentification' => $validatedData['DocIdentification'] ?? null,
-            'found_place'       => $validatedData['Location'],
-            'found_latitude'    => $validatedData['latitude'] ?? null,
-            'found_longitude'   => $validatedData['longitude'] ?? null,
-            'territory_id'      => ! empty($validatedData['territory_code'])
-                ? \App\Models\Territory::where('code', $validatedData['territory_code'])->value('id')
-                : null,
-            'contact_consent_at' => $request->boolean('contact_consent') ? now() : null,
-        ]);
+        try {
+            $document = Document::create(\App\Support\OfflineSubmission::columns($validatedData) + [
+                'OwnerFirstName'    => $validatedData['OwnerFirstName'],
+                'OwnerLastName'     => $validatedData['OwnerLastName'],
+                'Location'          => $validatedData['Location'],
+                'statut'            => 'non récupéré',
+                'document_type_id'  => $validatedData['document_type_id'],
+                'user_id'           => Auth::id(),
+                'DocIdentification' => $validatedData['DocIdentification'] ?? null,
+                'found_place'       => $validatedData['Location'],
+                'found_latitude'    => $validatedData['latitude'] ?? null,
+                'found_longitude'   => $validatedData['longitude'] ?? null,
+                'territory_id'      => ! empty($validatedData['territory_code'])
+                    ? \App\Models\Territory::where('code', $validatedData['territory_code'])->value('id')
+                    : null,
+                'contact_consent_at' => $request->boolean('contact_consent') ? now() : null,
+            ]);
+        } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
+            // Deux envois identiques arrivés en même temps : le premier a gagné.
+            return $this->publicationAlreadyReceived($validatedData['client_uuid'] ?? null) ?? throw $e;
+        }
 
         // ── Upload + conversions via MediaLibrary ── génère automatiquement : thumb, blurred, optimized en WebP
         $ocr = app(\App\Services\Ocr\OcrScanService::class);
@@ -188,6 +198,27 @@ class DocumentController extends Controller
             'document'   => new DocumentResource($document->fresh(['user', 'documentType', 'custodyOrganization'])),
             'collection' => $collection ? self::collectionSummary($collection) : null,
         ], 201);
+    }
+
+    /** Réponse identique à la publication, pour un envoi hors connexion déjà enregistré. */
+    private function publicationAlreadyReceived(?string $clientUuid): ?\Illuminate\Http\JsonResponse
+    {
+        if (! $clientUuid) {
+            return null;
+        }
+        $document = Document::where('user_id', Auth::id())->where('client_uuid', $clientUuid)->first();
+        if (! $document) {
+            return null;
+        }
+        $collection = $document->collectionRequests()->latest('id')->first();
+
+        return response()->json([
+            'success'    => true,
+            'replayed'   => true,
+            'message'    => 'Cette publication avait déjà été reçue.',
+            'document'   => new DocumentResource($document->fresh(['user', 'documentType', 'custodyOrganization'])),
+            'collection' => $collection ? self::collectionSummary($collection) : null,
+        ], 200);
     }
 
     /**

@@ -103,7 +103,12 @@ return [
         'timeout'            => (int) env('AI_REPORTS_TIMEOUT', 90),
         'temperature'        => 0.2,
         // gpt-oss « réfléchit » avant d'écrire : ces jetons comptent dans le plafond.
-        'max_tokens'         => (int) env('AI_REPORTS_MAX_TOKENS', 3500),
+        'max_tokens'         => (int) env('AI_REPORTS_MAX_TOKENS', 3000),
+        // Taille maximale des données envoyées (caractères). Formule gratuite Groq : la demande entière
+        // (données + réponse attendue) doit tenir dans le quota par minute du modèle, sinon erreur 413.
+        // Au-delà, seules les structures les plus actives sont détaillées.
+        'max_input_chars'    => (int) env('AI_REPORTS_MAX_INPUT_CHARS', 10000),
+        'max_structures'     => (int) env('AI_REPORTS_MAX_STRUCTURES', 12),
         // Quota par minute atteint : le rapport mensuel (tâche planifiée, commande) n'est pas pressé, il peut attendre
         // plus longtemps que l'assistant. Depuis l'écran (bouton « Régénérer »), l'attente reste celle de retry_after_max.
         'retry_after_max'    => (float) env('AI_REPORTS_RETRY_AFTER_MAX', 30),

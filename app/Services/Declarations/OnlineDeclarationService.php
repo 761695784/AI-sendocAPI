@@ -42,7 +42,7 @@ class OnlineDeclarationService
             'user_id'            => $user->id,
             'channel'            => DeclarationDePerte::CHANNEL_ONLINE,
             'citizen_profile_id' => $this->citizens->forAccount($user)->id,
-        ]);
+        ] + \App\Support\OfflineSubmission::columns($data));
 
         activity()
             ->causedBy($user)

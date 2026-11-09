@@ -35,7 +35,7 @@ class StoreDocumentRequest extends FormRequest
             // « J'accepte d'être contacté par la structure la plus proche pour lui remettre le document. »
             'contact_consent'   => 'sometimes|boolean',
             'contact_phone'     => 'nullable|string|max:20|regex:/^[0-9+\s().-]{7,20}$/',
-        ];
+        ] + \App\Support\OfflineSubmission::rules(); // envoi préparé hors connexion
     }
 
     public function withValidator($validator): void

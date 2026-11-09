@@ -54,7 +54,7 @@ class ReportNarrator
                         // un clic sur « Régénérer » ne doit pas dépasser le délai d'exécution du serveur.
                         app()->runningInConsole() ? (float) config('ai.reports.retry_after_max', 30) : null);
                 } catch (AiUnavailableException $e) {
-                    $attempts[] = ['provider' => $provider, 'ok' => false, 'error' => mb_substr($e->getMessage(), 0, 200)];
+                    $attempts[] = ['provider' => $provider, 'ok' => false, 'error' => mb_substr($e->getMessage(), 0, 400)];
                     Log::warning('Rédaction IA du rapport impossible : ' . $e->getMessage());
                     continue 2;   // fournisseur suivant
                 }
@@ -102,9 +102,24 @@ class ReportNarrator
             ->map(fn ($v, $k) => in_array($k, $keep, true) || str_contains((string) $k, 'pct') || str_contains((string) $k, 'hours') || str_contains((string) $k, 'days') ? $v : $mask($v))
             ->all();
 
-        $structures = collect($d['structures'] ?? [])->map(fn ($s) => $maskCounts(Arr::except($s, ['uuid']), ['name', 'parent', 'is_active']))->values()->all();
+        // Structures : seules les plus actives sont détaillées (un rapport national peut en compter des centaines).
+        $all = collect($d['structures'] ?? []);
+        $activity = fn (array $s) => collect(['collections_assigned', 'collected', 'collections_overdue_now', 'in_custody_now', 'pending_reviews_now', 'counter_declarations', 'restitutions'])
+            ->sum(fn ($k) => is_numeric($s[$k] ?? null) ? (int) $s[$k] : 0);
+        $active = $all->filter(fn ($s) => $activity((array) $s) > 0)
+            ->sortBy([fn ($x, $y) => ((int) ($y['collections_overdue_now'] ?? 0)) <=> ((int) ($x['collections_overdue_now'] ?? 0)), fn ($x, $y) => $activity((array) $y) <=> $activity((array) $x)])
+            ->values();
+        $detail = fn (int $n) => $active->take($n)->map(fn ($s) => collect($maskCounts(Arr::except((array) $s, ['uuid']), ['name', 'parent', 'is_active']))
+            ->reject(fn ($v, $k) => $v === null || $v === 0 || ($k === 'is_active' && $v === true))->all())->values()->all();
 
-        return [
+        // Évolution : { période: valeur } au lieu d'une liste d'objets (moins de texte).
+        $evolution = $d['evolution'] ?? [];
+        if (isset($evolution['series']) && is_array($evolution['series'])) {
+            $evolution['series'] = collect($evolution['series'])
+                ->map(fn ($points) => collect($points)->mapWithKeys(fn ($p) => [$p['period'] => $p['value']])->all())->all();
+        }
+
+        $build = fn (int $nStructures, bool $withEvolution, int $nRows) => self::withoutNulls([
             'rapport'   => [
                 'titre'     => $d['meta']['title'] ?? null,
                 'perimetre' => $d['meta']['scope']['name'] ?? null,
@@ -114,10 +129,16 @@ class ReportNarrator
             ],
             'vue_ensemble'      => $d['overview'] ?? [],
             'comparaison_periode_precedente' => $d['comparison'] ?? [],
-            'structures'        => $structures,
-            'evolution'         => $d['evolution'] ?? [],
-            'par_type_de_piece' => collect($d['by_document_type'] ?? [])->map(fn ($r) => $maskCounts((array) $r, ['name', 'type']))->values()->all(),
-            'par_region'        => collect($d['by_region'] ?? [])->map(fn ($r) => $maskCounts((array) $r, ['name', 'region']))->values()->all(),
+            'structures_resume' => [
+                'total'                => $all->count(),
+                'avec_activite'        => $active->count(),
+                'sans_activite'        => $all->count() - $active->count(),
+                'detaillees_ci_dessous' => min($nStructures, $active->count()),
+            ],
+            'structures'        => $detail($nStructures),
+            'evolution'         => $withEvolution ? $evolution : null,
+            'par_type_de_piece' => collect($d['by_document_type'] ?? [])->take($nRows)->map(fn ($r) => $maskCounts((array) $r, ['name', 'type']))->values()->all(),
+            'par_region'        => collect($d['by_region'] ?? [])->take($nRows)->map(fn ($r) => $maskCounts((array) $r, ['name', 'region']))->values()->all(),
             'restitutions_directes' => $d['direct_restitutions'] ?? [],
             'qr_codes'          => $d['qr'] ?? [],
             'finances'          => Arr::except($d['billing'] ?? [], ['charges']),
@@ -128,7 +149,38 @@ class ReportNarrator
                 'alertes'         => array_column($a['alerts'] ?? [], 'message'),
                 'points_positifs' => $a['positives'] ?? [],
             ],
-        ];
+        ]);
+
+        // Taille limitée (quota par minute des formules gratuites) : on réduit le détail jusqu'à tenir.
+        $budget = (int) config('ai.reports.max_input_chars', 10000);
+        $n = (int) config('ai.reports.max_structures', 12);
+        foreach ([[$n, true, 15], [(int) ceil($n / 2), true, 10], [(int) ceil($n / 2), false, 8], [3, false, 5], [0, false, 5]] as [$k, $evo, $rows]) {
+            $payload = $build($k, $evo, $rows);
+            if (mb_strlen(self::compactJson($payload)) <= $budget) {
+                break;
+            }
+        }
+
+        return $payload;
+    }
+
+    /** Retire les valeurs nulles et les tableaux vides (moins de texte, rien d'inventé). */
+    private static function withoutNulls(array $data): array
+    {
+        $out = [];
+        foreach ($data as $k => $v) {
+            if (is_array($v)) {
+                $v = self::withoutNulls($v);
+                if ($v === [] ) {
+                    continue;
+                }
+            }
+            if ($v !== null) {
+                $out[$k] = $v;
+            }
+        }
+
+        return array_is_list($data) ? array_values($out) : $out;
     }
 
     private function messages(array $payload): array
@@ -143,6 +195,8 @@ Règles impératives :
 - « <3 » signifie « moins de 3 » : ne le remplace jamais par un nombre.
 - Ton sobre, factuel, en français administratif clair ; pas de jargon technique ; pas d'emphase.
 - Ne cite aucune personne. Les structures (commissariats, brigades) peuvent être nommées.
+- « structures » ne détaille que les structures les plus actives (voir « structures_resume ») ; un indicateur absent d'une structure vaut 0.
+  Ne commente que les structures détaillées.
 - Les recommandations doivent être concrètes, réalisables par les structures, et découler des chiffres.
 
 Réponds UNIQUEMENT avec un objet JSON de cette forme :
@@ -182,7 +236,8 @@ TXT;
             return null;
         }
 
-        $clean = fn ($s) => trim(strip_tags((string) $s));
+        // Retire les vraies balises HTML seulement : strip_tags() effaçait tout ce qui suit « <3 » (« moins de 3 »).
+        $clean = fn ($s) => self::clean((string) $s);
         $known = collect($structureNames)->mapWithKeys(fn ($n) => [mb_strtolower(trim($n)) => $n]);
 
         return [
@@ -202,10 +257,32 @@ TXT;
         ];
     }
 
+    /** Texte du modèle sans balises HTML, en gardant « <3 », « < 24 h »… (l'affichage échappe le texte). */
+    public static function clean(string $text): string
+    {
+        $text = preg_replace('/<\/?[a-zA-Z][^<>]*>|<!--.*?-->/s', '', $text);
+
+        return trim(preg_replace('/[ \t]+/', ' ', $text));
+    }
+
     /** Nombres présents dans les données (et leurs arrondis usuels). */
     public function allowedNumbers(array $payload): array
     {
         $allowed = [];
+        // Nombres écrits dans les noms des indicateurs (ex. « moins_de_30_jours »).
+        $keys = function (array $a) use (&$keys, &$allowed) {
+            foreach ($a as $k => $v) {
+                if (is_string($k)) {
+                    foreach (self::numbersIn(str_replace('_', ' ', $k)) as $n) {
+                        $allowed[self::key($n)] = true;
+                    }
+                }
+                if (is_array($v)) {
+                    $keys($v);
+                }
+            }
+        };
+        $keys($payload);
         array_walk_recursive($payload, function ($value) use (&$allowed) {
             if (is_int($value) || is_float($value)) {
                 foreach ([$value, abs($value), round($value), round($value, 1), round(abs($value)), round(abs($value), 1)] as $v) {
