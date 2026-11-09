@@ -23,6 +23,7 @@ use App\Http\Controllers\V2\OrganizationTypeController;
 use App\Http\Controllers\V2\RestitutionController;
 use App\Http\Controllers\V2\StatsController;
 use App\Http\Controllers\V2\TerritoryController;
+use App\Http\Controllers\V2\TestimonialController;
 use App\Http\Controllers\V2\VigilanceController;
 use Illuminate\Support\Facades\Route;
 
@@ -54,6 +55,10 @@ Route::prefix('assistant')->group(function () {
     Route::get('audio/{lang}/{key}', [AssistantController::class, 'audio'])
         ->middleware('throttle:120,1,v2-audio')->where(['lang' => '[a-z]{2}', 'key' => '[a-z0-9_]{2,60}']);
 });
+
+// Témoignages : lecture publique ; dépôt ouvert à tous (le jeton JWT, s'il est fourni, identifie l'auteur).
+Route::get('testimonials', [TestimonialController::class, 'index'])->middleware('throttle:60,1,v2-testimonials');
+Route::post('testimonials', [TestimonialController::class, 'store'])->middleware('throttle:5,60,v2-testimonials-store');
 
 // Scan OCR d'une pièce trouvée (citoyen connecté) : lecture, champs proposés, photo publique masquée.
 Route::middleware(['auth:api', 'active'])->prefix('ocr')->group(function () {
@@ -181,6 +186,11 @@ Route::middleware(['auth:api', 'active', 'organization', 'throttle:120,1,v2-espa
     // Types d'organisation : super_admin
     Route::middleware('role:super_admin,api')->group(function () {
         Route::post('organization-types', [OrganizationTypeController::class, 'store']);
+
+        // Témoignages : modération avant publication.
+        Route::get('testimonials/moderation', [TestimonialController::class, 'moderation']);
+        Route::match(['put', 'patch'], 'testimonials/{testimonial}', [TestimonialController::class, 'update']);
+        Route::delete('testimonials/{testimonial}', [TestimonialController::class, 'destroy']);
 
         // Voix de l'assistant : phrases lues une fois par le modèle de synthèse (Adia_TTS, wolof) puis servies en MP3.
         Route::get('assistant/voices', [AssistantVoiceController::class, 'index']);

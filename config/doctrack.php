@@ -11,6 +11,12 @@ return [
     // Page publique de vérification d'un certificat (lien du QR code imprimé).
     'verification_url' => env('CERTIFICATE_VERIFICATION_URL', rtrim(env('APP_URL', 'http://localhost'), '/') . '/verifier'),
 
+    // Témoignages : invitation par SMS et e-mail après une restitution ; adresse qui reçoit chaque nouveau témoignage.
+    'testimonials' => [
+        'invite_after_restitution' => (bool) env('TESTIMONIALS_INVITE_AFTER_RESTITUTION', true),
+        'notify_email'             => env('TESTIMONIALS_NOTIFY_EMAIL', env('ASSISTANT_SUPPORT_EMAIL', 'sendoctrack@gmail.com')),
+    ],
+
     // Délai pendant lequel l'agent auteur peut annuler sa propre saisie (heures).
     'agent_cancel_window_hours' => (int) env('AGENT_CANCEL_WINDOW_HOURS', 24),
 

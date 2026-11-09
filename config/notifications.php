@@ -13,6 +13,9 @@
 return [
 
     'sms' => [
+        // Témoignages : invitation envoyée une fois, après la restitution
+        'testimonial.invite'             => 'DocTrack : votre document vous a été rendu ? Racontez-nous comment cela s\'est passé (2 minutes) : :url',
+
         // Guichet : déclaration de perte
         'counter_declaration.registered' => 'DocTrack : déclaration :reference enregistrée par :structure. Certificat vérifiable : :verify_url . Vous serez prévenu si votre pièce est retrouvée.',
         'counter_declaration.cancelled'  => 'DocTrack : votre déclaration :reference a été annulée par :structure. Motif : :reason',
@@ -61,6 +64,10 @@ return [
     ],
 
     'inbox' => [
+        'testimonial.pending' => [
+            'title' => 'Nouveau témoignage à relire',
+            'body'  => ':first_name (:city), note :rating : « :body »',
+        ],
         'collection.assigned' => [
             'title' => 'Document à récupérer — :document_type',
             'body'  => 'Un citoyen a trouvé un document (:owner_name) à :place:distance. Appelez-le pour organiser le dépôt ou le passage d\'un agent.',
@@ -112,6 +119,24 @@ return [
     ],
 
     'mail' => [
+        'testimonial.invite' => [
+            'subject' => 'DocTrack — votre document vous a été rendu',
+            'lines'   => [
+                'Bonjour :first_name, nous sommes heureux que votre document vous ait été rendu.',
+                'Votre expérience peut encourager d\'autres personnes à déclarer leurs pertes et à rendre les documents qu\'elles trouvent.',
+                'Racontez-nous comment cela s\'est passé (2 minutes) : :url',
+                'Votre témoignage ne sera publié qu\'avec votre accord, avec seulement votre prénom et votre ville.',
+            ],
+        ],
+        'testimonial.submitted' => [
+            'subject' => 'DocTrack — nouveau témoignage à relire (:first_name, :city)',
+            'lines'   => [
+                'Prénom : :first_name — ville : :city — note : :rating.',
+                'Restitution vérifiée : :verified.',
+                'Témoignage : « :body »',
+                'Il ne sera publié qu\'après validation : :url',
+            ],
+        ],
         'report.monthly' => [
             'subject' => 'DocTrack — rapport d\'activité :period (:scope)',
             'lines'   => [

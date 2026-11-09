@@ -63,6 +63,8 @@ tags:
     description: Assistant conversationnel guidé (texte + voix, français + wolof). Ouvert aux visiteurs ; le jeton JWT, s'il est fourni, identifie le citoyen.
   - name: Public
     description: Routes sans compte (vérification de certificat/décharge, scan de QR, webhooks).
+  - name: Témoignages
+    description: Témoignages des usagers — dépôt public, publication après validation par un super administrateur
 
 components:
   securitySchemes:
@@ -389,6 +391,19 @@ components:
             model: { type: string, example: qwen-plus }
             verified: { type: boolean }
             edited_by_reviewer: { type: boolean }
+    Testimonial:
+      type: object
+      description: Témoignage publié — seuls le prénom, la ville, la note et le texte sont publics.
+      properties:
+        uuid: { type: string, format: uuid }
+        first_name: { type: string, example: Awa }
+        city: { type: string, example: Thiès }
+        role: { type: string, enum: [owner, finder, other] }
+        rating: { type: integer, nullable: true, minimum: 1, maximum: 5 }
+        body: { type: string }
+        verified: { type: boolean, description: Restitution enregistrée dans DocTrack }
+        locale: { type: string, enum: [fr, en, pt] }
+        published_at: { type: string, format: date }
     VigilanceAlert:
       type: object
       properties:
@@ -566,6 +581,89 @@ paths:
         '200': { description: Confirmée, content: { application/json: { schema: { $ref: '#/components/schemas/VigilanceAlert' } } } }
         '404': { description: Hors périmètre ou droit vigilance.review manquant }
         '409': { description: Alerte déjà traitée }
+  # ════════════════════════ Témoignages ════════════════════════
+  /api/v2/testimonials:
+    get:
+      tags: [Témoignages]
+      summary: Témoignages publiés (validés), les plus récents d'abord
+      security: []
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 24, default: 6 } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/Testimonial' } }
+                  stats: { type: object, properties: { count: { type: integer }, average_rating: { type: number, nullable: true } } }
+    post:
+      tags: [Témoignages]
+      summary: Déposer un témoignage (en attente de validation)
+      description: |
+        Ouvert à tous ; si un jeton JWT est fourni, l'auteur est identifié et le badge « restitution vérifiée » est accordé
+        quand une restitution est enregistrée dans DocTrack (déclaration restituée ou document rendu).
+        Numéros (pièce, téléphone) et adresses e-mail écrits dans le texte sont masqués. Le contact n'est jamais publié.
+        Le super admin est prévenu (boîte de réception + e-mail TESTIMONIALS_NOTIFY_EMAIL). 5 envois par heure.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [first_name, city, role, body, consent]
+              properties:
+                first_name: { type: string, minLength: 2, maxLength: 60 }
+                city: { type: string, minLength: 2, maxLength: 80 }
+                role: { type: string, enum: [owner, finder, other], description: "owner : document retrouvé ; finder : document rendu" }
+                rating: { type: integer, minimum: 1, maximum: 5, nullable: true }
+                body: { type: string, minLength: 20, maxLength: 500 }
+                consent: { type: boolean, description: Accord de publication (prénom et ville) }
+                contact: { type: string, maxLength: 120, nullable: true, description: Téléphone ou e-mail pour vérifier — jamais publié }
+                locale: { type: string, enum: [fr, en, pt] }
+                website: { type: string, description: Champ piège anti-robot, doit rester vide }
+      responses:
+        '201': { description: Reçu, en attente de validation }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { description: Trop d'envois }
+  /api/v2/testimonials/moderation:
+    get:
+      tags: [Témoignages]
+      summary: File de modération (super admin)
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [pending, approved, rejected], default: pending } }
+        - { name: per_page, in: query, schema: { type: integer, maximum: 100 } }
+      responses:
+        '200': { description: OK — témoignages avec contact, compte, déclaration liée, et compteurs par statut }
+        '403': { description: Réservé au super admin }
+  /api/v2/testimonials/{testimonial}:
+    patch:
+      tags: [Témoignages]
+      summary: Valider, refuser ou corriger un témoignage (super admin)
+      parameters: [ { name: testimonial, in: path, required: true, schema: { type: string, format: uuid } } ]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status: { type: string, enum: [pending, approved, rejected] }
+                first_name: { type: string }
+                city: { type: string }
+                body: { type: string }
+                rating: { type: integer, minimum: 1, maximum: 5 }
+                moderation_note: { type: string, maxLength: 255 }
+      responses:
+        '200': { description: Témoignage mis à jour (publié s'il est validé) }
+    delete:
+      tags: [Témoignages]
+      summary: Supprimer un témoignage (super admin)
+      parameters: [ { name: testimonial, in: path, required: true, schema: { type: string, format: uuid } } ]
+      responses:
+        '200': { description: Supprimé }
   # ════════════════════════ OCR ════════════════════════
   /api/v2/ocr/scan:
     post:

@@ -105,6 +105,8 @@ class MatchReviewService
                 $declaration = $m->declaration;
                 if ($declaration && ! $declaration->items()->where('status', '!=', DeclarationItem::STATUS_RESTITUTED)->exists()) {
                     $declaration->moveTo(DeclarationDePerte::STATUS_RESTITUTED, $reason, $actor);
+                    // Invitation à raconter son expérience (une seule fois, sans bloquer la restitution).
+                    app(\App\Services\Testimonials\TestimonialService::class)->inviteAfterRestitution($declaration);
                 }
             });
     }
